@@ -34,7 +34,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   final Map<int, String> _attendanceSelection = {};
 
-  // ✅ HEATMAP DATA VARIABLES
+  // HEATMAP DATA VARIABLES
   Map<DateTime, String> _monthStatuses = {};
   Map<int, int> _lecturesPerDay = {};
 
@@ -71,7 +71,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     else if (now.isAfter(parsedEnd))
       initialFocus = parsedEnd;
 
-    // Fetch how many lectures happen on each day of the week to calculate "Forgot" status
     for (int i = 1; i <= 6; i++) {
       final entries = await _timetableDao.getEntriesForDay(i, sem);
       _lecturesPerDay[i] = entries.length;
@@ -89,9 +88,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     await _loadForDate(_selectedDay!);
   }
 
-  // ============================
-  // ✅ NEW: CALCULATE COLORS FOR ENTIRE MONTH
-  // ============================
   Future<void> _fetchMonthData(DateTime month) async {
     final prefs = await SharedPreferences.getInstance();
     final sem = prefs.getInt('semester') ?? 1;
@@ -129,7 +125,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
       } else if (day.isAfter(today)) {
         newStatuses[day] = 'future';
       } else {
-        // It's a past/present day with lectures. Let's check attendance.
         final dateKey = DateFormat('yyyy-MM-dd').format(day);
         final statuses = dateStatuses[dateKey] ?? [];
 
@@ -210,8 +205,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Attendance updated')));
-
-    // ✅ REFRESH CALENDAR COLORS INSTANTLY
     await _fetchMonthData(_focusedDay);
   }
 
@@ -224,7 +217,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       child: ChoiceChip(
         label: Text(label),
         selected: selected,
-        selectedColor: color.withOpacity(0.15),
+        selectedColor: color.withAlpha(38),
         labelStyle: TextStyle(
           color: selected ? color : Colors.black,
           fontWeight: FontWeight.w600,
@@ -242,8 +235,41 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
+  Widget _buildLegendItem(Color color, String label, {Widget? icon}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12, // Slightly smaller circles to save space
+          height: 12,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          child: Center(child: icon),
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: Color(0xFF64748B),
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    DateTime today = DateTime.utc(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
+    bool isFutureDay = _selectedDay != null && _selectedDay!.isAfter(today);
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -266,131 +292,191 @@ class _CalendarScreenState extends State<CalendarScreen> {
               color: Colors.white,
               border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
             ),
-            child: !_isCalendarReady
-                ? const SizedBox(
-                    height: 350,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF2563EB),
-                      ),
-                    ),
-                  )
-                : TableCalendar(
-                    firstDay: _firstDay,
-                    lastDay: _lastDay,
-                    focusedDay: _focusedDay,
-                    selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                    calendarFormat: CalendarFormat.month,
-                    availableCalendarFormats: const {
-                      CalendarFormat.month: 'Month',
-                    },
-                    headerStyle: const HeaderStyle(
-                      formatButtonVisible: false,
-                      titleCentered: true,
-                    ),
-
-                    // ✅ CUSTOM HEATMAP UI OVERRIDE
-                    calendarBuilders: CalendarBuilders(
-                      prioritizedBuilder: (context, day, focusedDay) {
-                        final normalizedDay = DateTime.utc(
-                          day.year,
-                          day.month,
-                          day.day,
-                        );
-                        bool isSelected = isSameDay(_selectedDay, day);
-                        bool isToday = isSameDay(DateTime.now(), day);
-
-                        // 1. Solid Blue for Selected Day
-                        if (isSelected) {
-                          return Container(
-                            margin: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF2563EB),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Text(
-                                '${day.day}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          );
-                        }
-
-                        // 2. Heatmap Colors
-                        final status = _monthStatuses[normalizedDay];
-                        Color? bgColor;
-                        Color textColor = Colors.black;
-                        FontWeight weight = isToday
-                            ? FontWeight.bold
-                            : FontWeight.normal;
-
-                        if (status == 'holiday') {
-                          bgColor = Colors.grey.withOpacity(0.15);
-                          textColor = Colors.grey.shade600;
-                        } else if (status == 'all_p') {
-                          bgColor = Colors.green.withOpacity(0.25);
-                        } else if (status == 'all_a') {
-                          bgColor = Colors.red.withOpacity(0.25);
-                        } else if (status == 'mixed') {
-                          bgColor = Colors.orange.withOpacity(0.25);
-                        } else if (status == 'forgot') {
-                          bgColor = const Color(0xFFFEF3C7); // Light Amber
-                        }
-
-                        // Outline today if not selected
-                        Border? border = isToday
-                            ? Border.all(
-                                color: const Color(0xFF2563EB),
-                                width: 1.5,
-                              )
-                            : null;
-
-                        return Container(
-                          margin: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: bgColor,
-                            shape: BoxShape.circle,
-                            border: border,
+            child: Column(
+              children: [
+                !_isCalendarReady
+                    // ✅ COMPACT LOADING SPINNER SPACE
+                    ? const SizedBox(
+                        height: 270,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF2563EB),
                           ),
-                          child: Center(
-                            child: status == 'forgot'
-                                ? const Icon(
-                                    Icons.question_mark_rounded,
-                                    size: 16,
-                                    color: Color(0xFFD97706),
-                                  ) // Amber Question Mark
-                                : Text(
+                        ),
+                      )
+                    : TableCalendar(
+                        firstDay: _firstDay,
+                        lastDay: _lastDay,
+                        focusedDay: _focusedDay,
+                        selectedDayPredicate: (day) =>
+                            isSameDay(_selectedDay, day),
+                        calendarFormat: CalendarFormat.month,
+                        availableCalendarFormats: const {
+                          CalendarFormat.month: 'Month',
+                        },
+
+                        // ✅ MASSIVE SPACE SAVER: Forces the calendar to be much shorter vertically
+                        rowHeight: 42,
+                        daysOfWeekHeight: 20,
+
+                        headerStyle: const HeaderStyle(
+                          formatButtonVisible: false,
+                          titleCentered: true,
+                          headerPadding: EdgeInsets.symmetric(
+                            vertical: 4,
+                          ), // Tighter header
+                        ),
+                        calendarBuilders: CalendarBuilders(
+                          prioritizedBuilder: (context, day, focusedDay) {
+                            final normalizedDay = DateTime.utc(
+                              day.year,
+                              day.month,
+                              day.day,
+                            );
+                            bool isSelected = isSameDay(_selectedDay, day);
+                            bool isToday = isSameDay(DateTime.now(), day);
+
+                            if (isSelected) {
+                              return Container(
+                                margin: const EdgeInsets.all(4),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF2563EB),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
                                     '${day.day}',
-                                    style: TextStyle(
-                                      color: textColor,
-                                      fontWeight: weight,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                          ),
-                        );
-                      },
-                    ),
-                    onDaySelected: (selectedDay, focusedDay) {
-                      if (!isSameDay(_selectedDay, selectedDay)) {
-                        setState(() {
-                          _selectedDay = selectedDay;
+                                ),
+                              );
+                            }
+
+                            final status = _monthStatuses[normalizedDay];
+                            Color? bgColor;
+                            Color textColor = Colors.black;
+                            FontWeight weight = isToday
+                                ? FontWeight.bold
+                                : FontWeight.normal;
+
+                            if (status == 'holiday') {
+                              bgColor = Colors.grey.withAlpha(38);
+                              textColor = Colors.grey.shade600;
+                            } else if (status == 'all_p') {
+                              bgColor = Colors.green.withAlpha(64);
+                            } else if (status == 'all_a') {
+                              bgColor = Colors.red.withAlpha(64);
+                            } else if (status == 'mixed') {
+                              bgColor = Colors.orange.withAlpha(64);
+                            } else if (status == 'forgot') {
+                              bgColor = const Color(0xFFF3E8FF);
+                            }
+
+                            Border? border = isToday
+                                ? Border.all(
+                                    color: const Color(0xFF2563EB),
+                                    width: 1.5,
+                                  )
+                                : null;
+
+                            return Container(
+                              margin: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: bgColor,
+                                shape: BoxShape.circle,
+                                border: border,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '${day.day}',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontWeight: weight,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        onDaySelected: (selectedDay, focusedDay) {
+                          if (!isSameDay(_selectedDay, selectedDay)) {
+                            setState(() {
+                              _selectedDay = selectedDay;
+                              _focusedDay = focusedDay;
+                            });
+                            _loadForDate(selectedDay);
+                          }
+                        },
+                        onPageChanged: (focusedDay) {
                           _focusedDay = focusedDay;
-                        });
-                        _loadForDate(selectedDay);
-                      }
-                    },
-                    onPageChanged: (focusedDay) {
-                      _focusedDay = focusedDay;
-                      _fetchMonthData(focusedDay); // Fetch colors for new month
-                    },
+                          _fetchMonthData(focusedDay);
+                        },
+                      ),
+
+                if (_isCalendarReady)
+                  Padding(
+                    // ✅ COMPACT LEGEND PADDING
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildLegendItem(
+                                const Color(0xFF2563EB),
+                                'Selected',
+                              ),
+                            ),
+                            Expanded(
+                              child: _buildLegendItem(
+                                Colors.green.withAlpha(64),
+                                'All Present',
+                              ),
+                            ),
+                            Expanded(
+                              child: _buildLegendItem(
+                                Colors.red.withAlpha(64),
+                                'All Absent',
+                              ),
+                            ),
+                          ],
+                        ),
+                        // ✅ TIGHTER VERTICAL SPACING IN LEGEND
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildLegendItem(
+                                Colors.orange.withAlpha(64),
+                                'Mixed',
+                              ),
+                            ),
+                            Expanded(
+                              child: _buildLegendItem(
+                                const Color(0xFFF3E8FF),
+                                'Forgot / Not Held',
+                              ),
+                            ),
+                            Expanded(
+                              child: _buildLegendItem(
+                                Colors.grey.withAlpha(38),
+                                'Holiday / Off',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
+              ],
+            ),
           ),
 
-          const SizedBox(height: 16),
+          // ✅ REDUCED SPACING BELOW CALENDAR
+          const SizedBox(height: 12),
 
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -406,7 +492,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
 
           Expanded(
             child: _loading
@@ -429,15 +515,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
                       return Card(
                         elevation: 0,
-                        margin: const EdgeInsets.only(bottom: 12),
+                        // ✅ TIGHTER CARD MARGINS TO FIT MORE LECTURES
+                        margin: const EdgeInsets.only(bottom: 8),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                           side: const BorderSide(color: Color(0xFFE2E8F0)),
                         ),
                         child: Padding(
+                          // ✅ TIGHTER INTERNAL PADDING FOR LECTURE ROWS
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
-                            vertical: 10,
+                            vertical: 6,
                           ),
                           child: Row(
                             children: [
@@ -450,8 +538,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                   ),
                                 ),
                               ),
-                              _attendanceButton(entry.id!, 'P', 'Present'),
-                              _attendanceButton(entry.id!, 'A', 'Absent'),
+                              if (isFutureDay)
+                                const Text(
+                                  'Upcoming',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.w500,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                )
+                              else ...[
+                                _attendanceButton(entry.id!, 'P', 'Present'),
+                                _attendanceButton(entry.id!, 'A', 'Absent'),
+                              ],
                             ],
                           ),
                         ),
@@ -460,27 +559,43 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   ),
           ),
 
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _saveAttendance,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2563EB),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+          if (!isFutureDay && _dayEntries.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _saveAttendance,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2563EB),
+                    foregroundColor: Colors.white,
+                    // ✅ SLIGHTLY SLIMMER SAVE BUTTON
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Save Changes',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
-                child: const Text(
-                  'Save Changes',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+            )
+          else if (isFutureDay && _dayEntries.isNotEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
+              child: Center(
+                child: Text(
+                  'Cannot mark attendance for future dates',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );

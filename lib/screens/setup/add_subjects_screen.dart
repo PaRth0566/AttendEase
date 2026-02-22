@@ -19,7 +19,10 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
   final SubjectDao _subjectDao = SubjectDao();
 
   List<Subject> _subjects = [];
+  List<int> _deletedSubjectIds = [];
+
   int _activeSemester = 1;
+  double _defaultRequiredPercent = 75.0;
 
   @override
   void initState() {
@@ -36,37 +39,41 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
   Future<void> _loadSubjects() async {
     final prefs = await SharedPreferences.getInstance();
     _activeSemester = prefs.getInt('semester') ?? 1;
+    _defaultRequiredPercent =
+        prefs.getDouble('subject_required_attendance') ?? 75.0;
 
     final data = await _subjectDao.getSubjectsBySemester(_activeSemester);
     if (!mounted) return;
-    setState(() => _subjects = data);
+
+    setState(() {
+      _subjects = data.toList();
+      _deletedSubjectIds.clear();
+    });
   }
 
-  Future<void> _addSubject() async {
+  void _addSubject() {
     final name = _subjectController.text.trim();
     if (name.isEmpty) {
       _showError('Subject name cannot be empty');
       return;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    final requiredPercent =
-        prefs.getDouble('subject_required_attendance') ?? 75.0;
-
-    await _subjectDao.insertSubject(
-      Subject(
-        name: name,
-        requiredPercent: requiredPercent,
-        semester: _activeSemester,
-      ),
-    );
+    setState(() {
+      _subjects.add(
+        Subject(
+          name: name,
+          requiredPercent: _defaultRequiredPercent,
+          semester: _activeSemester,
+        ),
+      );
+    });
 
     _subjectController.clear();
     FocusScope.of(context).unfocus();
-    await _loadSubjects();
   }
 
-  Future<void> _editSubject(Subject subject) async {
+  Future<void> _editSubject(int index) async {
+    final subject = _subjects[index];
     final controller = TextEditingController(text: subject.name);
 
     await showDialog(
@@ -76,7 +83,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: InputDecoration(
+          decoration: const InputDecoration(
             hintText: 'Enter subject name',
             focusedBorder: UnderlineInputBorder(
               borderSide: BorderSide(color: Color(0xFF2563EB), width: 2),
@@ -90,19 +97,20 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.check, color: Colors.green),
-            onPressed: () async {
+            onPressed: () {
               final newName = controller.text.trim();
               if (newName.isEmpty) return;
-              await _subjectDao.updateSubject(
-                Subject(
+
+              setState(() {
+                _subjects[index] = Subject(
                   id: subject.id,
                   name: newName,
                   requiredPercent: subject.requiredPercent,
                   semester: subject.semester,
-                ),
-              );
+                );
+              });
+
               Navigator.pop(context);
-              await _loadSubjects();
             },
           ),
         ],
@@ -110,9 +118,47 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
     );
   }
 
-  Future<void> _deleteSubject(int id) async {
-    await _subjectDao.deleteSubject(id);
+  void _deleteSubject(int index) {
+    setState(() {
+      final removed = _subjects.removeAt(index);
+      if (removed.id != null) {
+        _deletedSubjectIds.add(removed.id!);
+      }
+    });
+  }
+
+  Future<void> _saveAndProceed() async {
+    // 1. Process all queued deletions
+    for (final id in _deletedSubjectIds) {
+      await _subjectDao.deleteSubject(id);
+    }
+
+    // 2. Process all additions and updates
+    for (final subject in _subjects) {
+      if (subject.id == null) {
+        await _subjectDao.insertSubject(subject);
+      } else {
+        await _subjectDao.updateSubject(subject);
+      }
+    }
+
+    // ✅ THE FIX: Reload subjects from the database to update their IDs in memory!
+    // This stops them from duplicating if the user hits Back and Next again.
     await _loadSubjects();
+
+    if (!mounted) return;
+
+    if (widget.isEditMode) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Subjects saved successfully')),
+      );
+      Navigator.pop(context);
+    } else {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const TimetableSetupScreen()),
+      );
+    }
   }
 
   void _showError(String msg) {
@@ -212,13 +258,13 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
                         subject.name,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      onTap: () => _editSubject(subject),
+                      onTap: () => _editSubject(i),
                       trailing: IconButton(
                         icon: const Icon(
                           Icons.delete_outline,
                           color: Color(0xFFEF4444),
                         ),
-                        onPressed: () => _deleteSubject(subject.id!),
+                        onPressed: () => _deleteSubject(i),
                       ),
                     ),
                   );
@@ -226,7 +272,6 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
               ),
             ),
 
-            // ✅ UNIFIED BUTTON ROW
             Row(
               children: [
                 Expanded(
@@ -255,21 +300,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: hasSubjects
-                        ? () {
-                            if (widget.isEditMode) {
-                              Navigator.pop(context);
-                            } else {
-                              // ✅ NAVIGATION FIX: Uses regular push
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const TimetableSetupScreen(),
-                                ),
-                              );
-                            }
-                          }
-                        : null,
+                    onPressed: hasSubjects ? _saveAndProceed : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
