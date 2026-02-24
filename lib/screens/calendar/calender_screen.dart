@@ -8,6 +8,7 @@ import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
 import '../../models/timetable_entry.dart';
+import '../../services/notification_service.dart'; // ✅ IMPORTED NOTIFICATION SERVICE
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -206,6 +207,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
       context,
     ).showSnackBar(const SnackBar(content: Text('Attendance updated')));
     await _fetchMonthData(_focusedDay);
+
+    // ✅ RECALCULATE ALARMS AFTER SAVING!
+    await NotificationService().scheduleSmartNotifications();
   }
 
   Widget _attendanceButton(int timetableId, String value, String label) {
@@ -240,7 +244,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 12, // Slightly smaller circles to save space
+          width: 12,
           height: 12,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           child: Center(child: icon),
@@ -295,7 +299,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
             child: Column(
               children: [
                 !_isCalendarReady
-                    // ✅ COMPACT LOADING SPINNER SPACE
                     ? const SizedBox(
                         height: 270,
                         child: Center(
@@ -314,17 +317,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         availableCalendarFormats: const {
                           CalendarFormat.month: 'Month',
                         },
-
-                        // ✅ MASSIVE SPACE SAVER: Forces the calendar to be much shorter vertically
                         rowHeight: 42,
                         daysOfWeekHeight: 20,
-
                         headerStyle: const HeaderStyle(
                           formatButtonVisible: false,
                           titleCentered: true,
-                          headerPadding: EdgeInsets.symmetric(
-                            vertical: 4,
-                          ), // Tighter header
+                          headerPadding: EdgeInsets.symmetric(vertical: 4),
                         ),
                         calendarBuilders: CalendarBuilders(
                           prioritizedBuilder: (context, day, focusedDay) {
@@ -418,7 +416,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
                 if (_isCalendarReady)
                   Padding(
-                    // ✅ COMPACT LEGEND PADDING
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                     child: Column(
                       children: [
@@ -444,7 +441,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             ),
                           ],
                         ),
-                        // ✅ TIGHTER VERTICAL SPACING IN LEGEND
                         const SizedBox(height: 6),
                         Row(
                           children: [
@@ -475,7 +471,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           ),
 
-          // ✅ REDUCED SPACING BELOW CALENDAR
           const SizedBox(height: 12),
 
           Padding(
@@ -515,14 +510,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
                       return Card(
                         elevation: 0,
-                        // ✅ TIGHTER CARD MARGINS TO FIT MORE LECTURES
                         margin: const EdgeInsets.only(bottom: 8),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                           side: const BorderSide(color: Color(0xFFE2E8F0)),
                         ),
                         child: Padding(
-                          // ✅ TIGHTER INTERNAL PADDING FOR LECTURE ROWS
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 6,
@@ -569,7 +562,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2563EB),
                     foregroundColor: Colors.white,
-                    // ✅ SLIGHTLY SLIMMER SAVE BUTTON
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

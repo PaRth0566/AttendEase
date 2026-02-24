@@ -23,6 +23,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double _requiredTarget = 75.0;
   int _activeSemester = 1;
 
+  int _totalAttendedOverall = 0;
+  int _totalLecturesOverall = 0;
+
   bool _loading = true;
 
   @override
@@ -39,20 +42,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _subjects = await _subjectDao.getSubjectsBySemester(_activeSemester);
     _attendanceStats = await _attendanceDao.getAttendanceStats();
 
-    int totalAttended = 0;
-    int totalLectures = 0;
+    _totalAttendedOverall = 0;
+    _totalLecturesOverall = 0;
 
     for (final subject in _subjects) {
       final stat = _attendanceStats[subject.id] ?? {'attended': 0, 'total': 0};
-      totalAttended += stat['attended']!;
-      totalLectures += stat['total']!;
+      _totalAttendedOverall += stat['attended']!;
+      _totalLecturesOverall += stat['total']!;
     }
 
-    _currentOverall = totalLectures == 0
+    _currentOverall = _totalLecturesOverall == 0
         ? 0
-        : (totalAttended / totalLectures) * 100;
+        : (_totalAttendedOverall / _totalLecturesOverall) * 100;
 
-    // ✅ NEW LOGIC: Sort subjects by attendance percentage (Lowest to Highest)
+    // Sort subjects by attendance percentage (Lowest to Highest)
     _subjects.sort((a, b) {
       final statA = _attendanceStats[a.id] ?? {'attended': 0, 'total': 0};
       final statB = _attendanceStats[b.id] ?? {'attended': 0, 'total': 0};
@@ -64,10 +67,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ? 0.0
           : (statB['attended']! / statB['total']!) * 100;
 
-      // Ascending sort (Lowest at the top)
       int comparison = percentA.compareTo(percentB);
 
-      // If percentages are identical, sort alphabetically by name as a tie-breaker
       if (comparison == 0) {
         return a.name.compareTo(b.name);
       }
@@ -76,6 +77,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     if (mounted) {
       setState(() => _loading = false);
+    }
+  }
+
+  // =========================
+  // BUNK PLANNER MATH ENGINE
+  // =========================
+  Map<String, dynamic> _getPredictiveInsight(
+    int attended,
+    int total,
+    double requiredPercent,
+  ) {
+    if (total == 0)
+      return {'text': 'No classes recorded yet.', 'isSafe': true, 'skips': 0};
+
+    double reqFrac = requiredPercent / 100;
+    double currentPercent = (attended / total) * 100;
+
+    if (currentPercent >= requiredPercent) {
+      // SAFE: How many can they skip?
+      int skips = ((attended / reqFrac) - total).floor();
+      if (skips <= 0) {
+        return {
+          'text': 'On track, but you cannot skip the next lecture.',
+          'isSafe': true,
+          'skips': 0,
+        };
+      }
+      return {
+        'text':
+            'You can safely skip the next $skips lecture${skips > 1 ? 's' : ''}.',
+        'isSafe': true,
+        'skips': skips,
+      };
+    } else {
+      // RISK: How many must they attend?
+      int attends = (((reqFrac * total) - attended) / (1 - reqFrac)).ceil();
+      return {
+        'text':
+            'Attend the next $attends lecture${attends > 1 ? 's' : ''} to reach ${requiredPercent.toStringAsFixed(0)}%.',
+        'isSafe': false,
+        'attends': attends,
+      };
     }
   }
 
@@ -88,6 +131,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     bool isSafe = _currentOverall >= _requiredTarget;
     Color statusColor = isSafe ? Colors.green : Colors.red;
     IconData statusIcon = isSafe ? Icons.check_rounded : Icons.close_rounded;
+
+    final overallInsight = _getPredictiveInsight(
+      _totalAttendedOverall,
+      _totalLecturesOverall,
+      _requiredTarget,
+    );
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -114,7 +163,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 16),
 
+            // =========================
             // OVERALL ATTENDANCE CARD
+            // =========================
             Card(
               color: const Color(0xFFF2F4FF),
               elevation: 0,
@@ -122,57 +173,106 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 borderRadius: BorderRadius.circular(16),
                 side: const BorderSide(color: Color(0xFFE2E8F0)),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Overall Attendance',
-                          style: TextStyle(
-                            color: Colors.grey,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Overall Attendance',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${_currentOverall.toStringAsFixed(1)}%',
+                              style: const TextStyle(
+                                fontSize: 36,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Target: ${_requiredTarget.toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                color: statusColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${_currentOverall.toStringAsFixed(1)}%',
-                          style: const TextStyle(
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Target: ${_requiredTarget.toStringAsFixed(1)}%',
-                          style: TextStyle(
-                            color: statusColor,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            SizedBox(
+                              height: 70,
+                              width: 70,
+                              child: CircularProgressIndicator(
+                                value: _currentOverall / 100,
+                                backgroundColor: Colors.white,
+                                color: statusColor,
+                                strokeWidth: 8,
+                              ),
+                            ),
+                            Icon(statusIcon, color: statusColor, size: 34),
+                          ],
                         ),
                       ],
                     ),
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        SizedBox(
-                          height: 70,
-                          width: 70,
-                          child: CircularProgressIndicator(
-                            value: _currentOverall / 100,
-                            backgroundColor: Colors.white,
-                            color: statusColor,
-                            strokeWidth: 8,
-                          ),
+                  ),
+
+                  // 🧠 BUNK PLANNER: OVERALL INSIGHT
+                  if (_totalLecturesOverall > 0)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: overallInsight['isSafe']
+                            ? Colors.green.withAlpha(25)
+                            : Colors.red.withAlpha(25),
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(16),
+                          bottomRight: Radius.circular(16),
                         ),
-                        Icon(statusIcon, color: statusColor, size: 34),
-                      ],
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            overallInsight['isSafe']
+                                ? Icons.lightbulb_outline
+                                : Icons.warning_amber_rounded,
+                            size: 18,
+                            color: overallInsight['isSafe']
+                                ? Colors.green.shade700
+                                : Colors.red.shade700,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              overallInsight['text'],
+                              style: TextStyle(
+                                color: overallInsight['isSafe']
+                                    ? Colors.green.shade800
+                                    : Colors.red.shade800,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
+                ],
               ),
             ),
 
@@ -184,7 +284,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 12),
 
+            // =========================
             // SUBJECT LIST
+            // =========================
             if (_subjects.isEmpty)
               Container(
                 padding: const EdgeInsets.all(24),
@@ -224,8 +326,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // =========================
   // SUBJECT CARD
-  static Widget _subjectCard(
+  // =========================
+  Widget _subjectCard(
     String subjectName,
     double percent,
     int attended,
@@ -238,6 +342,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ? Colors.orange
         : Colors.red;
 
+    final insight = _getPredictiveInsight(attended, total, requiredPercent);
+
     return Card(
       color: const Color(0xFFF2F4FF),
       elevation: 0,
@@ -246,48 +352,101 @@ class _DashboardScreenState extends State<DashboardScreen> {
         borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: Color(0xFFE2E8F0)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
               children: [
-                Text(
-                  subjectName,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      subjectName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      '${percent.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                LinearProgressIndicator(
+                  value: total == 0 ? 0 : percent / 100,
+                  color: color,
+                  backgroundColor: Colors.white,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '$attended/$total lectures',
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                    Text(
+                      percent >= requiredPercent ? 'Safe' : 'Risk',
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // 🧠 BUNK PLANNER: SUBJECT INSIGHT
+          if (total > 0)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: insight['isSafe']
+                    ? Colors.green.withAlpha(20)
+                    : Colors.red.withAlpha(20),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(12),
+                  bottomRight: Radius.circular(12),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    insight['isSafe']
+                        ? Icons.lightbulb_outline
+                        : Icons.warning_amber_rounded,
+                    size: 14,
+                    color: insight['isSafe']
+                        ? Colors.green.shade700
+                        : Colors.red.shade700,
                   ),
-                ),
-                Text(
-                  '${percent.toStringAsFixed(1)}%',
-                  style: TextStyle(color: color, fontWeight: FontWeight.bold),
-                ),
-              ],
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      insight['text'],
+                      style: TextStyle(
+                        color: insight['isSafe']
+                            ? Colors.green.shade800
+                            : Colors.red.shade800,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            LinearProgressIndicator(
-              value: percent / 100,
-              color: color,
-              backgroundColor: Colors.white,
-            ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '$attended/$total lectures',
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
-                ),
-                Text(
-                  percent >= requiredPercent ? 'Safe' : 'Risk',
-                  style: TextStyle(color: color, fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }

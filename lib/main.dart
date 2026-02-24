@@ -1,12 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/root/root_screen.dart';
 import 'screens/setup/attendance_criteria_screen.dart';
 import 'screens/setup/basic_info_screen.dart';
+import 'services/notification_service.dart'; // ✅ IMPORTED NOTIFICATION SERVICE
 
-void main() {
-  runApp(const AttendEaseApp());
+void main() async {
+  // ✅ 1. Ensure Flutter is initialized before interacting with native device settings
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // ✅ 2. Initialize Notifications and schedule them based on current data
+  await NotificationService().init();
+  await NotificationService().scheduleSmartNotifications();
+
+  // ✅ 3. Lock the app to Portrait mode only to prevent RenderFlex overflow errors
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]).then((_) {
+    // ✅ 4. Run the app AFTER the orientation is locked
+    runApp(const AttendEaseApp());
+  });
 }
 
 class AttendEaseApp extends StatelessWidget {
@@ -26,7 +42,6 @@ class AttendEaseApp extends StatelessWidget {
       theme: ThemeData(
         brightness: Brightness.light,
         primaryColor: const Color(0xFF2563EB),
-        // ✅ FIX: Overrides the default purple outlines/buttons across the whole app
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF2563EB),
           brightness: Brightness.light,
