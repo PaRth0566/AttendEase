@@ -45,7 +45,6 @@ class _ReportScreenState extends State<ReportScreen> {
     });
   }
 
-  // ✅ FORCED BLUE THEME ON THE CALENDAR POPUP
   Future<void> _pickDate(bool isStart) async {
     final initial = isStart
         ? (_startDate ?? DateTime.now())
@@ -60,15 +59,13 @@ class _ReportScreenState extends State<ReportScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(
-                0xFF2563EB,
-              ), // Header background color & selected day
-              onPrimary: Colors.white, // Header text color
-              onSurface: Colors.black, // Body text color
+              primary: Color(0xFF2563EB),
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
             ),
             textButtonTheme: TextButtonThemeData(
               style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF2563EB), // Button text color
+                foregroundColor: const Color(0xFF2563EB),
               ),
             ),
           ),
@@ -82,7 +79,6 @@ class _ReportScreenState extends State<ReportScreen> {
         if (isStart) {
           _startDate = picked;
         } else {
-          // Prevent selecting an end date before the start date
           if (_startDate != null && picked.isBefore(_startDate!)) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -93,7 +89,7 @@ class _ReportScreenState extends State<ReportScreen> {
             _endDate = picked;
           }
         }
-        _reportGenerated = false; // Reset report if dates change
+        _reportGenerated = false;
       });
     }
   }
@@ -119,14 +115,12 @@ class _ReportScreenState extends State<ReportScreen> {
     String endQuery = '';
 
     if (_reportType == 0) {
-      // SEMESTER LOGIC: Fetch dates from SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       startQuery =
           prefs.getString('semester_start_$_selectedSemester') ?? '1970-01-01';
       endQuery =
           prefs.getString('semester_end_$_selectedSemester') ?? '2099-12-31';
     } else {
-      // CUSTOM DATE LOGIC
       startQuery = DateFormat('yyyy-MM-dd').format(_startDate!);
       endQuery = DateFormat('yyyy-MM-dd').format(_endDate!);
     }
@@ -151,6 +145,25 @@ class _ReportScreenState extends State<ReportScreen> {
         ? 0.0
         : (_totalAttended / _totalLectures) * 100;
 
+    // ✅ NEW LOGIC: Sort subjects by attendance percentage for reports
+    _subjects.sort((a, b) {
+      final statA = _stats[a.id] ?? {'attended': 0, 'total': 0};
+      final statB = _stats[b.id] ?? {'attended': 0, 'total': 0};
+
+      final double percentA = statA['total'] == 0
+          ? 0.0
+          : (statA['attended']! / statA['total']!) * 100;
+      final double percentB = statB['total'] == 0
+          ? 0.0
+          : (statB['attended']! / statB['total']!) * 100;
+
+      int comparison = percentA.compareTo(percentB);
+      if (comparison == 0) {
+        return a.name.compareTo(b.name);
+      }
+      return comparison;
+    });
+
     setState(() {
       _isGenerating = false;
       _reportGenerated = true;
@@ -172,9 +185,7 @@ class _ReportScreenState extends State<ReportScreen> {
       ),
       body: Column(
         children: [
-          // =========================
           // REPORT CONTROLS (TOP)
-          // =========================
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -184,7 +195,6 @@ class _ReportScreenState extends State<ReportScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Radio Buttons
                 Row(
                   children: [
                     Expanded(
@@ -230,7 +240,6 @@ class _ReportScreenState extends State<ReportScreen> {
 
                 const SizedBox(height: 8),
 
-                // Dynamic Inputs
                 if (_reportType == 0)
                   Row(
                     children: [
@@ -336,9 +345,7 @@ class _ReportScreenState extends State<ReportScreen> {
             ),
           ),
 
-          // =========================
           // REPORT RESULTS (BOTTOM)
-          // =========================
           Expanded(
             child: !_reportGenerated
                 ? const Center(
