@@ -20,6 +20,8 @@ class NotificationService {
   final TimetableDao _timetableDao = TimetableDao();
   final SubjectDao _subjectDao = SubjectDao();
 
+  static const String _channelId = 'attend_ease_master_urgent_v2';
+
   Future<void> init() async {
     tz.initializeTimeZones();
 
@@ -31,7 +33,21 @@ class NotificationService {
 
     await _notificationsPlugin.initialize(initSettings);
 
-    // Request permission for Android 13+
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      _channelId,
+      'Critical Attendance Alerts',
+      description: 'Urgent pop-up reminders for your attendance',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    await _notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
+        ?.createNotificationChannel(channel);
+
     _notificationsPlugin
         .resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin
@@ -44,9 +60,7 @@ class NotificationService {
         ?.requestExactAlarmsPermission();
   }
 
-  // 🔥 THIS FUNCTION DOES THE MAGIC 🔥
   Future<void> scheduleSmartNotifications() async {
-    // 1. Cancel any old scheduled notifications so they don't duplicate
     await _notificationsPlugin.cancelAll();
 
     final prefs = await SharedPreferences.getInstance();
@@ -58,10 +72,9 @@ class NotificationService {
     final todayKey = DateFormat('yyyy-MM-dd').format(now);
 
     // ==========================================
-    // 🔔 1. THE 8:00 PM REMINDER (UNMARKED TODAY)
+    // 🔔 1. THE 8:00 PM REMINDER
     // ==========================================
     if (now.weekday <= 6) {
-      // If today is Mon-Sat
       final todayLectures = await _timetableDao.getEntriesForDay(
         now.weekday,
         sem,
@@ -71,7 +84,6 @@ class NotificationService {
           todayKey,
         );
 
-        // If not all lectures are marked, and it's before 8 PM
         if (markedAttendance.length < todayLectures.length && now.hour < 20) {
           final scheduleTime = tz.TZDateTime(
             tz.local,
@@ -80,7 +92,7 @@ class NotificationService {
             now.day,
             20,
             0,
-          ); // 8:00 PM
+          );
           await _scheduleAlarm(
             id: 1,
             title: 'Attendance Reminder 📝',
@@ -93,11 +105,10 @@ class NotificationService {
     }
 
     // ==========================================
-    // 🚨 2. THE 10:30 PM RISK WARNING (FOR TOMORROW)
+    // 🚨 2. THE 10:30 PM RISK WARNING
     // ==========================================
     final tomorrow = now.add(const Duration(days: 1));
 
-    // Check if tomorrow is Mon-Sat AND it's currently before 10:30 PM
     if (tomorrow.weekday <= 6 &&
         (now.hour < 22 || (now.hour == 22 && now.minute < 30))) {
       final tomorrowLectures = await _timetableDao.getEntriesForDay(
@@ -106,7 +117,6 @@ class NotificationService {
       );
 
       if (tomorrowLectures.isNotEmpty) {
-        // Calculate Attendance
         final stats = await _attendanceDao.getAttendanceStats();
         final subjects = await _subjectDao.getSubjectsBySemester(sem);
 
@@ -125,9 +135,8 @@ class NotificationService {
           now.day,
           22,
           30,
-        ); // 10:30 PM
+        );
 
-        // SCENARIO A: OVERALL IS AT RISK (Highest Priority)
         if (overallPercent < overallTarget && totalL > 0) {
           await _scheduleAlarm(
             id: 2,
@@ -136,12 +145,10 @@ class NotificationService {
                 'Your overall attendance is ${overallPercent.toStringAsFixed(1)}%. You MUST attend tomorrow\'s classes to recover!',
             scheduledTime: scheduleTime,
           );
-          return; // Stop here, overall warning overrides individual subjects
+          return;
         }
 
-        // SCENARIO B: COMPILE ALL AT-RISK SUBJECTS FOR TOMORROW
         List<String> atRiskSubjectNames = [];
-
         for (final lecture in tomorrowLectures) {
           final subject = subjects.firstWhere((s) => s.id == lecture.subjectId);
           final subStat = stats[subject.id] ?? {'attended': 0, 'total': 0};
@@ -149,7 +156,6 @@ class NotificationService {
               ? 100.0
               : (subStat['attended']! / subStat['total']!) * 100;
 
-          // If subject is below target AND not already in our list
           if (subPercent < subject.requiredPercent && subStat['total']! > 0) {
             if (!atRiskSubjectNames.contains(subject.name)) {
               atRiskSubjectNames.add(subject.name);
@@ -157,7 +163,6 @@ class NotificationService {
           }
         }
 
-        // If we found any at-risk subjects for tomorrow, send ONE combined notification
         if (atRiskSubjectNames.isNotEmpty) {
           String combinedNames = atRiskSubjectNames.join(', ');
           await _scheduleAlarm(
@@ -179,11 +184,13 @@ class NotificationService {
     required tz.TZDateTime scheduledTime,
   }) async {
     const androidDetails = AndroidNotificationDetails(
-      'attendance_channel',
-      'Attendance Alerts',
-      channelDescription: 'Reminders and Risk Alerts for AttendEase',
+      _channelId,
+      'Critical Attendance Alerts',
+      channelDescription: 'Urgent pop-up reminders for your attendance',
       importance: Importance.max,
       priority: Priority.high,
+      fullScreenIntent: true,
+      category: AndroidNotificationCategory.reminder,
     );
     const details = NotificationDetails(android: androidDetails);
 

@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/attendance_dao.dart';
-import '../../database/subject_dao.dart'; // ✅ Added to calculate accurate semester attendance
-import '../report/report_screen.dart'; // ✅ IMPORTED THE NEW REPORT SCREEN
+import '../../database/db_helper.dart';
+import '../../database/subject_dao.dart';
+import '../../services/auth_service.dart';
+import '../../services/cloud_sync_service.dart'; // ✅ NEW: Added the Cloud Sync Service import
+import '../../widgets/backup_sync_card.dart';
+import '../auth/login_screen.dart';
+import '../report/report_screen.dart';
 import '../setup/add_subjects_screen.dart';
 import '../setup/attendance_criteria_screen.dart';
 import '../setup/basic_info_screen.dart';
@@ -18,8 +23,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final AttendanceDao _attendanceDao = AttendanceDao();
-  final SubjectDao _subjectDao =
-      SubjectDao(); // ✅ For fetching current semester's subjects
+  final SubjectDao _subjectDao = SubjectDao();
 
   String name = '';
   String course = '';
@@ -40,7 +44,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final prefs = await SharedPreferences.getInstance();
     semester = prefs.getInt('semester') ?? 1;
 
-    // ✅ SMART ATTENDANCE CALCULATION: Only calculate for the currently active semester
     final subjectsForSem = await _subjectDao.getSubjectsBySemester(semester);
     final stats = await _attendanceDao.getAttendanceStats();
 
@@ -66,17 +69,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
-  // ✅ PHASE 2: SEMESTER SWITCHER LOGIC
   Future<void> _switchSemester(int newSemester) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('semester', newSemester);
 
     setState(() => _loading = true);
-    await _loadProfileData(); // Reloads attendance for the new semester
+    await _loadProfileData();
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Switched to Semester $newSemester')),
+    );
+  }
+
+  // ✅ UPDATED: SECURE LOGOUT & AUTO-BACKUP FUNCTION
+  Future<void> _handleLogout() async {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Prevent dismissing while backing up
+      builder: (context) => AlertDialog(
+        title: const Text('Log Out?'),
+        content: const Text(
+          'Your data will be securely backed up to the cloud before logging out.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () async {
+              // Show a loading circle over the dialog while backing up
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (_) => const Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+              );
+
+              // 1. AUTO BACKUP TO CLOUD BEFORE WIPING!
+              await CloudSyncService().backupDataToCloud();
+
+              // 2. Log out of Google & Firebase Auth
+              await AuthService().signOut();
+
+              // 3. Wipe Local Settings (SharedPreferences)
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.clear();
+
+              // 4. Wipe SQLite Database
+              final db = await DBHelper.instance.database;
+              await db.delete('attendance_records');
+              await db.delete('timetable');
+              await db.delete('subjects');
+
+              // 5. Send them back to the Login Screen
+              if (!mounted) return;
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                (route) => false,
+              );
+            },
+            child: const Text('Log Out', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -94,14 +154,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : Padding(
+          : SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // =========================
-                  // RESTORED STUDENT CARD
-                  // =========================
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -153,9 +210,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                   const SizedBox(height: 32),
 
-                  // =========================
-                  // NEW UI: SEMESTER SWITCHER
-                  // =========================
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -214,9 +268,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
 
-                  // =========================
-                  // SETTINGS OPTIONS
-                  // =========================
                   _profileTile(
                     icon: Icons.person_rounded,
                     title: 'Edit Profile & Dates',
@@ -241,9 +292,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           builder: (_) =>
                               const AddSubjectsScreen(isEditMode: true),
                         ),
-                      ).then(
-                        (_) => _loadProfileData(),
-                      ); // Recalculate attendance if subjects change
+                      ).then((_) => _loadProfileData());
                     },
                   ),
 
@@ -275,7 +324,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     },
                   ),
 
-                  // ✅ NEW REAL BUTTON FOR REPORTS & ANALYTICS
                   _profileTile(
                     icon: Icons.bar_chart_rounded,
                     title: 'Reports & Analytics',
@@ -286,6 +334,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       );
                     },
                   ),
+
+                  const SizedBox(height: 8),
+                  const BackupSyncCard(),
+                  const SizedBox(height: 8),
+
+                  _profileTile(
+                    icon: Icons.logout_rounded,
+                    title: 'Log Out',
+                    textColor: Colors.red,
+                    iconColor: Colors.red,
+                    onTap: _handleLogout,
+                  ),
+
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -296,19 +358,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required IconData icon,
     required String title,
     required VoidCallback onTap,
+    Color textColor = Colors.black,
+    Color iconColor = const Color(0xFF2563EB),
   }) {
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
-      color: const Color(0xFFF2F4FF),
+      color: textColor == Colors.red
+          ? Colors.red.shade50
+          : const Color(0xFFF2F4FF),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFE2E8F0)),
+        side: BorderSide(
+          color: textColor == Colors.red
+              ? Colors.red.shade200
+              : const Color(0xFFE2E8F0),
+        ),
       ),
       child: ListTile(
-        leading: Icon(icon, color: const Color(0xFF2563EB)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        leading: Icon(icon, color: iconColor),
+        title: Text(
+          title,
+          style: TextStyle(fontWeight: FontWeight.w600, color: textColor),
+        ),
+        trailing: Icon(
+          Icons.arrow_forward_ios,
+          size: 16,
+          color: textColor == Colors.red ? Colors.red : Colors.grey,
+        ),
         onTap: onTap,
       ),
     );

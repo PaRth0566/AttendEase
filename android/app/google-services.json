@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "645842511929",
+    "project_id": "attendease-cbc6f",
+    "storage_bucket": "attendease-cbc6f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:645842511929:android:a79bc7d4c4db80afa045e8",
+        "android_client_info": {
+          "package_name": "com.example.attend_ease"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "645842511929-is69i346um3ciquelda06it1jvo3mg5s.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.attend_ease",
+            "certificate_hash": "e4f70b85a40c43e3855832946bf089024147162a"
+          }
+        },
+        {
+          "client_id": "645842511929-jr72m5715907vmh716ja48eer2k4dgto.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBd7lkRSjGboHofb9foEh29cHwvz4ocYb8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "645842511929-jr72m5715907vmh716ja48eer2k4dgto.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "645842511929-6kumv3a2i4j33mn2pa7318ht80r646hh.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.attendEase"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

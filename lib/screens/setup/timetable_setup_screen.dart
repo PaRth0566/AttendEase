@@ -6,6 +6,7 @@ import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
 import '../../models/timetable_entry.dart';
+import '../../services/cloud_sync_service.dart';
 import '../root/root_screen.dart';
 
 class TimetableSetupScreen extends StatefulWidget {
@@ -150,14 +151,18 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
       ).showSnackBar(const SnackBar(content: Text('Timetable updated!')));
       Navigator.pop(context);
     } else {
+      // ✅ Set Setup to Complete!
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_setup_complete', true);
 
+      // ✅ Instantly backup their brand new setup to Firebase!
+      await CloudSyncService().backupDataToCloud();
+
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Timetable setup complete!')),
       );
 
-      // This safely clears the setup stack and sends the user home!
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const RootScreen()),
@@ -240,7 +245,6 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
                       ),
-                      // ✅ BLUE FOCUSED BORDER FIX
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: const BorderSide(
@@ -320,7 +324,6 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                     ),
             ),
 
-            // ✅ UNIFIED BUTTON ROW
             Row(
               children: [
                 Expanded(

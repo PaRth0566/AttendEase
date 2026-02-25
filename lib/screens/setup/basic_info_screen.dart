@@ -3,6 +3,8 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/db_helper.dart';
+import '../../services/auth_service.dart'; // ✅ NEW: Added AuthService import
+import '../auth/login_screen.dart';
 
 class BasicInfoScreen extends StatefulWidget {
   final bool isEditMode;
@@ -54,9 +56,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     });
   }
 
-  // ✅ DYNAMIC DATE RESTRICTION APPLIED HERE
   Future<void> _pickDate(bool isStartDate) async {
-    // 1. Determine safe minimum and maximum dates
     DateTime minDate = isStartDate
         ? DateTime(2020)
         : (_startDate ?? DateTime(2020));
@@ -64,7 +64,6 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
         ? (_endDate ?? DateTime(2030))
         : DateTime(2030);
 
-    // 2. Ensure initialDate is safely within min/max bounds
     DateTime initial = isStartDate
         ? (_startDate ?? DateTime.now())
         : (_endDate ?? DateTime.now());
@@ -74,8 +73,8 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: minDate, // ✅ Locks days before the Start Date
-      lastDate: maxDate, // ✅ Locks days after the End Date
+      firstDate: minDate,
+      lastDate: maxDate,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -156,7 +155,11 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(backgroundColor: Colors.white, elevation: 0),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -216,32 +219,47 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
 
               Row(
                 children: [
-                  if (widget.isEditMode) ...[
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          side: const BorderSide(
-                            color: Color(0xFF2563EB),
-                            width: 1.5,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                  Expanded(
+                    child: OutlinedButton(
+                      // ✅ MAKE THIS FUNCTION ASYNC
+                      onPressed: () async {
+                        if (widget.isEditMode) {
+                          Navigator.pop(context);
+                        } else {
+                          // ✅ COMPLETELY WIPE THE SESSION BEFORE GOING BACK!
+                          await AuthService().signOut();
+
+                          if (!mounted) return;
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const LoginScreen(),
+                            ),
+                            (route) => false,
+                          );
+                        }
+                      },
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: const BorderSide(
+                          color: Color(0xFF2563EB),
+                          width: 1.5,
                         ),
-                        child: const Text(
-                          'Back',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF2563EB),
-                          ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Back',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2563EB),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 16),
-                  ],
+                  ),
+                  const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
                       onPressed: _saveAndNext,
