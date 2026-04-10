@@ -65,12 +65,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
-      ),
+      appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
       body: Stack(
         children: [
           Padding(
@@ -134,7 +129,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           if (_isLoading)
             Container(
-              color: Colors.white.withOpacity(0.8),
+              color: Theme.of(context).scaffoldBackgroundColor.withAlpha(204),
               child: const Center(
                 child: CircularProgressIndicator(color: Color(0xFF2563EB)),
               ),

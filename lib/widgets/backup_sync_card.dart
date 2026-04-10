@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // ✅ NEW: Added for beautiful time formatting
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Make sure this path matches exactly where your DBHelper is located!
@@ -21,14 +22,30 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
   @override
   void initState() {
     super.initState();
-    _loadLastSyncTime(); // Load the saved time when the widget starts
+    _loadLastSyncTime();
+  }
+
+  // ✅ NEW: Smart formatting function
+  String _formatTime(String rawTime) {
+    if (rawTime == "Never") return rawTime;
+    try {
+      // Try parsing the ugly database string (e.g., 2026-04-10 17:06:28.062483)
+      DateTime parsedDate = DateTime.parse(rawTime);
+      // Converts it to "Apr 10, 5:06 PM"
+      return DateFormat('MMM d, h:mm a').format(parsedDate);
+    } catch (e) {
+      // Fallback just in case
+      return rawTime;
+    }
   }
 
   // Fetch the saved time from local storage
   Future<void> _loadLastSyncTime() async {
     final prefs = await SharedPreferences.getInstance();
+    final rawTime = prefs.getString('last_sync_time') ?? "Never";
+
     setState(() {
-      _lastSyncTime = prefs.getString('last_sync_time') ?? "Never";
+      _lastSyncTime = _formatTime(rawTime);
     });
   }
 
@@ -84,14 +101,20 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
           .doc(user.uid)
           .set(backupData);
 
-      // 8. Save the new time locally for the UI
-      final currentTime = TimeOfDay.now().format(context);
+      // 8. Save the precise time locally, and format it for the UI
+      final now = DateTime.now();
+      final rawString = now.toString();
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('last_sync_time', currentTime);
+      await prefs.setString(
+        'last_sync_time',
+        rawString,
+      ); // Save raw for the system
 
       if (mounted) {
         setState(() {
-          _lastSyncTime = currentTime;
+          _lastSyncTime = _formatTime(
+            rawString,
+          ); // Format beautifully for the user
         });
 
         ScaffoldMessenger.of(
@@ -116,10 +139,12 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      color: Colors.white,
+      color: Theme.of(context).cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFE2E8F0)),
+        side: BorderSide(
+          color: Theme.of(context).dividerColor,
+        ), // ✅ Dynamic border for dark mode
       ),
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -130,16 +155,19 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Row(
+                Row(
                   children: [
-                    Icon(Icons.cloud_sync_rounded, color: Color(0xFF2563EB)),
-                    SizedBox(width: 12),
+                    const Icon(
+                      Icons.cloud_sync_rounded,
+                      color: Color(0xFF2563EB),
+                    ),
+                    const SizedBox(width: 12),
                     Text(
                       "Cloud Backup",
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: Colors.black,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
                       ),
                     ),
                   ],

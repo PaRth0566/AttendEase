@@ -130,7 +130,7 @@ class _TodayScreenState extends State<TodayScreen> {
       child: ChoiceChip(
         label: Text(label),
         selected: selected,
-        selectedColor: color.withOpacity(0.15),
+        selectedColor: color.withAlpha(38),
         labelStyle: TextStyle(
           color: selected ? color : Colors.black,
           fontWeight: FontWeight.w600,
@@ -155,13 +155,15 @@ class _TodayScreenState extends State<TodayScreen> {
     ).format(DateTime.now());
 
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           "Today's Attendance",
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Theme.of(context).textTheme.bodyLarge?.color,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
       ),
       body: Padding(

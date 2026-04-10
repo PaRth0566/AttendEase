@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/db_helper.dart';
-import '../../services/auth_service.dart'; // ✅ NEW: Added AuthService import
+import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 
 class BasicInfoScreen extends StatefulWidget {
@@ -56,6 +56,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     });
   }
 
+  // ✅ UPDATED: Removed the forced Light Mode wrapper!
   Future<void> _pickDate(bool isStartDate) async {
     DateTime minDate = isStartDate
         ? DateTime(2020)
@@ -75,23 +76,6 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
       initialDate: initial,
       firstDate: minDate,
       lastDate: maxDate,
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF2563EB),
-              onPrimary: Colors.white,
-              onSurface: Colors.black,
-            ),
-            textButtonTheme: TextButtonThemeData(
-              style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF2563EB),
-              ),
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
 
     if (picked != null) {
@@ -153,10 +137,12 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBackgroundColor, // ✅ Dynamic background
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
@@ -170,24 +156,28 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                 widget.isEditMode
                     ? 'Edit your details'
                     : "Let's get to know you",
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E293B),
+                  color:
+                      theme.textTheme.bodyLarge?.color, // ✅ Dynamic Title Color
                 ),
               ),
               const SizedBox(height: 32),
 
-              _inputField(_nameController, 'Full Name'),
-              _inputField(_courseController, 'Course'),
-              _inputField(_yearController, 'Year'),
-              _inputField(_divisionController, 'Division'),
+              _inputField(_nameController, 'Full Name', theme),
+              _inputField(_courseController, 'Course', theme),
+              _inputField(_yearController, 'Year', theme),
+              _inputField(_divisionController, 'Division', theme),
 
               const SizedBox(height: 16),
 
               DropdownButtonFormField<int>(
                 value: _selectedSemester,
-                decoration: _inputDecoration('Semester'),
+                decoration: _inputDecoration('Semester', theme),
+                dropdownColor:
+                    theme.cardColor, // ✅ Fixes invisible dropdowns in dark mode
+                style: TextStyle(color: theme.textTheme.bodyLarge?.color),
                 items: List.generate(
                   8,
                   (i) => DropdownMenuItem(
@@ -208,12 +198,14 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                 label: 'Semester Start Date *',
                 date: _startDate,
                 onTap: () => _pickDate(true),
+                theme: theme,
               ),
               const SizedBox(height: 12),
               _dateTile(
                 label: 'Semester End Date *',
                 date: _endDate,
                 onTap: () => _pickDate(false),
+                theme: theme,
               ),
               const SizedBox(height: 32),
 
@@ -221,12 +213,10 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      // ✅ MAKE THIS FUNCTION ASYNC
                       onPressed: () async {
                         if (widget.isEditMode) {
                           Navigator.pop(context);
                         } else {
-                          // ✅ COMPLETELY WIPE THE SESSION BEFORE GOING BACK!
                           await AuthService().signOut();
 
                           if (!mounted) return;
@@ -241,20 +231,20 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                       },
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        side: const BorderSide(
-                          color: Color(0xFF2563EB),
+                        side: BorderSide(
+                          color: theme.colorScheme.primary,
                           width: 1.5,
                         ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Back',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF2563EB),
+                          color: theme.colorScheme.primary,
                         ),
                       ),
                     ),
@@ -264,7 +254,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                     child: ElevatedButton(
                       onPressed: _saveAndNext,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
+                        backgroundColor: theme.colorScheme.primary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         elevation: 0,
@@ -291,12 +281,19 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     );
   }
 
-  Widget _inputField(TextEditingController controller, String label) {
+  Widget _inputField(
+    TextEditingController controller,
+    String label,
+    ThemeData theme,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextField(
         controller: controller,
-        decoration: _inputDecoration(label),
+        style: TextStyle(
+          color: theme.textTheme.bodyLarge?.color,
+        ), // ✅ Dynamic typing color
+        decoration: _inputDecoration(label, theme),
       ),
     );
   }
@@ -305,6 +302,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     required String label,
     required DateTime? date,
     required VoidCallback onTap,
+    required ThemeData theme,
   }) {
     return InkWell(
       onTap: onTap,
@@ -312,7 +310,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE2E8F0)),
+          border: Border.all(color: theme.dividerColor), // ✅ Dynamic border
         ),
         child: Row(
           children: [
@@ -320,32 +318,41 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
               child: Text(
                 date == null ? label : DateFormat('dd MMM yyyy').format(date),
                 style: TextStyle(
-                  color: date == null ? Colors.grey : Colors.black,
+                  color: date == null
+                      ? Colors.grey
+                      : theme.textTheme.bodyLarge?.color, // ✅ Dynamic Text
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ),
-            const Icon(Icons.calendar_today, size: 18),
+            Icon(
+              Icons.calendar_today,
+              size: 18,
+              color: theme.iconTheme.color,
+            ), // ✅ Dynamic Icon
           ],
         ),
       ),
     );
   }
 
-  InputDecoration _inputDecoration(String label) {
+  InputDecoration _inputDecoration(String label, ThemeData theme) {
     return InputDecoration(
       labelText: label,
+      labelStyle: TextStyle(
+        color: theme.textTheme.bodyMedium?.color,
+      ), // ✅ Dynamic label
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        borderSide: BorderSide(color: theme.dividerColor),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+        borderSide: BorderSide(color: theme.dividerColor), // ✅ Dynamic border
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+        borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
       ),
     );
   }

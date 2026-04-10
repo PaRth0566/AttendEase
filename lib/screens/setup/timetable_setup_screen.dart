@@ -151,11 +151,9 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
       ).showSnackBar(const SnackBar(content: Text('Timetable updated!')));
       Navigator.pop(context);
     } else {
-      // ✅ Set Setup to Complete!
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_setup_complete', true);
 
-      // ✅ Instantly backup their brand new setup to Firebase!
       await CloudSyncService().backupDataToCloud();
 
       if (!mounted) return;
@@ -173,10 +171,13 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Extract Theme
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBackgroundColor, // ✅ Dynamic background
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent, // ✅ Adheres to theme naturally
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
@@ -189,10 +190,10 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
               widget.isEditMode
                   ? 'Edit Sem $_activeSemester Timetable'
                   : 'Set Your Weekly Timetable',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1E293B),
+                color: theme.textTheme.bodyLarge?.color, // ✅ Dynamic text
               ),
             ),
             const SizedBox(height: 24),
@@ -206,12 +207,17 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                     child: ChoiceChip(
                       label: Text(e.value),
                       selected: _selectedDay == e.key,
-                      selectedColor: const Color(0xFF2563EB),
-                      backgroundColor: const Color(0xFFF1F5F9),
+                      selectedColor:
+                          theme.colorScheme.primary, // ✅ Dynamic primary
+                      backgroundColor:
+                          theme.cardColor, // ✅ Dynamic unselected bg
                       labelStyle: TextStyle(
                         color: _selectedDay == e.key
                             ? Colors.white
-                            : const Color(0xFF64748B),
+                            : theme
+                                  .textTheme
+                                  .bodyLarge
+                                  ?.color, // ✅ Dynamic unselected text
                         fontWeight: FontWeight.bold,
                       ),
                       onSelected: (_) async {
@@ -232,23 +238,33 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                 Expanded(
                   child: DropdownButtonFormField<Subject>(
                     value: _selectedSubject,
+                    dropdownColor: theme
+                        .cardColor, // ✅ Crucial: prevents white dropdown in dark mode
+                    style: TextStyle(
+                      color: theme.textTheme.bodyLarge?.color,
+                    ), // ✅ Dropdown text color
                     decoration: InputDecoration(
                       hintText: 'Select subject',
+                      hintStyle: TextStyle(
+                        color: theme.textTheme.bodyMedium?.color,
+                      ),
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
                       ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        borderSide: BorderSide(color: theme.dividerColor),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                        borderSide: BorderSide(
+                          color: theme.dividerColor,
+                        ), // ✅ Dynamic border
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF2563EB),
+                        borderSide: BorderSide(
+                          color: theme.colorScheme.primary,
                           width: 2,
                         ),
                       ),
@@ -274,7 +290,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                   },
                   icon: const Icon(Icons.add),
                   style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
+                    backgroundColor: theme.colorScheme.primary,
                     foregroundColor: Colors.white,
                     minimumSize: const Size(56, 56),
                   ),
@@ -286,10 +302,12 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
 
             Expanded(
               child: _daySubjects.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Text(
                         'No lectures added for this day',
-                        style: TextStyle(color: Colors.grey),
+                        style: TextStyle(
+                          color: theme.textTheme.bodyMedium?.color,
+                        ),
                       ),
                     )
                   : ListView.builder(
@@ -297,21 +315,24 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                       itemBuilder: (_, i) => ListTile(
                         leading: CircleAvatar(
                           radius: 14,
-                          backgroundColor: const Color(
-                            0xFF2563EB,
-                          ).withOpacity(0.15),
+                          backgroundColor: theme.colorScheme.primary.withAlpha(
+                            38,
+                          ),
                           child: Text(
                             '${i + 1}',
-                            style: const TextStyle(
-                              color: Color(0xFF2563EB),
+                            style: TextStyle(
+                              color: theme.colorScheme.primary,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
                         title: Text(
                           _daySubjects[i].name,
-                          style: const TextStyle(
-                            color: Colors.black,
+                          style: TextStyle(
+                            color: theme
+                                .textTheme
+                                .bodyLarge
+                                ?.color, // ✅ Dynamic text
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -331,20 +352,20 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(
-                        color: Color(0xFF2563EB),
+                      side: BorderSide(
+                        color: theme.colorScheme.primary,
                         width: 1.5,
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
+                    child: Text(
                       'Back',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF2563EB),
+                        color: theme.colorScheme.primary,
                       ),
                     ),
                   ),
@@ -354,7 +375,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                   child: ElevatedButton(
                     onPressed: _finishSetup,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
+                      backgroundColor: theme.colorScheme.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       elevation: 0,

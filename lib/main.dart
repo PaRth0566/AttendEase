@@ -10,6 +10,8 @@ import 'screens/root/root_screen.dart';
 import 'screens/setup/attendance_criteria_screen.dart';
 import 'screens/setup/basic_info_screen.dart';
 import 'services/notification_service.dart';
+import 'theme/app_theme.dart';
+import 'theme/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +23,11 @@ void main() async {
   await NotificationService().init();
   await NotificationService().scheduleSmartNotifications();
 
+  // ✅ FIX: Read the saved theme from memory BEFORE the app starts!
+  final prefs = await SharedPreferences.getInstance();
+  final isDark = prefs.getBool('isDarkMode') ?? false;
+  themeProvider.initializeTheme(isDark);
+
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
@@ -29,10 +36,23 @@ void main() async {
   });
 }
 
-class AttendEaseApp extends StatelessWidget {
+class AttendEaseApp extends StatefulWidget {
   const AttendEaseApp({super.key});
 
-  // ✅ NEW: The Master Routing Logic
+  @override
+  State<AttendEaseApp> createState() => _AttendEaseAppState();
+}
+
+class _AttendEaseAppState extends State<AttendEaseApp> {
+  // ✅ CACHE THE FUTURE: This stops the app from redirecting when the theme changes!
+  late Future<Widget> _initialScreen;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialScreen = _getInitialScreen();
+  }
+
   Future<Widget> _getInitialScreen() async {
     // 1. Check if user is logged into Firebase FIRST
     if (FirebaseAuth.instance.currentUser == null) {
@@ -52,41 +72,47 @@ class AttendEaseApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'AttendEase',
-      theme: ThemeData(
-        brightness: Brightness.light,
-        primaryColor: const Color(0xFF2563EB),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2563EB),
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-      ),
-      home: FutureBuilder<Widget>(
-        future: _getInitialScreen(),
-        builder: (context, snapshot) {
-          // Show a clean loading spinner while checking auth state
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              backgroundColor: Colors.white,
-              body: Center(
-                child: CircularProgressIndicator(color: Color(0xFF2563EB)),
-              ),
-            );
-          }
+    return AnimatedBuilder(
+      animation: themeProvider,
+      builder: (context, child) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'AttendEase',
 
-          // Return the correct screen based on the logic above
-          if (snapshot.hasData) {
-            return snapshot.data!;
-          }
+          // ✅ DYNAMIC THEME IMPLEMENTATION
+          themeMode: themeProvider.themeMode,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
 
-          // Safe fallback
-          return const LoginScreen();
-        },
-      ),
-      routes: {'/attendance-criteria': (_) => const AttendanceCriteriaScreen()},
+          home: FutureBuilder<Widget>(
+            future: _initialScreen, // ✅ Uses the cached future
+            builder: (context, snapshot) {
+              // Show a clean loading spinner while checking auth state
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return Scaffold(
+                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                  body: Center(
+                    child: CircularProgressIndicator(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                );
+              }
+
+              // Return the correct screen based on the logic above
+              if (snapshot.hasData) {
+                return snapshot.data!;
+              }
+
+              // Safe fallback
+              return const LoginScreen();
+            },
+          ),
+          routes: {
+            '/attendance-criteria': (_) => const AttendanceCriteriaScreen(),
+          },
+        );
+      },
     );
   }
 }

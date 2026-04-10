@@ -173,15 +173,16 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Analytics & Reports',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: Theme.of(context).textTheme.bodyLarge?.color,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
       ),
       body: Column(
         children: [
@@ -189,7 +190,7 @@ class _ReportScreenState extends State<ReportScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Theme.of(context).cardColor,
               border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
             ),
             child: Column(
@@ -324,11 +325,11 @@ class _ReportScreenState extends State<ReportScreen> {
                       ),
                     ),
                     child: _isGenerating
-                        ? const SizedBox(
+                        ? SizedBox(
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
-                              color: Colors.white,
+                              color: Theme.of(context).cardColor,
                               strokeWidth: 2,
                             ),
                           )
@@ -371,7 +372,7 @@ class _ReportScreenState extends State<ReportScreen> {
                           color: const Color(0xFFF2F4FF),
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: const Color(0xFF2563EB).withOpacity(0.3),
+                            color: const Color(0xFF2563EB).withAlpha(76),
                           ),
                         ),
                         child: Column(

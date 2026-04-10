@@ -74,7 +74,6 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
       );
       Navigator.pop(context);
     } else {
-      // ✅ NAVIGATION FIX: Uses push so back button works!
       Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const AddSubjectsScreen()),
@@ -88,7 +87,7 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
-  InputDecoration _inputStyle(String hint) {
+  InputDecoration _inputStyle(String hint, ThemeData theme) {
     return InputDecoration(
       hintText: hint,
       hintStyle: const TextStyle(
@@ -98,25 +97,27 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+        borderSide: BorderSide(color: theme.dividerColor),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+        borderSide: BorderSide(color: theme.dividerColor), // ✅ Dynamic border
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF2563EB), width: 2),
+        borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBackgroundColor, // ✅ Dynamic Background
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
@@ -125,22 +126,22 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               'Attendance Requirements',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1E293B),
+                color: theme.textTheme.bodyLarge?.color, // ✅ Dynamic Title
               ),
             ),
             const SizedBox(height: 32),
 
-            const Text(
+            Text(
               'Overall Attendance Required (%)',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF334155),
+                color: theme.textTheme.bodyMedium?.color, // ✅ Dynamic subtitle
               ),
             ),
             const SizedBox(height: 8),
@@ -149,17 +150,20 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration: _inputStyle('e.g. 75'),
+              style: TextStyle(
+                color: theme.textTheme.bodyLarge?.color,
+              ), // ✅ Typing color
+              decoration: _inputStyle('e.g. 75', theme),
             ),
 
             const SizedBox(height: 24),
 
-            const Text(
+            Text(
               'Minimum Attendance Per Subject (%)',
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF334155),
+                color: theme.textTheme.bodyMedium?.color, // ✅ Dynamic subtitle
               ),
             ),
             const SizedBox(height: 8),
@@ -168,12 +172,14 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
-              decoration: _inputStyle('e.g. 70'),
+              style: TextStyle(
+                color: theme.textTheme.bodyLarge?.color,
+              ), // ✅ Typing color
+              decoration: _inputStyle('e.g. 70', theme),
             ),
 
             const Spacer(),
 
-            // ✅ UNIFIED BUTTON ROW
             Row(
               children: [
                 Expanded(
@@ -181,20 +187,20 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(
-                        color: Color(0xFF2563EB),
+                      side: BorderSide(
+                        color: theme.colorScheme.primary,
                         width: 1.5,
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
+                    child: Text(
                       'Back',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF2563EB),
+                        color: theme.colorScheme.primary,
                       ),
                     ),
                   ),
@@ -204,7 +210,7 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
                   child: ElevatedButton(
                     onPressed: _saveData,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
+                      backgroundColor: theme.colorScheme.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       elevation: 0,

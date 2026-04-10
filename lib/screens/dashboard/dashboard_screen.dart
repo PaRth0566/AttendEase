@@ -124,8 +124,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     if (_loading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        body: Center(
+          child: CircularProgressIndicator(color: theme.colorScheme.primary),
+        ),
+      );
     }
 
     bool isSafe = _currentOverall >= _requiredTarget;
@@ -139,13 +147,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBackgroundColor, // ✅ Dynamic background
       appBar: AppBar(
-        title: const Text(
+        backgroundColor: Colors.transparent, // ✅ Adheres to theme naturally
+        title: Text(
           'Dashboard',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            color: theme.textTheme.bodyLarge?.color, // ✅ Dynamic Text
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        backgroundColor: Colors.white,
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -155,8 +166,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             Text(
               'Semester $_activeSemester Overview',
-              style: const TextStyle(
-                color: Colors.grey,
+              style: TextStyle(
+                color: theme.textTheme.bodyMedium?.color, // ✅ Dynamic Subtitle
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
               ),
@@ -167,11 +178,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // OVERALL ATTENDANCE CARD
             // =========================
             Card(
-              color: const Color(0xFFF2F4FF),
+              color: theme.cardColor, // ✅ Dynamic Card Color
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                side: BorderSide(color: theme.dividerColor), // ✅ Dynamic Border
               ),
               child: Column(
                 children: [
@@ -183,19 +194,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
+                            Text(
                               'Overall Attendance',
                               style: TextStyle(
-                                color: Colors.grey,
+                                color: theme.textTheme.bodyMedium?.color,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               '${_currentOverall.toStringAsFixed(1)}%',
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 36,
                                 fontWeight: FontWeight.bold,
+                                color: theme.textTheme.bodyLarge?.color,
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -216,7 +228,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               width: 70,
                               child: CircularProgressIndicator(
                                 value: _currentOverall / 100,
-                                backgroundColor: Colors.white,
+                                backgroundColor: theme
+                                    .dividerColor, // ✅ Fixes white background in dark mode
                                 color: statusColor,
                                 strokeWidth: 8,
                               ),
@@ -238,8 +251,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: overallInsight['isSafe']
-                            ? Colors.green.withAlpha(25)
-                            : Colors.red.withAlpha(25),
+                            ? Colors.green.withAlpha(
+                                isDark ? 38 : 25,
+                              ) // ✅ Adjusted for dark mode readability
+                            : Colors.red.withAlpha(isDark ? 38 : 25),
                         borderRadius: const BorderRadius.only(
                           bottomLeft: Radius.circular(16),
                           bottomRight: Radius.circular(16),
@@ -253,8 +268,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 : Icons.warning_amber_rounded,
                             size: 18,
                             color: overallInsight['isSafe']
-                                ? Colors.green.shade700
-                                : Colors.red.shade700,
+                                ? (isDark
+                                      ? Colors.green.shade400
+                                      : Colors.green.shade700)
+                                : (isDark
+                                      ? Colors.red.shade400
+                                      : Colors.red.shade700),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
@@ -262,8 +281,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               overallInsight['text'],
                               style: TextStyle(
                                 color: overallInsight['isSafe']
-                                    ? Colors.green.shade800
-                                    : Colors.red.shade800,
+                                    ? (isDark
+                                          ? Colors.green.shade300
+                                          : Colors
+                                                .green
+                                                .shade800) // ✅ Readable text in Dark Mode
+                                    : (isDark
+                                          ? Colors.red.shade300
+                                          : Colors.red.shade800),
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
@@ -278,9 +303,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             const SizedBox(height: 24),
 
-            const Text(
+            Text(
               'Your Subjects',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: theme.textTheme.bodyLarge?.color, // ✅ Dynamic Text
+              ),
             ),
             const SizedBox(height: 12),
 
@@ -291,9 +320,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Container(
                 padding: const EdgeInsets.all(24),
                 alignment: Alignment.center,
-                child: const Text(
+                child: Text(
                   'No subjects added for this semester yet.',
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(color: theme.textTheme.bodyMedium?.color),
                 ),
               )
             else
@@ -317,6 +346,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     stat['attended']!,
                     stat['total']!,
                     subject.requiredPercent,
+                    theme, // ✅ Pass theme down
+                    isDark, // ✅ Pass dark mode status down
                   );
                 },
               ),
@@ -335,6 +366,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     int attended,
     int total,
     double requiredPercent,
+    ThemeData theme,
+    bool isDark,
   ) {
     Color color = percent >= requiredPercent
         ? Colors.green
@@ -345,12 +378,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final insight = _getPredictiveInsight(attended, total, requiredPercent);
 
     return Card(
-      color: const Color(0xFFF2F4FF),
+      color: theme.cardColor, // ✅ Dynamic Card Color
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Color(0xFFE2E8F0)),
+        side: BorderSide(color: theme.dividerColor), // ✅ Dynamic Border
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -364,9 +397,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Text(
                       subjectName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
+                        color:
+                            theme.textTheme.bodyLarge?.color, // ✅ Dynamic Text
                       ),
                     ),
                     Text(
@@ -382,7 +417,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 LinearProgressIndicator(
                   value: total == 0 ? 0 : percent / 100,
                   color: color,
-                  backgroundColor: Colors.white,
+                  backgroundColor:
+                      theme.dividerColor, // ✅ Fixes white background
                 ),
                 const SizedBox(height: 8),
                 Row(
@@ -390,7 +426,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Text(
                       '$attended/$total lectures',
-                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                      style: TextStyle(
+                        color: theme
+                            .textTheme
+                            .bodyMedium
+                            ?.color, // ✅ Dynamic Subtitle
+                        fontSize: 12,
+                      ),
                     ),
                     Text(
                       percent >= requiredPercent ? 'Safe' : 'Risk',
@@ -412,8 +454,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 color: insight['isSafe']
-                    ? Colors.green.withAlpha(20)
-                    : Colors.red.withAlpha(20),
+                    ? Colors.green.withAlpha(
+                        isDark ? 38 : 25,
+                      ) // ✅ Adjusted for Dark Mode
+                    : Colors.red.withAlpha(isDark ? 38 : 25),
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(12),
                   bottomRight: Radius.circular(12),
@@ -427,8 +471,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         : Icons.warning_amber_rounded,
                     size: 14,
                     color: insight['isSafe']
-                        ? Colors.green.shade700
-                        : Colors.red.shade700,
+                        ? (isDark
+                              ? Colors.green.shade400
+                              : Colors.green.shade700)
+                        : (isDark ? Colors.red.shade400 : Colors.red.shade700),
                   ),
                   const SizedBox(width: 6),
                   Expanded(
@@ -436,8 +482,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       insight['text'],
                       style: TextStyle(
                         color: insight['isSafe']
-                            ? Colors.green.shade800
-                            : Colors.red.shade800,
+                            ? (isDark
+                                  ? Colors.green.shade300
+                                  : Colors.green.shade800) // ✅ Readable text
+                            : (isDark
+                                  ? Colors.red.shade300
+                                  : Colors.red.shade800),
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),

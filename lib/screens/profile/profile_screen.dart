@@ -5,7 +5,8 @@ import '../../database/attendance_dao.dart';
 import '../../database/db_helper.dart';
 import '../../database/subject_dao.dart';
 import '../../services/auth_service.dart';
-import '../../services/cloud_sync_service.dart'; // ✅ NEW: Added the Cloud Sync Service import
+import '../../services/cloud_sync_service.dart';
+import '../../theme/theme_provider.dart'; // ✅ NEW IMPORT
 import '../../widgets/backup_sync_card.dart';
 import '../auth/login_screen.dart';
 import '../report/report_screen.dart';
@@ -82,11 +83,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ✅ UPDATED: SECURE LOGOUT & AUTO-BACKUP FUNCTION
   Future<void> _handleLogout() async {
     showDialog(
       context: context,
-      barrierDismissible: false, // Prevent dismissing while backing up
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('Log Out?'),
         content: const Text(
@@ -100,7 +100,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              // Show a loading circle over the dialog while backing up
               showDialog(
                 context: context,
                 barrierDismissible: false,
@@ -109,23 +108,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               );
 
-              // 1. AUTO BACKUP TO CLOUD BEFORE WIPING!
               await CloudSyncService().backupDataToCloud();
-
-              // 2. Log out of Google & Firebase Auth
               await AuthService().signOut();
 
-              // 3. Wipe Local Settings (SharedPreferences)
               final prefs = await SharedPreferences.getInstance();
               await prefs.clear();
 
-              // 4. Wipe SQLite Database
               final db = await DBHelper.instance.database;
               await db.delete('attendance_records');
               await db.delete('timetable');
               await db.delete('subjects');
 
-              // 5. Send them back to the Login Screen
               if (!mounted) return;
               Navigator.pushAndRemoveUntil(
                 context,
@@ -142,16 +135,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Allows us to grab the current theme colors dynamically
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text(
-          'Profile',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-      ),
+      // ✅ Removed hardcoded Colors.white
+      appBar: AppBar(title: const Text('Profile')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -163,9 +152,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF2F4FF),
+                      color: theme.cardColor, // ✅ Dynamic Card Color
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      border: Border.all(
+                        color: theme.dividerColor,
+                      ), // ✅ Dynamic Border
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -180,7 +171,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 4),
                         Text(
                           '$course • Year $year • Div $division',
-                          style: const TextStyle(color: Colors.grey),
+                          style: TextStyle(
+                            color: theme.textTheme.bodyMedium?.color,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
@@ -190,10 +183,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 12),
                         Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.percent,
                               size: 18,
-                              color: Color(0xFF2563EB),
+                              color: theme
+                                  .colorScheme
+                                  .primary, // ✅ Dynamic primary
                             ),
                             const SizedBox(width: 6),
                             Text(
@@ -217,16 +212,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     margin: const EdgeInsets.only(bottom: 24),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color:
+                          theme.scaffoldBackgroundColor, // ✅ Matches background
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.02),
-                          blurRadius: 4,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
+                      border: Border.all(color: theme.dividerColor),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -236,20 +225,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1E293B),
                           ),
                         ),
                         DropdownButton<int>(
                           value: semester,
                           underline: const SizedBox(),
-                          icon: const Icon(
+                          dropdownColor:
+                              theme.cardColor, // ✅ Dynamic dropdown menu color
+                          icon: Icon(
                             Icons.keyboard_arrow_down,
-                            color: Color(0xFF2563EB),
+                            color: theme.colorScheme.primary,
                           ),
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF2563EB),
+                            color: theme.colorScheme.primary,
                           ),
                           items: List.generate(
                             8,
@@ -265,6 +255,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           },
                         ),
                       ],
+                    ),
+                  ),
+
+                  // ✅ NEW: DARK MODE TOGGLE TILE
+                  _profileTile(
+                    icon: Icons.dark_mode_rounded,
+                    title: 'Dark Mode',
+                    onTap: () {
+                      themeProvider.toggleTheme(!themeProvider.isDarkMode);
+                    },
+                    trailing: Switch(
+                      value: themeProvider.isDarkMode,
+                      activeColor: theme.colorScheme.primary,
+                      onChanged: (value) {
+                        themeProvider.toggleTheme(value);
+                      },
                     ),
                   ),
 
@@ -342,8 +348,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _profileTile(
                     icon: Icons.logout_rounded,
                     title: 'Log Out',
-                    textColor: Colors.red,
-                    iconColor: Colors.red,
+                    isRedAlert:
+                        true, // ✅ Uses dynamic styling for the red button
                     onTap: _handleLogout,
                   ),
 
@@ -354,38 +360,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  // ✅ UPDATED: Dynamically colors the tiles based on Light/Dark Mode
   Widget _profileTile({
     required IconData icon,
     required String title,
     required VoidCallback onTap,
-    Color textColor = Colors.black,
-    Color iconColor = const Color(0xFF2563EB),
+    bool isRedAlert = false,
+    Widget? trailing,
   }) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
-      color: textColor == Colors.red
-          ? Colors.red.shade50
-          : const Color(0xFFF2F4FF),
+      // If it's the logout button, make it a soft red. Otherwise, use the theme card color.
+      color: isRedAlert
+          ? (isDark ? Colors.red.withAlpha(38) : Colors.red.shade50)
+          : theme.cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: textColor == Colors.red
-              ? Colors.red.shade200
-              : const Color(0xFFE2E8F0),
+          color: isRedAlert ? Colors.red.withAlpha(76) : theme.dividerColor,
         ),
       ),
       child: ListTile(
-        leading: Icon(icon, color: iconColor),
+        leading: Icon(
+          icon,
+          color: isRedAlert ? Colors.red : theme.colorScheme.primary,
+        ),
         title: Text(
           title,
-          style: TextStyle(fontWeight: FontWeight.w600, color: textColor),
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: isRedAlert
+                ? Colors.red
+                : theme.textTheme.bodyLarge?.color, // ✅ Dynamic Text Color
+          ),
         ),
-        trailing: Icon(
-          Icons.arrow_forward_ios,
-          size: 16,
-          color: textColor == Colors.red ? Colors.red : Colors.grey,
-        ),
+        trailing:
+            trailing ??
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: isRedAlert ? Colors.red : Colors.grey,
+            ),
         onTap: onTap,
       ),
     );

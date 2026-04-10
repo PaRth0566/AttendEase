@@ -79,21 +79,30 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
     await showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Edit Subject'),
+        backgroundColor: Theme.of(context).cardColor, // ✅ Dynamic popup color
+        title: Text(
+          'Edit Subject',
+          style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+        ),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(
+          style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+          decoration: InputDecoration(
             hintText: 'Enter subject name',
+            hintStyle: const TextStyle(color: Colors.grey),
             focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: Color(0xFF2563EB), width: 2),
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.primary,
+                width: 2,
+              ),
             ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
           IconButton(
             icon: const Icon(Icons.check, color: Colors.green),
@@ -128,12 +137,10 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
   }
 
   Future<void> _saveAndProceed() async {
-    // 1. Process all queued deletions
     for (final id in _deletedSubjectIds) {
       await _subjectDao.deleteSubject(id);
     }
 
-    // 2. Process all additions and updates
     for (final subject in _subjects) {
       if (subject.id == null) {
         await _subjectDao.insertSubject(subject);
@@ -142,8 +149,6 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
       }
     }
 
-    // ✅ THE FIX: Reload subjects from the database to update their IDs in memory!
-    // This stops them from duplicating if the user hits Back and Next again.
     await _loadSubjects();
 
     if (!mounted) return;
@@ -168,11 +173,12 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
   @override
   Widget build(BuildContext context) {
     final hasSubjects = _subjects.isNotEmpty;
+    final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBackgroundColor, // ✅ Dynamic Background
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
@@ -185,10 +191,10 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
               widget.isEditMode
                   ? 'Edit Sem $_activeSemester Subjects'
                   : 'Add Your Subjects',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 26,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF1E293B),
+                color: theme.textTheme.bodyLarge?.color, // ✅ Dynamic Title
               ),
             ),
             const SizedBox(height: 4),
@@ -196,7 +202,10 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
               widget.isEditMode
                   ? 'Tap a subject to edit its name'
                   : 'Add all subjects for this semester',
-              style: const TextStyle(fontSize: 16, color: Color(0xFF64748B)),
+              style: TextStyle(
+                fontSize: 16,
+                color: theme.textTheme.bodyMedium?.color,
+              ), // ✅ Dynamic Subtitle
             ),
             const SizedBox(height: 32),
 
@@ -205,10 +214,14 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
                 Expanded(
                   child: TextField(
                     controller: _subjectController,
+                    style: TextStyle(
+                      color: theme.textTheme.bodyLarge?.color,
+                    ), // ✅ Dynamic typing text
                     decoration: InputDecoration(
                       hintText: 'Enter subject name',
+                      hintStyle: const TextStyle(color: Colors.grey),
                       filled: true,
-                      fillColor: const Color(0xFFF8FAFC),
+                      fillColor: theme.cardColor, // ✅ Dynamic input background
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 18,
@@ -219,8 +232,8 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF2563EB),
+                        borderSide: BorderSide(
+                          color: theme.colorScheme.primary,
                           width: 2,
                         ),
                       ),
@@ -232,7 +245,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
                   icon: const Icon(Icons.add, size: 28),
                   onPressed: _addSubject,
                   style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
+                    backgroundColor: theme.colorScheme.primary,
                     foregroundColor: Colors.white,
                     minimumSize: const Size(56, 56),
                   ),
@@ -250,13 +263,23 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 12),
                     decoration: BoxDecoration(
+                      color: theme
+                          .cardColor, // ✅ Dynamic background for the list item
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                      border: Border.all(
+                        color: theme.dividerColor,
+                      ), // ✅ Dynamic border
                     ),
                     child: ListTile(
                       title: Text(
                         subject.name,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: theme
+                              .textTheme
+                              .bodyLarge
+                              ?.color, // ✅ Dynamic Text
+                        ),
                       ),
                       onTap: () => _editSubject(i),
                       trailing: IconButton(
@@ -279,20 +302,20 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(
-                        color: Color(0xFF2563EB),
+                      side: BorderSide(
+                        color: theme.colorScheme.primary,
                         width: 1.5,
                       ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
+                    child: Text(
                       'Back',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF2563EB),
+                        color: theme.colorScheme.primary,
                       ),
                     ),
                   ),
@@ -302,7 +325,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
                   child: ElevatedButton(
                     onPressed: hasSubjects ? _saveAndProceed : null,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2563EB),
+                      backgroundColor: theme.colorScheme.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       elevation: 0,
