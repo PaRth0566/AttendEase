@@ -188,7 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     Center(
                       child: Image.asset(
-                        'assets/icon/app_icon.png',
+                        'assets/icon/app_icon2.png',
                         height:
                             88, // Made it slightly bigger since we removed the padding!
                         width: 88,
