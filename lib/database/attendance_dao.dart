@@ -166,4 +166,34 @@ class AttendanceDao {
     }
     return dateStatuses;
   }
+
+  // ================================
+  // CALCULATE CURRENT STREAK
+  // ================================
+  Future<int> getCurrentStreak() async {
+    final db = await DBHelper.instance.database;
+
+    // Groups records by date and counts Presents and Absents for each day
+    final result = await db.rawQuery('''
+      SELECT date,
+             SUM(CASE WHEN status = 'A' THEN 1 ELSE 0 END) as absent_count,
+             SUM(CASE WHEN status = 'P' THEN 1 ELSE 0 END) as present_count
+      FROM attendance_records
+      GROUP BY date
+      ORDER BY date DESC
+    ''');
+
+    int streak = 0;
+    for (final row in result) {
+      int absentCount = row['absent_count'] as int;
+      int presentCount = row['present_count'] as int;
+
+      if (absentCount > 0) {
+        break; // Streak is broken the moment we find an absent record!
+      } else if (presentCount > 0) {
+        streak++; // Perfect day!
+      }
+    }
+    return streak;
+  }
 }

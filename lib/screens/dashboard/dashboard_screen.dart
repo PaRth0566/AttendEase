@@ -27,6 +27,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _totalAttendedOverall = 0;
   int _totalLecturesOverall = 0;
 
+  int _currentStreak = 0;
+
   bool _loading = true;
 
   @override
@@ -42,6 +44,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     _subjects = await _subjectDao.getSubjectsBySemester(_activeSemester);
     _attendanceStats = await _attendanceDao.getAttendanceStats();
+    _currentStreak = await _attendanceDao.getCurrentStreak();
 
     _totalAttendedOverall = 0;
     _totalLecturesOverall = 0;
@@ -56,7 +59,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ? 0
         : (_totalAttendedOverall / _totalLecturesOverall) * 100;
 
-    // Sort subjects by attendance percentage (Lowest to Highest)
     _subjects.sort((a, b) {
       final statA = _attendanceStats[a.id] ?? {'attended': 0, 'total': 0};
       final statB = _attendanceStats[b.id] ?? {'attended': 0, 'total': 0};
@@ -69,43 +71,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
           : (statB['attended']! / statB['total']!) * 100;
 
       int comparison = percentA.compareTo(percentB);
-
-      if (comparison == 0) {
-        return a.name.compareTo(b.name);
-      }
+      if (comparison == 0) return a.name.compareTo(b.name);
       return comparison;
     });
 
-    if (mounted) {
-      setState(() => _loading = false);
-    }
+    if (mounted) setState(() => _loading = false);
   }
 
-  // =========================
-  // BUNK PLANNER MATH ENGINE
-  // =========================
   Map<String, dynamic> _getPredictiveInsight(
     int attended,
     int total,
     double requiredPercent,
   ) {
-    if (total == 0) {
+    if (total == 0)
       return {'text': 'No classes recorded yet.', 'isSafe': true, 'skips': 0};
-    }
 
     double reqFrac = requiredPercent / 100;
     double currentPercent = (attended / total) * 100;
 
     if (currentPercent >= requiredPercent) {
-      // SAFE: How many can they skip?
       int skips = ((attended / reqFrac) - total).floor();
-      if (skips <= 0) {
+      if (skips <= 0)
         return {
           'text': 'On track, but you cannot skip the next lecture.',
           'isSafe': true,
           'skips': 0,
         };
-      }
       return {
         'text':
             'You can safely skip the next $skips lecture${skips > 1 ? 's' : ''}.',
@@ -113,7 +104,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'skips': skips,
       };
     } else {
-      // RISK: How many must they attend?
       int attends = (((reqFrac * total) - attended) / (1 - reqFrac)).ceil();
       return {
         'text':
@@ -141,7 +131,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     bool isSafe = _currentOverall >= _requiredTarget;
     Color statusColor = isSafe ? Colors.green : Colors.red;
     IconData statusIcon = isSafe ? Icons.check_rounded : Icons.close_rounded;
-
     final overallInsight = _getPredictiveInsight(
       _totalAttendedOverall,
       _totalLecturesOverall,
@@ -160,6 +149,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
         elevation: 0,
+        actions: [
+          // ✅ CHANGED: Only shows up if streak is 3 or more days!
+          if (_currentStreak >= 3)
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.orange.withAlpha(25)
+                        : Colors.orange.withAlpha(20),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.orange.withAlpha(80)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '$_currentStreak',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: isDark
+                              ? Colors.orange.shade300
+                              : Colors.orange.shade800,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Text('🔥', style: TextStyle(fontSize: 14)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -176,9 +204,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 16),
 
-            // =========================
             // OVERALL ATTENDANCE CARD
-            // =========================
             Card(
               color: theme.cardColor,
               elevation: 0,
@@ -242,7 +268,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
 
-                  // 🧠 BUNK PLANNER: OVERALL INSIGHT
+                  // BUNK PLANNER: OVERALL INSIGHT
                   if (_totalLecturesOverall > 0)
                     Container(
                       width: double.infinity,
@@ -299,7 +325,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
 
             const SizedBox(height: 24),
-
             Text(
               'Your Subjects',
               style: TextStyle(
@@ -310,9 +335,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 12),
 
-            // =========================
             // SUBJECT LIST
-            // =========================
             if (_subjects.isEmpty)
               Container(
                 padding: const EdgeInsets.all(24),
@@ -332,11 +355,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   final stat =
                       _attendanceStats[subject.id] ??
                       {'attended': 0, 'total': 0};
-
                   final double percent = stat['total'] == 0
                       ? 0.0
                       : ((stat['attended']! / stat['total']!) * 100);
-
                   return _subjectCard(
                     subject,
                     percent,
@@ -369,7 +390,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         : percent >= (subject.requiredPercent - 10)
         ? Colors.orange
         : Colors.red;
-
     final insight = _getPredictiveInsight(
       attended,
       total,
@@ -393,9 +413,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               builder: (_) => SubjectDetailScreen(subject: subject),
             ),
           ).then((_) {
-            setState(() {
-              _loading = true;
-            });
+            setState(() => _loading = true);
             _loadDashboardData();
           });
         },
@@ -470,8 +488,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
             ),
-
-            // 🧠 BUNK PLANNER: SUBJECT INSIGHT
             if (total > 0)
               Container(
                 width: double.infinity,
