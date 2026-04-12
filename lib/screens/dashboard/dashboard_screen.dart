@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
 import '../../models/subject.dart';
+import '../report/subject_detail_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -88,8 +89,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     int total,
     double requiredPercent,
   ) {
-    if (total == 0)
+    if (total == 0) {
       return {'text': 'No classes recorded yet.', 'isSafe': true, 'skips': 0};
+    }
 
     double reqFrac = requiredPercent / 100;
     double currentPercent = (attended / total) * 100;
@@ -147,13 +149,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor, // ✅ Dynamic background
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.transparent, // ✅ Adheres to theme naturally
+        backgroundColor: Colors.transparent,
         title: Text(
           'Dashboard',
           style: TextStyle(
-            color: theme.textTheme.bodyLarge?.color, // ✅ Dynamic Text
+            color: theme.textTheme.bodyLarge?.color,
             fontWeight: FontWeight.bold,
           ),
         ),
@@ -167,7 +169,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Text(
               'Semester $_activeSemester Overview',
               style: TextStyle(
-                color: theme.textTheme.bodyMedium?.color, // ✅ Dynamic Subtitle
+                color: theme.textTheme.bodyMedium?.color,
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
               ),
@@ -178,11 +180,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // OVERALL ATTENDANCE CARD
             // =========================
             Card(
-              color: theme.cardColor, // ✅ Dynamic Card Color
+              color: theme.cardColor,
               elevation: 0,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: theme.dividerColor), // ✅ Dynamic Border
+                side: BorderSide(color: theme.dividerColor),
               ),
               child: Column(
                 children: [
@@ -228,8 +230,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               width: 70,
                               child: CircularProgressIndicator(
                                 value: _currentOverall / 100,
-                                backgroundColor: theme
-                                    .dividerColor, // ✅ Fixes white background in dark mode
+                                backgroundColor: theme.dividerColor,
                                 color: statusColor,
                                 strokeWidth: 8,
                               ),
@@ -251,9 +252,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: overallInsight['isSafe']
-                            ? Colors.green.withAlpha(
-                                isDark ? 38 : 25,
-                              ) // ✅ Adjusted for dark mode readability
+                            ? Colors.green.withAlpha(isDark ? 38 : 25)
                             : Colors.red.withAlpha(isDark ? 38 : 25),
                         borderRadius: const BorderRadius.only(
                           bottomLeft: Radius.circular(16),
@@ -283,9 +282,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 color: overallInsight['isSafe']
                                     ? (isDark
                                           ? Colors.green.shade300
-                                          : Colors
-                                                .green
-                                                .shade800) // ✅ Readable text in Dark Mode
+                                          : Colors.green.shade800)
                                     : (isDark
                                           ? Colors.red.shade300
                                           : Colors.red.shade800),
@@ -308,7 +305,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: theme.textTheme.bodyLarge?.color, // ✅ Dynamic Text
+                color: theme.textTheme.bodyLarge?.color,
               ),
             ),
             const SizedBox(height: 12),
@@ -341,13 +338,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       : ((stat['attended']! / stat['total']!) * 100);
 
                   return _subjectCard(
-                    subject.name,
+                    subject,
                     percent,
                     stat['attended']!,
                     stat['total']!,
-                    subject.requiredPercent,
-                    theme, // ✅ Pass theme down
-                    isDark, // ✅ Pass dark mode status down
+                    theme,
+                    isDark,
                   );
                 },
               ),
@@ -361,142 +357,170 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // SUBJECT CARD
   // =========================
   Widget _subjectCard(
-    String subjectName,
+    Subject subject,
     double percent,
     int attended,
     int total,
-    double requiredPercent,
     ThemeData theme,
     bool isDark,
   ) {
-    Color color = percent >= requiredPercent
+    Color color = percent >= subject.requiredPercent
         ? Colors.green
-        : percent >= (requiredPercent - 10)
+        : percent >= (subject.requiredPercent - 10)
         ? Colors.orange
         : Colors.red;
 
-    final insight = _getPredictiveInsight(attended, total, requiredPercent);
+    final insight = _getPredictiveInsight(
+      attended,
+      total,
+      subject.requiredPercent,
+    );
 
     return Card(
-      color: theme.cardColor, // ✅ Dynamic Card Color
+      color: theme.cardColor,
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: theme.dividerColor), // ✅ Dynamic Border
+        side: BorderSide(color: theme.dividerColor),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      subjectName,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color:
-                            theme.textTheme.bodyLarge?.color, // ✅ Dynamic Text
-                      ),
-                    ),
-                    Text(
-                      '${percent.toStringAsFixed(1)}%',
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                LinearProgressIndicator(
-                  value: total == 0 ? 0 : percent / 100,
-                  color: color,
-                  backgroundColor:
-                      theme.dividerColor, // ✅ Fixes white background
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '$attended/$total lectures',
-                      style: TextStyle(
-                        color: theme
-                            .textTheme
-                            .bodyMedium
-                            ?.color, // ✅ Dynamic Subtitle
-                        fontSize: 12,
-                      ),
-                    ),
-                    Text(
-                      percent >= requiredPercent ? 'Safe' : 'Risk',
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SubjectDetailScreen(subject: subject),
             ),
-          ),
-
-          // 🧠 BUNK PLANNER: SUBJECT INSIGHT
-          if (total > 0)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: insight['isSafe']
-                    ? Colors.green.withAlpha(
-                        isDark ? 38 : 25,
-                      ) // ✅ Adjusted for Dark Mode
-                    : Colors.red.withAlpha(isDark ? 38 : 25),
-                borderRadius: const BorderRadius.only(
-                  bottomLeft: Radius.circular(12),
-                  bottomRight: Radius.circular(12),
-                ),
-              ),
-              child: Row(
+          ).then((_) {
+            setState(() {
+              _loading = true;
+            });
+            _loadDashboardData();
+          });
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
                 children: [
-                  Icon(
-                    insight['isSafe']
-                        ? Icons.lightbulb_outline
-                        : Icons.warning_amber_rounded,
-                    size: 14,
-                    color: insight['isSafe']
-                        ? (isDark
-                              ? Colors.green.shade400
-                              : Colors.green.shade700)
-                        : (isDark ? Colors.red.shade400 : Colors.red.shade700),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      insight['text'],
-                      style: TextStyle(
-                        color: insight['isSafe']
-                            ? (isDark
-                                  ? Colors.green.shade300
-                                  : Colors.green.shade800) // ✅ Readable text
-                            : (isDark
-                                  ? Colors.red.shade300
-                                  : Colors.red.shade800),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                subject.name,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: theme.textTheme.bodyLarge?.color,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.chevron_right_rounded,
+                              size: 18,
+                              color: theme.dividerColor,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                      Text(
+                        '${percent.toStringAsFixed(1)}%',
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(
+                    value: total == 0 ? 0 : percent / 100,
+                    color: color,
+                    backgroundColor: theme.dividerColor,
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '$attended/$total lectures',
+                        style: TextStyle(
+                          color: theme.textTheme.bodyMedium?.color,
+                          fontSize: 12,
+                        ),
+                      ),
+                      Text(
+                        percent >= subject.requiredPercent ? 'Safe' : 'Risk',
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-        ],
+
+            // 🧠 BUNK PLANNER: SUBJECT INSIGHT
+            if (total > 0)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: insight['isSafe']
+                      ? Colors.green.withAlpha(isDark ? 38 : 25)
+                      : Colors.red.withAlpha(isDark ? 38 : 25),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      insight['isSafe']
+                          ? Icons.lightbulb_outline
+                          : Icons.warning_amber_rounded,
+                      size: 14,
+                      color: insight['isSafe']
+                          ? (isDark
+                                ? Colors.green.shade400
+                                : Colors.green.shade700)
+                          : (isDark
+                                ? Colors.red.shade400
+                                : Colors.red.shade700),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        insight['text'],
+                        style: TextStyle(
+                          color: insight['isSafe']
+                              ? (isDark
+                                    ? Colors.green.shade300
+                                    : Colors.green.shade800)
+                              : (isDark
+                                    ? Colors.red.shade300
+                                    : Colors.red.shade800),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
