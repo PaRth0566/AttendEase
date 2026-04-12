@@ -12,7 +12,7 @@ import 'screens/setup/basic_info_screen.dart';
 import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
-
+//TEST
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
