@@ -48,7 +48,7 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(
           builder: (_) => const BasicInfoScreen(isEditMode: false),
         ),
-        (route) => false,
+            (route) => false,
       );
       return;
     }
@@ -62,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const RootScreen()),
-        (route) => false,
+            (route) => false,
       );
     } else {
       Navigator.pushAndRemoveUntil(
@@ -70,7 +70,7 @@ class _LoginScreenState extends State<LoginScreen> {
         MaterialPageRoute(
           builder: (_) => const BasicInfoScreen(isEditMode: false),
         ),
-        (route) => false,
+            (route) => false,
       );
     }
   }
@@ -170,6 +170,37 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // ✅ NEW: Guest Login Logic
+  Future<void> _loginAsGuest() async {
+    final List<ConnectivityResult> connectivityResult = await (Connectivity()
+        .checkConnectivity());
+    if (connectivityResult.contains(ConnectivityResult.none)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No internet connection. Please connect to log in.'),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      User? user = await _authService.signInGuest();
+      await _handlePostLogin(user); // Routes them properly!
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Guest Login failed. Please try again.'),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -189,8 +220,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Center(
                       child: Image.asset(
                         'assets/icon/app_icon2.png',
-                        height:
-                            88, // Made it slightly bigger since we removed the padding!
+                        height: 88,
                         width: 88,
                         fit: BoxFit.contain,
                       ),
@@ -263,7 +293,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : Icons.visibility,
                           ),
                           onPressed: () => setState(
-                            () => _obscurePassword = !_obscurePassword,
+                                () => _obscurePassword = !_obscurePassword,
                           ),
                         ),
                         border: OutlineInputBorder(
@@ -363,6 +393,37 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
+
+                    const SizedBox(height: 16),
+
+                    // 🔥 NEW: Continue as Guest Button 🔥
+                    OutlinedButton.icon(
+                      onPressed: _loginAsGuest,
+                      icon: Icon(
+                        Icons.person_outline_rounded,
+                        color: theme.colorScheme.primary,
+                        size: 24,
+                      ),
+                      label: Text(
+                        'Continue as Guest',
+                        style: TextStyle(
+                          color: theme.colorScheme.primary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: BorderSide(
+                            color: theme.colorScheme.primary.withAlpha(100),
+                            width: 1.5
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+
                     const SizedBox(height: 32),
 
                     Row(

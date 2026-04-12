@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
 
 class DBHelper {
   DBHelper._internal();
@@ -14,6 +16,20 @@ class DBHelper {
   }
 
   Future<Database> _initDatabase() async {
+    if (kIsWeb) {
+      // Use web factory for sqflite on the web
+      var factory = databaseFactoryFfiWeb;
+      return await factory.openDatabase(
+        'attendease.db',
+        options: OpenDatabaseOptions(
+          version: 3, // ✅ UPGRADED TO VERSION 3
+          onConfigure: _onConfigure,
+          onCreate: _onCreate,
+          onUpgrade: _onUpgrade, // ✅ ADDED UPGRADE LOGIC
+        ),
+      );
+    }
+
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'attendease.db');
 

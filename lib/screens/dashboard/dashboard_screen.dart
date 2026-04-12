@@ -7,7 +7,10 @@ import '../../models/subject.dart';
 import '../report/subject_detail_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final List<Subject>? overrideSubjects;
+  final Map<int, Map<String, int>>? overrideStats;
+
+  const DashboardScreen({super.key, this.overrideSubjects, this.overrideStats});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -42,9 +45,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _requiredTarget = prefs.getDouble('overall_required_attendance') ?? 75.0;
     _activeSemester = prefs.getInt('semester') ?? 1;
 
-    _subjects = await _subjectDao.getSubjectsBySemester(_activeSemester);
-    _attendanceStats = await _attendanceDao.getAttendanceStats();
-    _currentStreak = await _attendanceDao.getCurrentStreak();
+    if (widget.overrideSubjects != null && widget.overrideStats != null) {
+      // Bypass database and use provided data immediately
+      _subjects = widget.overrideSubjects!;
+      _attendanceStats = widget.overrideStats!;
+      _currentStreak = 0; 
+    } else {
+      _subjects = await _subjectDao.getSubjectsBySemester(_activeSemester);
+      _attendanceStats = await _attendanceDao.getAttendanceStats();
+      _currentStreak = await _attendanceDao.getCurrentStreak();
+    }
 
     _totalAttendedOverall = 0;
     _totalLecturesOverall = 0;

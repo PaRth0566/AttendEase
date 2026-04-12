@@ -14,7 +14,7 @@ class SubjectDao {
     );
   }
 
-  // ✅ GET SUBJECTS ONLY FOR A SPECIFIC SEMESTER
+  // GET SUBJECTS ONLY FOR A SPECIFIC SEMESTER
   Future<List<Subject>> getSubjectsBySemester(int semester) async {
     final Database db = await DBHelper.instance.database;
     final List<Map<String, dynamic>> maps = await db.query(

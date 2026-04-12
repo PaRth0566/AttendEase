@@ -7,6 +7,9 @@ class AuthService {
 
   User? get currentUser => _auth.currentUser;
 
+  // ✅ NEW: Get current user ID easily
+  String? get currentUserId => _auth.currentUser?.uid;
+
   // 1. SIGN IN WITH GOOGLE
   Future<User?> signInWithGoogle() async {
     try {
@@ -14,7 +17,7 @@ class AuthService {
       if (googleUser == null) return null;
 
       final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
+      await googleUser.authentication;
       final AuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
@@ -35,9 +38,9 @@ class AuthService {
     try {
       final UserCredential userCredential = await _auth
           .signInWithEmailAndPassword(
-            email: email.trim(),
-            password: password.trim(),
-          );
+        email: email.trim(),
+        password: password.trim(),
+      );
       return userCredential.user;
     } catch (e) {
       print("Email Login Error: $e");
@@ -50,11 +53,11 @@ class AuthService {
     try {
       final UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(
-            email: email.trim(),
-            password: password.trim(),
-          );
+        email: email.trim(),
+        password: password.trim(),
+      );
 
-      // ✅ NEW: Automatically send a verification email
+      // Automatically send a verification email
       await userCredential.user?.sendEmailVerification();
 
       return userCredential.user;
@@ -78,5 +81,22 @@ class AuthService {
   Future<void> signOut() async {
     await _googleSignIn.signOut();
     await _auth.signOut();
+  }
+
+  // 6. ✅ NEW: SIGN IN ANONYMOUSLY (GUEST MODE)
+  Future<User?> signInGuest() async {
+    try {
+      // Check if they are already logged in from a previous session
+      if (_auth.currentUser != null) {
+        return _auth.currentUser;
+      }
+
+      // If not, create a new anonymous guest account
+      UserCredential result = await _auth.signInAnonymously();
+      return result.user;
+    } catch (e) {
+      print("Error signing in anonymously: $e");
+      return null;
+    }
   }
 }
