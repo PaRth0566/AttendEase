@@ -114,14 +114,17 @@ class AttendanceDao {
     return stats;
   }
 
-  // ✅ NEW: Fetch history for a specific subject
+  // ================================
+  // FETCH HISTORY FOR A SPECIFIC SUBJECT (DEEP-DIVE)
+  // ================================
+  // ✅ UPDATED: Now fetches the specific timetable_entry_id for editing/deleting
   Future<List<Map<String, dynamic>>> getAttendanceHistoryForSubject(
     int subjectId,
   ) async {
     final db = await DBHelper.instance.database;
     final List<Map<String, dynamic>> maps = await db.rawQuery(
       '''
-      SELECT a.date, a.status
+      SELECT a.timetable_entry_id, a.date, a.status
       FROM attendance_records a
       INNER JOIN timetable t ON a.timetable_entry_id = t.id
       WHERE t.subject_id = ?
