@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import 'basic_info_screen.dart';
 
@@ -47,6 +48,7 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
           'report',
           fileBytes,
           filename: result.files.first.name,
+          contentType: MediaType('application', 'pdf'),
         ),
       );
 
@@ -81,14 +83,20 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
           throw Exception(jsonResult['error'] ?? 'Unknown error occurred.');
         }
       } else {
-        throw Exception('Server error: ${response.statusCode}');
+        String serverMsg = 'Server error: ${response.statusCode}';
+        try {
+          final errJson = json.decode(responseData);
+          if (errJson['error'] != null) serverMsg = errJson['error'];
+        } catch (_) {}
+        throw Exception(serverMsg);
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isUploading = false);
+        final displayErr = e.toString().replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to process PDF: $e\nEnsure it is a valid attendance report.'),
+            content: Text('Error: $displayErr'),
             backgroundColor: Colors.red.shade600,
             duration: const Duration(seconds: 4),
           ),

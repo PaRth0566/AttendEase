@@ -10,6 +10,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/root/root_screen.dart';
 import 'screens/setup/attendance_criteria_screen.dart';
 import 'screens/setup/basic_info_screen.dart';
+import 'screens/setup/setup_choice_screen.dart';
 import 'screens/web/web_dashboard_screen.dart';
 import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
@@ -90,7 +91,7 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
     if (isSetupComplete) {
       return const RootScreen();
     } else {
-      return const BasicInfoScreen(isEditMode: false);
+      return const SetupChoiceScreen();
     }
   }
 

@@ -4,7 +4,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/db_helper.dart';
 import '../../database/subject_dao.dart';
+import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
+import '../../models/timetable_entry.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 
@@ -166,6 +168,35 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                   requiredPercent: 75.0,
                   semester: _selectedSemester
                 ));
+             }
+          }
+          
+          final timetable = widget.prefilledData!['timetable'];
+          if (timetable != null && timetable is List && timetable.isNotEmpty) {
+             final Map<String, int> subjectNameToId = {};
+             final insertedSubjects = await subjectDao.getSubjectsBySemester(_selectedSemester);
+             for (var sub in insertedSubjects) {
+               subjectNameToId[sub.name] = sub.id!;
+             }
+
+             final timetableDao = TimetableDao();
+             for (var dayObj in timetable) {
+                final int dayOfWeek = dayObj['dayOfWeek'] ?? 1;
+                final List<dynamic> daySubjects = dayObj['subjects'] ?? [];
+                
+                await timetableDao.deleteEntriesForDay(dayOfWeek, _selectedSemester);
+                
+                for (int i = 0; i < daySubjects.length; i++) {
+                   final String subName = daySubjects[i].toString().trim();
+                   final subId = subjectNameToId[subName];
+                   if (subId != null) {
+                      await timetableDao.insertEntry(TimetableEntry(
+                        dayOfWeek: dayOfWeek,
+                        subjectId: subId,
+                        lectureOrder: i + 1
+                      ));
+                   }
+                }
              }
           }
         }

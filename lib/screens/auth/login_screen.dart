@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
 import '../root/root_screen.dart';
-import '../setup/basic_info_screen.dart';
+import '../setup/setup_choice_screen.dart';
 import 'forgot_password_screen.dart';
 import 'signup_screen.dart';
 
@@ -46,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (_) => const BasicInfoScreen(isEditMode: false),
+          builder: (_) => const SetupChoiceScreen(),
         ),
             (route) => false,
       );
@@ -68,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(
-          builder: (_) => const BasicInfoScreen(isEditMode: false),
+          builder: (_) => const SetupChoiceScreen(),
         ),
             (route) => false,
       );
