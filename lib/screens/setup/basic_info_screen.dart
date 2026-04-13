@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../database/db_helper.dart';
 import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
+import '../../database/attendance_dao.dart';
 import '../../models/subject.dart';
 import '../../models/timetable_entry.dart';
 import '../../services/auth_service.dart';
@@ -171,14 +172,14 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
              }
           }
           
+          final Map<String, int> subjectNameToId = {};
+          final insertedSubjects = await subjectDao.getSubjectsBySemester(_selectedSemester);
+          for (var sub in insertedSubjects) {
+            subjectNameToId[sub.name] = sub.id!;
+          }
+          
           final timetable = widget.prefilledData!['timetable'];
           if (timetable != null && timetable is List && timetable.isNotEmpty) {
-             final Map<String, int> subjectNameToId = {};
-             final insertedSubjects = await subjectDao.getSubjectsBySemester(_selectedSemester);
-             for (var sub in insertedSubjects) {
-               subjectNameToId[sub.name] = sub.id!;
-             }
-
              final timetableDao = TimetableDao();
              for (var dayObj in timetable) {
                 final int dayOfWeek = dayObj['dayOfWeek'] ?? 1;
@@ -195,6 +196,56 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                         subjectId: subId,
                         lectureOrder: i + 1
                       ));
+                   }
+                }
+             }
+          }
+          
+          final history = widget.prefilledData!['attendanceRecords'];
+          if (history != null && history is List && history.isNotEmpty) {
+             final attendanceDao = AttendanceDao();
+             final timetableDao = TimetableDao();
+             
+             final allTimetableEntries = <int, List<TimetableEntry>>{};
+             for (int day = 1; day <= 7; day++) {
+                final dayEntries = await timetableDao.getEntriesForDay(day, _selectedSemester);
+                for (var entry in dayEntries) {
+                   allTimetableEntries.putIfAbsent(entry.subjectId, () => []).add(entry);
+                }
+             }
+
+             for (var record in history) {
+                final dateStr = record['date']; 
+                final subjectName = record['subject']?.toString().trim();
+                final status = record['status']?.toString().toUpperCase();
+                
+                if (dateStr != null && subjectName != null && status != null && (status == 'P' || status == 'A')) {
+                   final subId = subjectNameToId[subjectName];
+                   if (subId != null) {
+                      final entriesForSubject = allTimetableEntries[subId] ?? [];
+                      if (entriesForSubject.isNotEmpty) {
+                          DateTime? parsedDate;
+                          try {
+                              parsedDate = DateTime.parse(dateStr);
+                          } catch (_) {}
+                          
+                          int matchingEntryId = entriesForSubject.first.id!; 
+                          if (parsedDate != null) {
+                              final weekday = parsedDate.weekday; 
+                              for (var entry in entriesForSubject) {
+                                  if (entry.dayOfWeek == weekday) {
+                                      matchingEntryId = entry.id!;
+                                      break;
+                                  }
+                              }
+                          }
+                          
+                          await attendanceDao.upsertAttendance(
+                              timetableId: matchingEntryId,
+                              date: dateStr,
+                              status: status,
+                          );
+                      }
                    }
                 }
              }

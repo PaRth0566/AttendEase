@@ -22,15 +22,6 @@ void main() async {
   // ☁️ INITIALIZE FIREBASE
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // ✅ NEW: SILENT GUEST LOGIN
-  // This ensures the user instantly gets a secure Guest ID if they aren't logged in.
-  if (FirebaseAuth.instance.currentUser == null) {
-    try {
-      await FirebaseAuth.instance.signInAnonymously();
-    } catch (e) {
-      print("Silent Guest Login Failed: $e");
-    }
-  }
 
   // 🔔 INITIALIZE NOTIFICATIONS (skip on web as it causes MissingPlugin errors)
   if (!kIsWeb) {
@@ -79,20 +70,8 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
       return const WebDashboardScreen();
     }
 
-    // 1. Check if user is logged into Firebase FIRST
-    if (FirebaseAuth.instance.currentUser == null) {
-      return const LoginScreen();
-    }
-
-    // 2. If they are logged in (even as a Guest), check if they finished setting up their profile
-    final prefs = await SharedPreferences.getInstance();
-    final isSetupComplete = prefs.getBool('is_setup_complete') ?? false;
-
-    if (isSetupComplete) {
-      return const RootScreen();
-    } else {
-      return const SetupChoiceScreen();
-    }
+    // Android: Always start on the Auth screen
+    return const LoginScreen();
   }
 
   @override
