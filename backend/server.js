@@ -36,7 +36,7 @@ app.post('/api/analyze-attendance', (req, res, next) => {
       return res.status(400).json({ success: false, error: 'No PDF file provided under the "report" field.' });
     }
 
-    if (req.file.mimetype !== 'application/pdf' && !req.file.originalname.toLowerCase().endsWith('.pdf')) {
+    if (req.file.mimetype !== 'application/pdf') {
       return res.status(400).json({ success: false, error: 'Only PDF files are accepted.' });
     }
 
@@ -90,38 +90,34 @@ RULES:
       }
     };
 
-    const callGemini = async (modelName) => {
-      return axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          contents: [{ role: 'user', parts: [{ text: prompt }, pdfPart] }],
-          generationConfig: { responseMimeType: "application/json" }
-        },
-        { headers: { 'Content-Type': 'application/json' } }
-      );
-    };
-
-    let response;
-    try {
-      response = await callGemini('gemini-3-flash-preview');
-    } catch (apiErr) {
-      if (apiErr.response?.status === 503) {
-        console.warn("gemini-3-flash-preview is busy, falling back to gemini-2.5-flash...");
-        response = await callGemini('gemini-2.5-flash');
-      } else {
-        throw apiErr;
+    // Note: The user manually updated this to use gemini-2.5-flash which is perfect.
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              pdfPart
+            ]
+          }
+        ],
+        generationConfig: {
+          responseMimeType: "application/json"
+        }
+      },
+      {
+        headers: { 'Content-Type': 'application/json' }
       }
-    }
+    );
 
     const insights = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{"subjects":[]}';
 
     res.json({ success: true, insights });
   } catch (err) {
-    const apiErrorMessage = err.response?.data?.error?.message;
-    const msg = (apiErrorMessage && apiErrorMessage.includes('demand')) 
-      ? 'The AI model is overloaded due to high demand. Please try again in a few moments.' 
-      : 'Failed to analyze attendance report. See backend logs.';
-    res.status(500).json({ success: false, error: msg });
+    console.error("Attendance Analysis Error:", err.response?.data || err.message);
+    res.status(500).json({ success: false, error: 'Failed to analyze attendance report. See backend logs.' });
   }
 });
 
@@ -137,7 +133,7 @@ app.post('/api/extract-setup-data', (req, res, next) => {
 }, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, error: 'No PDF file provided under the "report" field.' });
-    if (req.file.mimetype !== 'application/pdf' && !req.file.originalname.toLowerCase().endsWith('.pdf')) return res.status(400).json({ success: false, error: 'Only PDF files are accepted.' });
+    if (req.file.mimetype !== 'application/pdf') return res.status(400).json({ success: false, error: 'Only PDF files are accepted.' });
 
     console.log(`Received PDF for Setup: ${req.file.originalname} (${req.file.size} bytes)`);
 
@@ -147,8 +143,6 @@ STEP-BY-STEP INSTRUCTIONS:
 1. Extract metadata from the report header: student full name, program (course), academic year.
 2. Determine the semester as a number if possible, or string.
 3. Identify every unique subject name in the report.
-4. Carefully analyze the dates and subjects throughout the report to reconstruct the recurring weekly timetable. Determine which subjects occur on which day of the week (1 = Monday, 2 = Tuesday, ..., 6 = Saturday). Order the subjects chronologically as they were taught that day.
-5. Extract every individual attendance record listed in the report. For each entry, provide the date (in YYYY-MM-DD format), the subject name, and the status ("P" for Present, "A" for Absent). Ignore any "Cancelled" classes.
 
 DO NOT EXTRACT OR RETURN REPORT START DATE OR END DATE.
 
@@ -161,25 +155,11 @@ Return ONLY a JSON object matching exactly this schema:
   "subjects": [
     "Subject 1",
     "Subject 2"
-  ],
-  "timetable": [
-    {
-      "dayOfWeek": 1,
-      "subjects": ["Subject 1", "Subject 2"]
-    }
-  ],
-  "attendanceRecords": [
-    {
-      "date": "2025-01-20",
-      "subject": "Subject 1",
-      "status": "P"
-    }
   ]
 }
 
 RULES:
 - If a metadata field is not found, use an empty string "".
-- If you cannot deduce the timetable securely, provide an empty array [].
 - Provide ONLY the JSON. No markdown formatting.
 `;
 
@@ -187,38 +167,20 @@ RULES:
       inlineData: { mimeType: req.file.mimetype, data: req.file.buffer.toString("base64") }
     };
 
-    const callGemini = async (modelName) => {
-      return axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
-          contents: [{ role: 'user', parts: [{ text: prompt }, pdfPart] }],
-          generationConfig: { responseMimeType: "application/json" }
-        },
-        { headers: { 'Content-Type': 'application/json' } }
-      );
-    };
-
-    let response;
-    try {
-      response = await callGemini('gemini-3-flash-preview');
-    } catch (apiErr) {
-      if (apiErr.response?.status === 503) {
-        console.warn("gemini-3-flash-preview is busy for Setup Extraction, falling back to gemini-2.5-flash...");
-        response = await callGemini('gemini-2.5-flash');
-      } else {
-        throw apiErr;
-      }
-    }
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        contents: [{ role: 'user', parts: [{ text: prompt }, pdfPart] }],
+        generationConfig: { responseMimeType: "application/json" }
+      },
+      { headers: { 'Content-Type': 'application/json' } }
+    );
 
     const data = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
     res.json({ success: true, data });
   } catch (err) {
-    console.error("Extraction Error (Full Details):", err.response ? JSON.stringify(err.response.data, null, 2) : err.message);
-    const apiErrorMessage = err.response?.data?.error?.message;
-    const msg = (apiErrorMessage && apiErrorMessage.includes('demand')) 
-      ? 'The AI model is overloaded due to high demand. Please try again in a few moments.' 
-      : 'Failed to extract setup data.';
-    res.status(500).json({ success: false, error: msg });
+    console.error("Extraction Error:", err.response?.data || err.message);
+    res.status(500).json({ success: false, error: 'Failed to extract setup data.' });
   }
 });
 
