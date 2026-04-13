@@ -3,13 +3,16 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/db_helper.dart';
+import '../../database/subject_dao.dart';
+import '../../models/subject.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 
 class BasicInfoScreen extends StatefulWidget {
   final bool isEditMode;
+  final Map<String, dynamic>? prefilledData;
 
-  const BasicInfoScreen({super.key, required this.isEditMode});
+  const BasicInfoScreen({super.key, required this.isEditMode, this.prefilledData});
 
   @override
   State<BasicInfoScreen> createState() => _BasicInfoScreenState();
@@ -30,7 +33,31 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     super.initState();
     if (widget.isEditMode) {
       _loadSavedData();
+    } else if (widget.prefilledData != null) {
+      _loadPrefilledData();
     }
+  }
+
+  void _loadPrefilledData() {
+    final data = widget.prefilledData!;
+    _nameController.text = data['studentName']?.toString() ?? '';
+    _courseController.text = data['course']?.toString() ?? '';
+    _yearController.text = data['year']?.toString() ?? '';
+    
+    final semStr = data['semester']?.toString().toLowerCase() ?? '1';
+    int semNum = 1;
+    if (semStr.contains('1') || semStr.contains('i') && !semStr.contains('ii') && !semStr.contains('iv') && !semStr.contains('vi')) semNum = 1;
+    if (semStr.contains('2') || semStr.contains('ii') && !semStr.contains('iii') && !semStr.contains('vii')) semNum = 2;
+    if (semStr.contains('3') || semStr.contains('iii') && !semStr.contains('viii')) semNum = 3;
+    if (semStr.contains('4') || semStr.contains('iv')) semNum = 4;
+    if (semStr.contains('5') || semStr.contains('v') && !semStr.contains('iv') && !semStr.contains('vi')) semNum = 5;
+    if (semStr.contains('6') || semStr.contains('vi') && !semStr.contains('vii')) semNum = 6;
+    if (semStr.contains('7') || semStr.contains('vii') && !semStr.contains('viii')) semNum = 7;
+    if (semStr.contains('8') || semStr.contains('viii')) semNum = 8;
+    
+    setState(() {
+      _selectedSemester = semNum;
+    });
   }
 
   Future<void> _loadSavedData() async {
@@ -124,6 +151,25 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
         '''DELETE FROM attendance_records WHERE id IN (SELECT a.id FROM attendance_records a INNER JOIN timetable t ON a.timetable_entry_id = t.id INNER JOIN subjects s ON t.subject_id = s.id WHERE s.semester = ? AND (a.date < ? OR a.date > ?))''',
         [_selectedSemester, startStr, endStr],
       );
+    } else if (widget.prefilledData != null && widget.prefilledData!['subjects'] != null) {
+      final List<dynamic> subs = widget.prefilledData!['subjects'];
+      if(subs.isNotEmpty) {
+        final subjectDao = SubjectDao();
+        // Only insert if no subjects exist for this semester (prevents duplicates if user hits back and next again)
+        final existing = await subjectDao.getSubjectsBySemester(_selectedSemester);
+        if (existing.isEmpty) {
+          for (var sub in subs) {
+             final subName = sub.toString().trim();
+             if(subName.isNotEmpty) {
+                await subjectDao.insertSubject(Subject(
+                  name: subName,
+                  requiredPercent: 75.0,
+                  semester: _selectedSemester
+                ));
+             }
+          }
+        }
+      }
     }
 
     if (!mounted) return;
