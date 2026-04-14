@@ -168,104 +168,118 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
       );
     } else if (widget.prefilledData != null && widget.prefilledData!['subjects'] != null) {
       final List<dynamic> subs = widget.prefilledData!['subjects'];
-      if(subs.isNotEmpty) {
+      if (subs.isNotEmpty) {
+        final db = await DBHelper.instance.database;
         final subjectDao = SubjectDao();
-        // Only insert if no subjects exist for this semester (prevents duplicates if user hits back and next again)
-        final existing = await subjectDao.getSubjectsBySemester(_selectedSemester);
-        if (existing.isEmpty) {
-          for (var sub in subs) {
-             final subName = sub.toString().trim();
-             if(subName.isNotEmpty) {
-                await subjectDao.insertSubject(Subject(
-                  name: subName,
-                  requiredPercent: 75.0,
-                  semester: _selectedSemester
+        final timetableDao = TimetableDao();
+        final attendanceDao = AttendanceDao();
+
+        // ── Step 1: Wipe old data for this semester so re-importing is always clean ──
+        // Delete attendance records → timetable → subjects (in FK order)
+        await db.rawDelete('''
+          DELETE FROM attendance_records WHERE timetable_entry_id IN (
+            SELECT t.id FROM timetable t
+            INNER JOIN subjects s ON t.subject_id = s.id
+            WHERE s.semester = ?
+          )
+        ''', [_selectedSemester]);
+
+        for (int day = 1; day <= 7; day++) {
+          await timetableDao.deleteEntriesForDay(day, _selectedSemester);
+        }
+
+        final oldSubjects = await subjectDao.getSubjectsBySemester(_selectedSemester);
+        for (final sub in oldSubjects) {
+          await subjectDao.deleteSubject(sub.id!);
+        }
+
+        // ── Step 2: Insert subjects ──────────────────────────────────────────────
+        for (var sub in subs) {
+          final subName = sub.toString().trim();
+          if (subName.isNotEmpty) {
+            await subjectDao.insertSubject(Subject(
+              name: subName,
+              requiredPercent: 75.0,
+              semester: _selectedSemester,
+            ));
+          }
+        }
+
+        // Build name → id map
+        final Map<String, int> subjectNameToId = {};
+        final insertedSubjects = await subjectDao.getSubjectsBySemester(_selectedSemester);
+        for (var sub in insertedSubjects) {
+          subjectNameToId[sub.name] = sub.id!;
+        }
+
+        // ── Step 3: Insert timetable ─────────────────────────────────────────────
+        final timetable = widget.prefilledData!['timetable'];
+        if (timetable != null && timetable is List && timetable.isNotEmpty) {
+          for (var dayObj in timetable) {
+            final int dayOfWeek = dayObj['dayOfWeek'] ?? 1;
+            final List<dynamic> daySubjects = dayObj['subjects'] ?? [];
+
+            for (int i = 0; i < daySubjects.length; i++) {
+              final String subName = daySubjects[i].toString().trim();
+              final subId = subjectNameToId[subName];
+              if (subId != null) {
+                await timetableDao.insertEntry(TimetableEntry(
+                  dayOfWeek: dayOfWeek,
+                  subjectId: subId,
+                  lectureOrder: i + 1,
                 ));
-             }
+              }
+            }
           }
-          
-          final Map<String, int> subjectNameToId = {};
-          final insertedSubjects = await subjectDao.getSubjectsBySemester(_selectedSemester);
-          for (var sub in insertedSubjects) {
-            subjectNameToId[sub.name] = sub.id!;
+        }
+
+        // ── Step 4: Build timetable lookup for attendance insertion ───────────────
+        final allTimetableEntries = <int, List<TimetableEntry>>{};
+        for (int day = 1; day <= 7; day++) {
+          final dayEntries = await timetableDao.getEntriesForDay(day, _selectedSemester);
+          for (var entry in dayEntries) {
+            allTimetableEntries.putIfAbsent(entry.subjectId, () => []).add(entry);
           }
-          
-          final timetable = widget.prefilledData!['timetable'];
-          if (timetable != null && timetable is List && timetable.isNotEmpty) {
-             final timetableDao = TimetableDao();
-             for (var dayObj in timetable) {
-                final int dayOfWeek = dayObj['dayOfWeek'] ?? 1;
-                final List<dynamic> daySubjects = dayObj['subjects'] ?? [];
-                
-                await timetableDao.deleteEntriesForDay(dayOfWeek, _selectedSemester);
-                
-                for (int i = 0; i < daySubjects.length; i++) {
-                   final String subName = daySubjects[i].toString().trim();
-                   final subId = subjectNameToId[subName];
-                   if (subId != null) {
-                      await timetableDao.insertEntry(TimetableEntry(
-                        dayOfWeek: dayOfWeek,
-                        subjectId: subId,
-                        lectureOrder: i + 1
-                      ));
-                   }
-                }
-             }
-          }
-          
-          final history = widget.prefilledData!['attendanceRecords'];
-          if (history != null && history is List && history.isNotEmpty) {
-             final attendanceDao = AttendanceDao();
-             final timetableDao = TimetableDao();
-             
-             final allTimetableEntries = <int, List<TimetableEntry>>{};
-             for (int day = 1; day <= 7; day++) {
-                final dayEntries = await timetableDao.getEntriesForDay(day, _selectedSemester);
-                for (var entry in dayEntries) {
-                   allTimetableEntries.putIfAbsent(entry.subjectId, () => []).add(entry);
-                }
-             }
+        }
 
-             for (var record in history) {
-                final dateStr = record['date']; 
-                final subjectName = record['subject']?.toString().trim();
-                final status = record['status']?.toString().toUpperCase();
-                // Use record['lectureNumber'] (1st, 2nd, etc. occurrence that day)
-                final int lectureNumber = (record['lectureNumber'] ?? 1) as int;
-                
-                if (dateStr != null && subjectName != null && status != null && (status == 'P' || status == 'A')) {
-                   final subId = subjectNameToId[subjectName];
-                   if (subId != null) {
-                      DateTime? parsedDate;
-                      try {
-                          parsedDate = DateTime.parse(dateStr);
-                      } catch (_) {}
-                      
-                      if (parsedDate != null) {
-                          // 1. Get ALL timetable entries for this subject
-                          final allEntriesForSub = allTimetableEntries[subId] ?? [];
+        // ── Step 5: Insert attendance records ────────────────────────────────────
+        final history = widget.prefilledData!['attendanceRecords'];
+        if (history != null && history is List && history.isNotEmpty) {
+          for (var record in history) {
+            final dateStr = record['date']?.toString();
+            final subjectName = record['subject']?.toString().trim();
+            final status = record['status']?.toString().toUpperCase();
+            final int lectureNumber = (record['lectureNumber'] as num?)?.toInt() ?? 1;
 
-                          // 2. Filter for entries occurring on this specific day of the week
-                          final entriesOnThisDay = allEntriesForSub
-                              .where((e) => e.dayOfWeek == parsedDate!.weekday)
-                              .toList()
-                            ..sort((a, b) => a.lectureOrder.compareTo(b.lectureOrder));
+            if (dateStr == null || subjectName == null || status == null) continue;
+            if (status != 'P' && status != 'A') continue;
 
-                          if (entriesOnThisDay.isNotEmpty) {
-                              // 3. Pick the entry matching the lectureNumber (1-indexed)
-                              final targetIndex = (lectureNumber - 1).clamp(0, entriesOnThisDay.length - 1);
-                              final matchingEntryId = entriesOnThisDay[targetIndex].id!;
-                              
-                              await attendanceDao.upsertAttendance(
-                                  timetableId: matchingEntryId,
-                                  date: dateStr,
-                                  status: status,
-                              );
-                          }
-                      }
-                   }
-                }
-             }
+            final subId = subjectNameToId[subjectName];
+            if (subId == null) continue;
+
+            DateTime? parsedDate;
+            try {
+              parsedDate = DateTime.parse(dateStr);
+            } catch (_) {
+              continue;
+            }
+
+            final allEntriesForSub = allTimetableEntries[subId] ?? [];
+            final entriesOnThisDay = allEntriesForSub
+                .where((e) => e.dayOfWeek == parsedDate!.weekday)
+                .toList()
+              ..sort((a, b) => a.lectureOrder.compareTo(b.lectureOrder));
+
+            if (entriesOnThisDay.isEmpty) continue;
+
+            final targetIndex = (lectureNumber - 1).clamp(0, entriesOnThisDay.length - 1);
+            final matchingEntryId = entriesOnThisDay[targetIndex].id!;
+
+            await attendanceDao.upsertAttendance(
+              timetableId: matchingEntryId,
+              date: dateStr,
+              status: status,
+            );
           }
         }
       }
