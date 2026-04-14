@@ -44,7 +44,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # ✅ ASSETS ADDED HERE WITH CORRECT SPACING
+
   assets:
     - assets/icon/app_icon2.png
     - assets/icon/app_icon.jpg
