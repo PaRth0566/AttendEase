@@ -6,7 +6,7 @@ class AttendanceDao {
   // ================================
   // DASHBOARD STATS (SUBJECT-WISE)
   // ================================
-  Future<Map<int, Map<String, int>>> getAttendanceStats() async {
+  Future<Map<int, Map<String, int>>> getAttendanceStats(int semester) async {
     final db = await DBHelper.instance.database;
 
     final result = await db.rawQuery('''
@@ -15,8 +15,10 @@ class AttendanceDao {
              COUNT(a.id) AS total
       FROM attendance_records a
       JOIN timetable t ON a.timetable_entry_id = t.id
+      JOIN subjects s ON t.subject_id = s.id
+      WHERE s.semester = ?
       GROUP BY t.subject_id
-    ''');
+    ''', [semester]);
 
     final Map<int, Map<String, int>> stats = {};
 
@@ -170,18 +172,21 @@ class AttendanceDao {
   // ================================
   // CALCULATE CURRENT STREAK
   // ================================
-  Future<int> getCurrentStreak() async {
+  Future<int> getCurrentStreak(int semester) async {
     final db = await DBHelper.instance.database;
 
     // Groups records by date and counts Presents and Absents for each day
     final result = await db.rawQuery('''
-      SELECT date,
-             SUM(CASE WHEN status = 'A' THEN 1 ELSE 0 END) as absent_count,
-             SUM(CASE WHEN status = 'P' THEN 1 ELSE 0 END) as present_count
-      FROM attendance_records
-      GROUP BY date
-      ORDER BY date DESC
-    ''');
+      SELECT a.date,
+             SUM(CASE WHEN a.status = 'A' THEN 1 ELSE 0 END) as absent_count,
+             SUM(CASE WHEN a.status = 'P' THEN 1 ELSE 0 END) as present_count
+      FROM attendance_records a
+      JOIN timetable t ON a.timetable_entry_id = t.id
+      JOIN subjects s ON t.subject_id = s.id
+      WHERE s.semester = ?
+      GROUP BY a.date
+      ORDER BY a.date DESC
+    ''', [semester]);
 
     int streak = 0;
     for (final row in result) {

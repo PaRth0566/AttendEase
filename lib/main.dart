@@ -65,7 +65,7 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
   }
 
   Future<Widget> _getInitialScreen() async {
-    // If on the web platform, show the specific Dashboard screen directly, skipping auth.
+    // Web: always start on the marketing/AI landing page
     if (kIsWeb) {
       return const WebDashboardScreen();
     }

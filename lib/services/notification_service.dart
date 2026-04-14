@@ -117,7 +117,7 @@ class NotificationService {
       );
 
       if (tomorrowLectures.isNotEmpty) {
-        final stats = await _attendanceDao.getAttendanceStats();
+        final stats = await _attendanceDao.getAttendanceStats(sem);
         final subjects = await _subjectDao.getSubjectsBySemester(sem);
 
         int totalA = 0;

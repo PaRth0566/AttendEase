@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,6 +15,7 @@ import '../setup/add_subjects_screen.dart';
 import '../setup/attendance_criteria_screen.dart';
 import '../setup/basic_info_screen.dart';
 import '../setup/timetable_setup_screen.dart';
+import '../web/web_dashboard_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -46,7 +48,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     semester = prefs.getInt('semester') ?? 1;
 
     final subjectsForSem = await _subjectDao.getSubjectsBySemester(semester);
-    final stats = await _attendanceDao.getAttendanceStats();
+    final stats = await _attendanceDao.getAttendanceStats(semester);
 
     int attended = 0;
     int total = 0;
@@ -84,45 +86,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _handleLogout() async {
+    final rootContext = context; // capture before dialog opens
     showDialog(
-      context: context,
+      context: rootContext,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
+      builder: (dialogCtx) => AlertDialog(
         title: const Text('Log Out?'),
         content: const Text(
           'Your data will be securely backed up to the cloud before logging out.',
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogCtx),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
+              Navigator.pop(dialogCtx); // close confirmation dialog
+
+              // Show full-screen loading on root context
               showDialog(
-                context: context,
+                context: rootContext,
                 barrierDismissible: false,
                 builder: (_) => const Center(
                   child: CircularProgressIndicator(color: Colors.white),
                 ),
               );
 
-              await CloudSyncService().backupDataToCloud();
-              await AuthService().signOut();
+              try {
+                if (!kIsWeb) {
+                  await CloudSyncService().backupDataToCloud();
+                }
+                await AuthService().signOut();
 
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.clear();
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.clear();
 
-              final db = await DBHelper.instance.database;
-              await db.delete('attendance_records');
-              await db.delete('timetable');
-              await db.delete('subjects');
+                if (!kIsWeb) {
+                  final db = await DBHelper.instance.database;
+                  await db.delete('attendance_records');
+                  await db.delete('timetable');
+                  await db.delete('subjects');
+                }
+              } catch (_) {}
 
               if (!mounted) return;
               Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                rootContext,
+                MaterialPageRoute(
+                  builder: (context) => kIsWeb
+                      ? const WebDashboardScreen()
+                      : const LoginScreen(),
+                ),
                 (route) => false,
               );
             },

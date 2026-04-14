@@ -1,5 +1,6 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
@@ -86,17 +87,19 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    final List<ConnectivityResult> connectivityResult = await (Connectivity()
-        .checkConnectivity());
-    if (connectivityResult.contains(ConnectivityResult.none)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No internet connection. Please connect to log in.'),
-          ),
-        );
+    if (!kIsWeb) {
+      final List<ConnectivityResult> connectivityResult = await (Connectivity()
+          .checkConnectivity());
+      if (connectivityResult.contains(ConnectivityResult.none)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No internet connection. Please connect to log in.'),
+            ),
+          );
+        }
+        return;
       }
-      return;
     }
 
     setState(() => _isLoading = true);
@@ -141,17 +144,19 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _loginWithGoogle() async {
-    final List<ConnectivityResult> connectivityResult = await (Connectivity()
-        .checkConnectivity());
-    if (connectivityResult.contains(ConnectivityResult.none)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No internet connection. Please connect to log in.'),
-          ),
-        );
+    if (!kIsWeb) {
+      final List<ConnectivityResult> connectivityResult = await (Connectivity()
+          .checkConnectivity());
+      if (connectivityResult.contains(ConnectivityResult.none)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No internet connection. Please connect to log in.'),
+            ),
+          );
+        }
+        return;
       }
-      return;
     }
 
     setState(() => _isLoading = true);
@@ -172,17 +177,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // ✅ NEW: Guest Login Logic
   Future<void> _loginAsGuest() async {
-    final List<ConnectivityResult> connectivityResult = await (Connectivity()
-        .checkConnectivity());
-    if (connectivityResult.contains(ConnectivityResult.none)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No internet connection. Please connect to log in.'),
-          ),
-        );
+    if (!kIsWeb) {
+      final List<ConnectivityResult> connectivityResult = await (Connectivity()
+          .checkConnectivity());
+      if (connectivityResult.contains(ConnectivityResult.none)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No internet connection. Please connect to log in.'),
+            ),
+          );
+        }
+        return;
       }
-      return;
     }
 
     setState(() => _isLoading = true);

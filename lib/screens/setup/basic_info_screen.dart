@@ -46,21 +46,33 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     _nameController.text = data['studentName']?.toString() ?? '';
     _courseController.text = data['course']?.toString() ?? '';
     _yearController.text = data['year']?.toString() ?? '';
-    
-    final semStr = data['semester']?.toString().toLowerCase() ?? '1';
-    int semNum = 1;
-    if (semStr.contains('1') || semStr.contains('i') && !semStr.contains('ii') && !semStr.contains('iv') && !semStr.contains('vi')) semNum = 1;
-    if (semStr.contains('2') || semStr.contains('ii') && !semStr.contains('iii') && !semStr.contains('vii')) semNum = 2;
-    if (semStr.contains('3') || semStr.contains('iii') && !semStr.contains('viii')) semNum = 3;
-    if (semStr.contains('4') || semStr.contains('iv')) semNum = 4;
-    if (semStr.contains('5') || semStr.contains('v') && !semStr.contains('iv') && !semStr.contains('vi')) semNum = 5;
-    if (semStr.contains('6') || semStr.contains('vi') && !semStr.contains('vii')) semNum = 6;
-    if (semStr.contains('7') || semStr.contains('vii') && !semStr.contains('viii')) semNum = 7;
-    if (semStr.contains('8') || semStr.contains('viii')) semNum = 8;
-    
+
+    final semStr = data['semester']?.toString().toLowerCase().trim() ?? '';
+    int semNum = _parseSemesterNumber(semStr);
+
     setState(() {
       _selectedSemester = semNum;
     });
+  }
+
+  /// Parses a semester string like "Semester III", "sem 3", "3", "iii" etc.
+  /// Uses regex with word-boundaries to avoid ambiguity (e.g., "viii" ≠ "i").
+  int _parseSemesterNumber(String s) {
+    // Try numeric digit first (most reliable)
+    final digitMatch = RegExp(r'\b([1-8])\b').firstMatch(s);
+    if (digitMatch != null) {
+      return int.parse(digitMatch.group(1)!);
+    }
+    // Roman numerals — ordered longest-first to avoid partial matches
+    if (RegExp(r'\bviii\b').hasMatch(s)) return 8;
+    if (RegExp(r'\bvii\b').hasMatch(s))  return 7;
+    if (RegExp(r'\bvi\b').hasMatch(s))   return 6;
+    if (RegExp(r'\biv\b').hasMatch(s))   return 4;
+    if (RegExp(r'\bv\b').hasMatch(s))    return 5;
+    if (RegExp(r'\biii\b').hasMatch(s))  return 3;
+    if (RegExp(r'\bii\b').hasMatch(s))   return 2;
+    if (RegExp(r'\bi\b').hasMatch(s))    return 1;
+    return 1; // default fallback
   }
 
   Future<void> _loadSavedData() async {
@@ -218,33 +230,38 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                 final dateStr = record['date']; 
                 final subjectName = record['subject']?.toString().trim();
                 final status = record['status']?.toString().toUpperCase();
+                // Use record['lectureNumber'] (1st, 2nd, etc. occurrence that day)
+                final int lectureNumber = (record['lectureNumber'] ?? 1) as int;
                 
                 if (dateStr != null && subjectName != null && status != null && (status == 'P' || status == 'A')) {
                    final subId = subjectNameToId[subjectName];
                    if (subId != null) {
-                      final entriesForSubject = allTimetableEntries[subId] ?? [];
-                      if (entriesForSubject.isNotEmpty) {
-                          DateTime? parsedDate;
-                          try {
-                              parsedDate = DateTime.parse(dateStr);
-                          } catch (_) {}
-                          
-                          int matchingEntryId = entriesForSubject.first.id!; 
-                          if (parsedDate != null) {
-                              final weekday = parsedDate.weekday; 
-                              for (var entry in entriesForSubject) {
-                                  if (entry.dayOfWeek == weekday) {
-                                      matchingEntryId = entry.id!;
-                                      break;
-                                  }
-                              }
+                      DateTime? parsedDate;
+                      try {
+                          parsedDate = DateTime.parse(dateStr);
+                      } catch (_) {}
+                      
+                      if (parsedDate != null) {
+                          // 1. Get ALL timetable entries for this subject
+                          final allEntriesForSub = allTimetableEntries[subId] ?? [];
+
+                          // 2. Filter for entries occurring on this specific day of the week
+                          final entriesOnThisDay = allEntriesForSub
+                              .where((e) => e.dayOfWeek == parsedDate!.weekday)
+                              .toList()
+                            ..sort((a, b) => a.lectureOrder.compareTo(b.lectureOrder));
+
+                          if (entriesOnThisDay.isNotEmpty) {
+                              // 3. Pick the entry matching the lectureNumber (1-indexed)
+                              final targetIndex = (lectureNumber - 1).clamp(0, entriesOnThisDay.length - 1);
+                              final matchingEntryId = entriesOnThisDay[targetIndex].id!;
+                              
+                              await attendanceDao.upsertAttendance(
+                                  timetableId: matchingEntryId,
+                                  date: dateStr,
+                                  status: status,
+                              );
                           }
-                          
-                          await attendanceDao.upsertAttendance(
-                              timetableId: matchingEntryId,
-                              date: dateStr,
-                              status: status,
-                          );
                       }
                    }
                 }

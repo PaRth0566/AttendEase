@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:http/http.dart' as http;
 
+import '../auth/login_screen.dart';
 import 'gemini_insights_panel.dart';
 
 class WebDashboardScreen extends StatefulWidget {
@@ -13,8 +14,6 @@ class WebDashboardScreen extends StatefulWidget {
 
 class _WebDashboardScreenState extends State<WebDashboardScreen>
     with TickerProviderStateMixin {
-  bool _showInsights = false;
-
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
 
@@ -65,112 +64,17 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
   }
 
   void _goToInsights() {
-    setState(() => _showInsights = true);
-  }
-
-  void _goBack() {
-    setState(() {
-      _showInsights = false;
-      _fadeController.reset();
-      _slideController.reset();
-      _fadeController.forward();
-      _slideController.forward();
-    });
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const _WebInsightsScreen()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-
-    if (_showInsights) {
-      return _buildInsightsView(theme, isDark);
-    }
     return _buildLandingPage(theme, isDark);
-  }
-
-  // ── SECONDARY VIEW ─────────────────────────────────────────
-  Widget _buildInsightsView(ThemeData theme, bool isDark) {
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-      body: Column(
-        children: [
-          // Top nav bar
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.04)
-                  : Colors.white.withOpacity(0.8),
-              border: Border(
-                bottom: BorderSide(
-                  color: isDark
-                      ? Colors.white.withOpacity(0.08)
-                      : Colors.black.withOpacity(0.06),
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                // Logo
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    image: const DecorationImage(
-                      image: AssetImage('assets/icon/app_icon2.png'),
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'AttendEase',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  ),
-                ),
-                const Spacer(),
-                TextButton.icon(
-                  onPressed: _goBack,
-                  icon: Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    size: 14,
-                    color: isDark ? Colors.white70 : Colors.black54,
-                  ),
-                  label: Text(
-                    'Back to Home',
-                    style: TextStyle(
-                      color: isDark ? Colors.white70 : Colors.black54,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Content — scroll fills entire screen width
-          Expanded(
-            child: SingleChildScrollView(
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 860),
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: GeminiInsightsPanel(),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   // ── LANDING PAGE ──────────────────────────────────────────
@@ -339,6 +243,7 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
                               children: [
                                 _buildOutlinedBtn(isDark),
                                 _buildPrimaryBtn(),
+                                _buildSignInBtn(isDark),
                               ],
                             ),
                           ],
@@ -477,6 +382,33 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
     );
   }
 
+  Widget _buildSignInBtn(bool isDark) {
+    return OutlinedButton.icon(
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+        );
+      },
+      icon: const Icon(Icons.person_rounded, size: 18),
+      label: const Text('Sign In'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
+        side: BorderSide(
+          color: isDark
+              ? const Color(0xFF6366F1).withOpacity(0.5)
+              : const Color(0xFF6366F1).withOpacity(0.4),
+          width: 1.5,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+    );
+  }
+
   Widget _glowCircle(double size, Color color) {
     return Container(
       width: size,
@@ -484,6 +416,96 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: color,
+      ),
+    );
+  }
+}
+
+// ── Dedicated Insights Screen (enables browser back button) ──────────
+class _WebInsightsScreen extends StatelessWidget {
+  const _WebInsightsScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+      body: Column(
+        children: [
+          // Top nav bar
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withOpacity(0.04)
+                  : Colors.white.withOpacity(0.8),
+              border: Border(
+                bottom: BorderSide(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.08)
+                      : Colors.black.withOpacity(0.06),
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    image: const DecorationImage(
+                      image: AssetImage('assets/icon/app_icon2.png'),
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'AttendEase',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    size: 14,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                  ),
+                  label: Text(
+                    'Back to Home',
+                    style: TextStyle(
+                      color: isDark ? Colors.white70 : Colors.black54,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Content
+          Expanded(
+            child: SingleChildScrollView(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 860),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: GeminiInsightsPanel(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

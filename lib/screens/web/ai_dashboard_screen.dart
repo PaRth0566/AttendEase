@@ -243,29 +243,20 @@ class AIDashboardScreen extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withOpacity(0.06)
-            : const Color(0xFFF1F5F9),
+        color: isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon,
-              size: 13,
-              color: isDark
-                  ? Colors.white.withOpacity(0.5)
-                  : const Color(0xFF64748B)),
+          Icon(icon, size: 13, color: const Color(0xFF6366F1)),
           const SizedBox(width: 6),
           Flexible(
             child: Text(
               text,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: isDark
-                    ? Colors.white.withOpacity(0.65)
-                    : const Color(0xFF475569),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -283,138 +274,127 @@ class AIDashboardScreen extends StatelessWidget {
     Map<String, dynamic> insight,
     bool isDark,
   ) {
+    final statusColor = overallPercent >= overallTarget
+        ? Colors.green
+        : overallPercent >= (overallTarget - 10)
+            ? Colors.orange
+            : Colors.red;
+
+    final statusIcon = overallPercent >= overallTarget
+        ? Icons.check_circle_rounded
+        : overallPercent >= (overallTarget - 10)
+            ? Icons.warning_rounded
+            : Icons.error_rounded;
+
     return Container(
-      width: double.infinity,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        gradient: LinearGradient(
-          colors: isDark
-              ? [const Color(0xFF1E1B4B), const Color(0xFF1E293B)]
-              : [const Color(0xFF6366F1), const Color(0xFF3B82F6)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? Colors.white10 : Colors.black.withOpacity(0.08)),
         boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF6366F1).withOpacity(0.25),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
+          if (!isDark)
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+            ),
         ],
       ),
-      child: Stack(
+      child: Column(
         children: [
-          Positioned(
-            right: -20,
-            top: -20,
-            child: Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.05),
-              ),
-            ),
-          ),
           Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Overall Attendance',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white.withOpacity(0.7),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '${overallPercent.toStringAsFixed(1)}%',
-                            style: const TextStyle(
-                              fontSize: 52,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white,
-                              height: 1.0,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '$totalAttended of $totalLectures lectures  •  Target: ${overallTarget.toStringAsFixed(0)}%',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.white.withOpacity(0.65),
-                            ),
-                          ),
-                        ],
+                    const Text(
+                      'Overall Attendance',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey,
                       ),
                     ),
-                    SizedBox(
-                      width: 80,
-                      height: 80,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            value: overallPercent / 100,
-                            backgroundColor: Colors.white.withOpacity(0.15),
-                            color: Colors.white,
-                            strokeWidth: 7,
-                            strokeCap: StrokeCap.round,
-                          ),
-                          Icon(
-                            isSafe
-                                ? Icons.check_circle_outline_rounded
-                                : Icons.warning_amber_rounded,
-                            color: Colors.white,
-                            size: 28,
-                          ),
-                        ],
+                    const SizedBox(height: 8),
+                    Text(
+                      '${overallPercent.toStringAsFixed(1)}%',
+                      style: const TextStyle(
+                        fontSize: 36,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Target: ${overallTarget.toStringAsFixed(0)}%  •  $totalAttended/$totalLectures',
+                      style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        insight['isSafe']
-                            ? Icons.lightbulb_outline_rounded
-                            : Icons.error_outline_rounded,
-                        size: 16,
-                        color: Colors.white,
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      height: 70,
+                      width: 70,
+                      child: CircularProgressIndicator(
+                        value: overallPercent / 100,
+                        backgroundColor: isDark ? Colors.white10 : Colors.black12,
+                        color: statusColor,
+                        strokeWidth: 8,
+                        strokeCap: StrokeCap.round,
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          insight['text'],
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                    Icon(statusIcon, color: statusColor, size: 34),
+                  ],
                 ),
               ],
             ),
           ),
+          if (totalLectures > 0)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: insight['isSafe']
+                    ? Colors.green.withAlpha(isDark ? 38 : 25)
+                    : Colors.red.withAlpha(isDark ? 38 : 25),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    insight['isSafe'] ? Icons.lightbulb_outline : Icons.warning_amber_rounded,
+                    size: 18,
+                    color: insight['isSafe']
+                        ? (isDark ? Colors.green.shade400 : Colors.green.shade700)
+                        : (isDark ? Colors.red.shade400 : Colors.red.shade700),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      insight['text'],
+                      style: TextStyle(
+                        color: insight['isSafe']
+                            ? (isDark ? Colors.green.shade300 : Colors.green.shade800)
+                            : (isDark ? Colors.red.shade300 : Colors.red.shade800),
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -427,130 +407,80 @@ class AIDashboardScreen extends StatelessWidget {
     int total,
     bool isDark,
   ) {
-    final bool safe = percent >= subjectTarget;
-    final bool warning =
-        !safe && percent >= (subjectTarget - 10);
+    final statusColor = percent >= subjectTarget
+        ? Colors.green
+        : percent >= (subjectTarget - 10)
+            ? Colors.orange
+            : Colors.red;
 
-    final Color accentColor = safe
-        ? const Color(0xFF10B981)
-        : warning
-            ? const Color(0xFFF59E0B)
-            : const Color(0xFFEF4444);
-
-    final insight =
-        _getPredictiveInsight(attended, total, subjectTarget);
+    final insight = _getPredictiveInsight(attended, total, subjectTarget);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
+        color: isDark ? const Color(0xFF1E293B) : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.08)
-              : Colors.black.withOpacity(0.06),
-        ),
-        boxShadow: [
-          if (!isDark)
-            BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 12,
-              offset: const Offset(0, 2),
-            ),
-        ],
+        border: Border.all(color: isDark ? Colors.white10 : Colors.black.withOpacity(0.08)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.all(16),
+            child: Column(
               children: [
-                Container(
-                  width: 10,
-                  height: 10,
-                  margin: const EdgeInsets.only(top: 5),
-                  decoration: BoxDecoration(
-                    color: accentColor,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: accentColor.withOpacity(0.4),
-                        blurRadius: 6,
-                        spreadRadius: 1,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
                         subject.name,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
                           fontSize: 15,
-                          color: isDark
-                              ? Colors.white
-                              : const Color(0xFF0F172A),
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: total == 0 ? 0 : percent / 100,
-                          color: accentColor,
-                          backgroundColor: isDark
-                              ? Colors.white.withOpacity(0.1)
-                              : const Color(0xFFF1F5F9),
-                          minHeight: 8,
-                        ),
+                    ),
+                    Text(
+                      '${percent.toStringAsFixed(1)}%',
+                      style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '$attended / $total lectures',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark
-                                  ? Colors.white.withOpacity(0.45)
-                                  : const Color(0xFF94A3B8),
-                            ),
-                          ),
-                          Text(
-                            '${percent.toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                              color: accentColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: total == 0 ? 0 : percent / 100,
+                    color: statusColor,
+                    backgroundColor: isDark ? Colors.white10 : Colors.black12,
+                    minHeight: 8,
                   ),
                 ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: accentColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    safe ? 'Safe' : warning ? 'Caution' : 'Risk',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: accentColor,
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '$attended/$total lectures',
+                      style: const TextStyle(
+                        color: Colors.grey,
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
+                    Text(
+                      percent >= subjectTarget ? 'Safe' : 'Risk',
+                      style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -558,10 +488,11 @@ class AIDashboardScreen extends StatelessWidget {
           if (total > 0)
             Container(
               width: double.infinity,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: accentColor.withOpacity(isDark ? 0.08 : 0.06),
+                color: insight['isSafe']
+                    ? Colors.green.withAlpha(isDark ? 38 : 25)
+                    : Colors.red.withAlpha(isDark ? 38 : 25),
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(16),
                   bottomRight: Radius.circular(16),
@@ -570,20 +501,22 @@ class AIDashboardScreen extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(
-                    insight['isSafe']
-                        ? Icons.lightbulb_outline_rounded
-                        : Icons.warning_amber_rounded,
-                    size: 13,
-                    color: accentColor,
+                    insight['isSafe'] ? Icons.lightbulb_outline : Icons.warning_amber_rounded,
+                    size: 14,
+                    color: insight['isSafe']
+                        ? (isDark ? Colors.green.shade400 : Colors.green.shade700)
+                        : (isDark ? Colors.red.shade400 : Colors.red.shade700),
                   ),
-                  const SizedBox(width: 7),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       insight['text'],
                       style: TextStyle(
+                        color: insight['isSafe']
+                            ? (isDark ? Colors.green.shade300 : Colors.green.shade800)
+                            : (isDark ? Colors.red.shade300 : Colors.red.shade800),
                         fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: accentColor,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
                   ),

@@ -224,55 +224,38 @@ class _GeminiInsightsPanelState extends State<GeminiInsightsPanel>
         ],
       ],
     );
-  }
-
-  Widget _buildUploadCard(ThemeData theme, bool isDark) {
+  }  Widget _buildUploadCard(ThemeData theme, bool isDark) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withOpacity(0.04)
-            : Colors.white.withOpacity(0.85),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.08)
-              : Colors.black.withOpacity(0.07),
-        ),
-        boxShadow: [
-          if (!isDark)
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 20,
-              offset: const Offset(0, 4),
-            ),
-        ],
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Top Row: Icon + Title + Upload Button ──
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Color(0xFF6366F1), Color(0xFF3B82F6)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF6366F1).withOpacity(0.35),
-                      blurRadius: 12,
+                      color: const Color(0xFF6366F1).withOpacity(0.3),
+                      blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
                   ],
                 ),
-                child: const Icon(Icons.auto_awesome,
-                    color: Colors.white, size: 20),
+                child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -283,101 +266,83 @@ class _GeminiInsightsPanelState extends State<GeminiInsightsPanel>
                       'AI Attendance Analyzer',
                       style: TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color:
-                            isDark ? Colors.white : const Color(0xFF0F172A),
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.bodyLarge?.color,
                       ),
                     ),
-                    const SizedBox(height: 3),
+                    const SizedBox(height: 2),
                     Text(
-                      _fileName != null
-                          ? 'Selected: $_fileName'
-                          : 'Upload your PDF for instant insights',
+                      _fileName != null ? 'Selected: $_fileName' : 'Upload PDF for instant insights',
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark
-                            ? Colors.white.withOpacity(0.5)
-                            : const Color(0xFF94A3B8),
+                        color: theme.textTheme.bodyMedium?.color,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
               const SizedBox(width: 12),
               _isLoading
-                  ? Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF6366F1).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Padding(
-                        padding: EdgeInsets.all(11),
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: Color(0xFF6366F1),
-                        ),
-                      ),
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6366F1)),
                     )
-                  : Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF6366F1), Color(0xFF3B82F6)],
+                  : InkWell(
+                      onTap: _uploadAndAnalyze,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF6366F1), Color(0xFF3B82F6)],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF6366F1).withOpacity(0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color:
-                                const Color(0xFF6366F1).withOpacity(0.4),
-                            blurRadius: 14,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: ElevatedButton.icon(
-                        onPressed: _uploadAndAnalyze,
-                        icon: const Icon(Icons.upload_file_rounded,
-                            size: 16),
-                        label: const Text('Upload PDF'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          foregroundColor: Colors.white,
-                          shadowColor: Colors.transparent,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 12),
-                          textStyle: const TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w700),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.upload_file_rounded, color: Colors.white, size: 16),
+                            SizedBox(width: 8),
+                            Text(
+                              'Upload PDF',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
             ],
           ),
-
-          const SizedBox(height: 16),
-
-          // ── Bottom Row: Two small target inputs ────────
+          const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
                 child: _buildTargetInput(
                   controller: _overallTargetCtrl,
-                  label: 'Overall Target %',
+                  label: 'Overall Target',
                   icon: Icons.pie_chart_outline_rounded,
-                  isDark: isDark,
+                  theme: theme,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _buildTargetInput(
                   controller: _subjectTargetCtrl,
-                  label: 'Per Subject Target %',
+                  label: 'Subject Target',
                   icon: Icons.menu_book_rounded,
-                  isDark: isDark,
+                  theme: theme,
                 ),
               ),
             ],
@@ -391,28 +356,18 @@ class _GeminiInsightsPanelState extends State<GeminiInsightsPanel>
     required TextEditingController controller,
     required String label,
     required IconData icon,
-    required bool isDark,
+    required ThemeData theme,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withOpacity(0.06)
-            : const Color(0xFFF8FAFC),
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.1)
-              : const Color(0xFFE2E8F0),
-        ),
+        border: Border.all(color: theme.dividerColor),
       ),
       child: Row(
         children: [
-          Icon(icon,
-              size: 16,
-              color: isDark
-                  ? const Color(0xFF818CF8)
-                  : const Color(0xFF6366F1)),
+          Icon(icon, size: 16, color: const Color(0xFF6366F1)),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
@@ -420,33 +375,28 @@ class _GeminiInsightsPanelState extends State<GeminiInsightsPanel>
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: theme.textTheme.bodyLarge?.color,
               ),
               decoration: InputDecoration(
                 labelText: label,
                 labelStyle: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: isDark
-                      ? Colors.white.withOpacity(0.4)
-                      : const Color(0xFF94A3B8),
+                  fontSize: 10,
+                  color: theme.textTheme.bodyMedium?.color,
                 ),
                 border: InputBorder.none,
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(vertical: 4),
               ),
             ),
           ),
           Text(
             '%',
             style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: isDark
-                  ? Colors.white.withOpacity(0.35)
-                  : const Color(0xFFCBD5E1),
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: theme.dividerColor,
             ),
           ),
         ],

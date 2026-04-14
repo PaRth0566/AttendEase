@@ -5,6 +5,7 @@ import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
 import '../../models/subject.dart';
 import '../report/subject_detail_screen.dart';
+import 'refresh_pdf_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final List<Subject>? overrideSubjects;
@@ -41,51 +42,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadDashboardData() async {
-    final prefs = await SharedPreferences.getInstance();
-    _requiredTarget = prefs.getDouble('overall_required_attendance') ?? 75.0;
-    _activeSemester = prefs.getInt('semester') ?? 1;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _requiredTarget = prefs.getDouble('overall_required_attendance') ?? 75.0;
+      _activeSemester = prefs.getInt('semester') ?? 1;
 
-    if (widget.overrideSubjects != null && widget.overrideStats != null) {
-      // Bypass database and use provided data immediately
-      _subjects = widget.overrideSubjects!;
-      _attendanceStats = widget.overrideStats!;
-      _currentStreak = 0; 
-    } else {
-      _subjects = await _subjectDao.getSubjectsBySemester(_activeSemester);
-      _attendanceStats = await _attendanceDao.getAttendanceStats();
-      _currentStreak = await _attendanceDao.getCurrentStreak();
+      if (widget.overrideSubjects != null && widget.overrideStats != null) {
+        _subjects = widget.overrideSubjects!;
+        _attendanceStats = widget.overrideStats!;
+        _currentStreak = 0;
+      } else {
+        _subjects = await _subjectDao.getSubjectsBySemester(_activeSemester);
+        _attendanceStats = await _attendanceDao.getAttendanceStats(_activeSemester);
+        _currentStreak = await _attendanceDao.getCurrentStreak(_activeSemester);
+      }
+
+      _totalAttendedOverall = 0;
+      _totalLecturesOverall = 0;
+
+      for (final subject in _subjects) {
+        final stat = _attendanceStats[subject.id] ?? {'attended': 0, 'total': 0};
+        _totalAttendedOverall += stat['attended']!;
+        _totalLecturesOverall += stat['total']!;
+      }
+
+      _currentOverall = _totalLecturesOverall == 0
+          ? 0
+          : (_totalAttendedOverall / _totalLecturesOverall) * 100;
+
+      _subjects.sort((a, b) {
+        final statA = _attendanceStats[a.id] ?? {'attended': 0, 'total': 0};
+        final statB = _attendanceStats[b.id] ?? {'attended': 0, 'total': 0};
+
+        final double percentA = statA['total'] == 0
+            ? 0.0
+            : (statA['attended']! / statA['total']!) * 100;
+        final double percentB = statB['total'] == 0
+            ? 0.0
+            : (statB['attended']! / statB['total']!) * 100;
+
+        int comparison = percentA.compareTo(percentB);
+        if (comparison == 0) return a.name.compareTo(b.name);
+        return comparison;
+      });
+    } catch (e) {
+      debugPrint('Dashboard load error: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
-
-    _totalAttendedOverall = 0;
-    _totalLecturesOverall = 0;
-
-    for (final subject in _subjects) {
-      final stat = _attendanceStats[subject.id] ?? {'attended': 0, 'total': 0};
-      _totalAttendedOverall += stat['attended']!;
-      _totalLecturesOverall += stat['total']!;
-    }
-
-    _currentOverall = _totalLecturesOverall == 0
-        ? 0
-        : (_totalAttendedOverall / _totalLecturesOverall) * 100;
-
-    _subjects.sort((a, b) {
-      final statA = _attendanceStats[a.id] ?? {'attended': 0, 'total': 0};
-      final statB = _attendanceStats[b.id] ?? {'attended': 0, 'total': 0};
-
-      final double percentA = statA['total'] == 0
-          ? 0.0
-          : (statA['attended']! / statA['total']!) * 100;
-      final double percentB = statB['total'] == 0
-          ? 0.0
-          : (statB['attended']! / statB['total']!) * 100;
-
-      int comparison = percentA.compareTo(percentB);
-      if (comparison == 0) return a.name.compareTo(b.name);
-      return comparison;
-    });
-
-    if (mounted) setState(() => _loading = false);
   }
 
   Map<String, dynamic> _getPredictiveInsight(
@@ -214,7 +218,78 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 16),
 
-            // OVERALL ATTENDANCE CARD
+            // SYNC NEW REPORT BUTTON
+            GestureDetector(
+              onTap: () async {
+                await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(builder: (_) => const RefreshPdfScreen()),
+                );
+                // Always reload — data may have been partially or fully synced
+                setState(() => _loading = true);
+                await _loadDashboardData();
+              },
+              child: Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6366F1), Color(0xFF3B82F6)],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6366F1).withOpacity(0.35),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.cloud_sync_rounded, color: Colors.white, size: 22),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Sync New Report',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Upload latest PDF to update records',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 16),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             Card(
               color: theme.cardColor,
               elevation: 0,
