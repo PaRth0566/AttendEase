@@ -12,6 +12,7 @@ import 'screens/setup/attendance_criteria_screen.dart';
 import 'screens/setup/basic_info_screen.dart';
 import 'screens/setup/setup_choice_screen.dart';
 import 'screens/web/web_dashboard_screen.dart';
+// Web dashboards removed to unify UI
 import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
@@ -69,7 +70,7 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
     if (kIsWeb) {
       return const WebDashboardScreen();
     }
-
+    
     // Android: Always start on the Auth screen
     return const LoginScreen();
   }

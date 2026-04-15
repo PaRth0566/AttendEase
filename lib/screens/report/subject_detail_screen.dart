@@ -225,10 +225,12 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                             final status = record['status'];
                             final timetableId = record['timetable_entry_id'];
 
-                            DateTime date = DateTime.parse(dateStr);
-                            String formattedDate = DateFormat(
-                              'EEEE, MMM d, yyyy',
-                            ).format(date);
+                            String strippedDateStr = dateStr.contains('_') ? dateStr.split('_')[0] : dateStr;
+                            DateTime? parsedDate = DateTime.tryParse(strippedDateStr);
+                            String formattedDate = dateStr;
+                            if (parsedDate != null) {
+                              formattedDate = DateFormat('EEEE, MMM d, yyyy').format(parsedDate);
+                            }
 
                             final isPresent = status == 'P';
                             final colorBg = isPresent

@@ -46,7 +46,7 @@ class SetupChoiceScreen extends StatelessWidget {
               _buildChoiceCard(
                 context: context,
                 title: "Upload PDF Report",
-                subtitle: "Automated via Gemini AI",
+                subtitle: "Smart Offline Parsing",
                 icon: Icons.upload_file_rounded,
                 color: theme.colorScheme.primary,
                 isDark: isDark,

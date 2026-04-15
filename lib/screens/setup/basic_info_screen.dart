@@ -41,9 +41,15 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
 
   void _loadPrefilledData() {
     final data = widget.prefilledData!;
-    _nameController.text = data['studentName']?.toString() ?? '';
+    _nameController.text = data['name']?.toString() ?? data['studentName']?.toString() ?? '';
     _courseController.text = data['course']?.toString() ?? '';
     _yearController.text = data['year']?.toString() ?? '';
+    if (data['startDate'] != null && data['startDate'].toString().isNotEmpty) {
+      _startDate = DateTime.tryParse(data['startDate']);
+    }
+    if (data['endDate'] != null && data['endDate'].toString().isNotEmpty) {
+      _endDate = DateTime.tryParse(data['endDate']);
+    }
 
     final semStr = data['semester']?.toString().toLowerCase().trim() ?? '';
     int semNum = _parseSemesterNumber(semStr);
@@ -220,15 +226,17 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
 
             if (dateStr == null || subName == null || status == null) continue;
             if (status != 'P' && status != 'A') continue;
-            // Smart Date Parsing
-            final parsedDate = DateTime.tryParse(dateStr);
+            // The local parser appends '_N' for same-day lectures to prevent DB overwrite
+            final parts = dateStr.split('_');
+            final parsedDate = DateTime.tryParse(parts[0]);
             if (parsedDate == null) {
               debugPrint('Skipping invalid date format: "$dateStr"');
               continue;
             }
             
             // Enforce strict YYYY-MM-DD format for DB/Calendar compatibility
-            dateStr = '${parsedDate.year.toString().padLeft(4, '0')}-${parsedDate.month.toString().padLeft(2, '0')}-${parsedDate.day.toString().padLeft(2, '0')}';
+            final prefix = '${parsedDate.year.toString().padLeft(4, '0')}-${parsedDate.month.toString().padLeft(2, '0')}-${parsedDate.day.toString().padLeft(2, '0')}';
+            dateStr = parts.length > 1 ? '${prefix}_${parts[1]}' : prefix;
 
             final subId = subjectNameToId[subName];
             if (subId == null) continue;
@@ -367,7 +375,33 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                 onTap: () => _pickDate(false),
                 theme: theme,
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.15),
+                  border: Border.all(color: Colors.amber.shade700.withOpacity(0.5)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.warning_amber_rounded, size: 18, color: Colors.amber.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "Attendance history is STRICTLY bound by these dates. Classes occurring outside this timeframe are ignored! Ensure they match your report.",
+                        style: TextStyle(
+                          fontSize: 12,
+                          height: 1.4,
+                          color: Theme.of(context).brightness == Brightness.dark ? Colors.amber.shade200 : Colors.amber.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
 
               Row(
                 children: [

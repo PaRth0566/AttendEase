@@ -1,9 +1,8 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../services/local_pdf_parser.dart';
 
 import '../../database/attendance_dao.dart';
 import '../../database/db_helper.dart';
@@ -41,46 +40,11 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
       setState(() {
         _isUploading = true;
         _isDone = false;
-        _statusMessage = 'Uploading to Gemini AI...';
+        _statusMessage = 'Analyzing PDF locally...';
       });
 
-      final uri = Uri.parse('https://attendease-backend-ndxs.onrender.com/api/extract-setup-data');
-      final request = http.MultipartRequest('POST', uri);
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'report',
-          fileBytes,
-          filename: result.files.first.name,
-          contentType: MediaType('application', 'pdf'),
-        ),
-      );
-
-      final response = await request.send();
-      final responseData = await response.stream.bytesToString();
-
-      if (response.statusCode != 200) {
-        String serverMsg = 'Server error: ${response.statusCode}';
-        try {
-          final errJson = json.decode(responseData);
-          if (errJson['error'] != null) serverMsg = errJson['error'];
-        } catch (_) {}
-        throw Exception(serverMsg);
-      }
-
-      final jsonResult = json.decode(responseData);
-      if (jsonResult['success'] != true) {
-        throw Exception(jsonResult['error'] ?? 'Unknown error occurred.');
-      }
-
-      final extractedStr = jsonResult['data'];
-      if (extractedStr == null) throw Exception('No data returned from AI.');
-
-      final cleanedStr = extractedStr
-          .toString()
-          .replaceAll('```json', '')
-          .replaceAll('```', '')
-          .trim();
-      final Map<String, dynamic> data = json.decode(cleanedStr);
+      final Map<String, dynamic> data =
+          await LocalPdfParser.extractAttendanceFromPdf(fileBytes);
 
       setState(() => _statusMessage = 'Syncing records to database...');
       await _applyData(data);
@@ -96,7 +60,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
           _isUploading = false;
           _statusMessage = 'Select your latest attendance PDF to sync new records.';
         });
-        final displayErr = e.toString().replaceAll('Exception: ', '');
+        final displayErr = e.toString().replaceAll('FormatException: ', '').replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $displayErr'),
@@ -147,6 +111,19 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
     final Map<String, int> insertedP = {};
     final Map<String, int> insertedA = {};
 
+    // Update bounds based on the new PDF if it included them
+    if (data['startDate'] != null && data['startDate'].toString().isNotEmpty &&
+        data['endDate'] != null && data['endDate'].toString().isNotEmpty) {
+      final startStr = data['startDate'].toString();
+      final endStr = data['endDate'].toString();
+      // Only update if they parse successfully
+      if (DateTime.tryParse(startStr) != null && DateTime.tryParse(endStr) != null) {
+        await prefs.setString('semester_start_$activeSemester', startStr);
+        await prefs.setString('semester_end_$activeSemester', endStr);
+        debugPrint('Updated semester bounds from new PDF: $startStr to $endStr');
+      }
+    }
+
     final List<dynamic> records = data['attendanceRecords'] ?? [];
     for (final rec in records) {
       var dateStr = rec['date']?.toString().trim();
@@ -156,15 +133,17 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
       if (dateStr == null || subName == null || status == null) continue;
       if (status != 'P' && status != 'A') continue;
 
-      // Smart Date Parsing
-      final parsedDate = DateTime.tryParse(dateStr);
+      // Smart Date Parsing, preserving index suffix if any
+      final parts = dateStr.split('_');
+      final parsedDate = DateTime.tryParse(parts[0]);
       if (parsedDate == null) {
         debugPrint('Skipping invalid date format: "$dateStr"');
         continue;
       }
       
       // Enforce strict YYYY-MM-DD format for DB/Calendar compatibility
-      dateStr = '${parsedDate.year.toString().padLeft(4, '0')}-${parsedDate.month.toString().padLeft(2, '0')}-${parsedDate.day.toString().padLeft(2, '0')}';
+      final prefix = '${parsedDate.year.toString().padLeft(4, '0')}-${parsedDate.month.toString().padLeft(2, '0')}-${parsedDate.day.toString().padLeft(2, '0')}';
+      dateStr = parts.length > 1 ? '${prefix}_${parts[1]}' : prefix;
 
       final subId = subjectNameToId[subName];
       if (subId == null) continue;
@@ -326,12 +305,14 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                       children: [
                         const Icon(Icons.info_outline_rounded, size: 14, color: Colors.amber),
                         const SizedBox(width: 6),
-                        Text(
-                          'New records will be merged with existing data',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.amber.shade300 : Colors.amber.shade800,
+                        Expanded(
+                          child: Text(
+                            'Warning: New records will OVERRIDE current data for this semester!',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? Colors.red.shade300 : Colors.red.shade800,
+                            ),
                           ),
                         ),
                       ],

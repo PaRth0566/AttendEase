@@ -10,6 +10,8 @@ import '../../services/cloud_sync_service.dart';
 import '../../theme/theme_provider.dart'; // ✅ NEW IMPORT
 import '../../widgets/backup_sync_card.dart';
 import '../auth/login_screen.dart';
+import '../dashboard/refresh_pdf_screen.dart';
+
 import '../report/report_screen.dart';
 import '../setup/add_subjects_screen.dart';
 import '../setup/attendance_criteria_screen.dart';
@@ -186,7 +188,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '$course • Year $year • Div $division',
+                          [course, if (year.isNotEmpty) 'Year $year', if (division.isNotEmpty) division].where((e) => e.isNotEmpty).join(' • '),
                           style: TextStyle(
                             color: theme.textTheme.bodyMedium?.color,
                           ),
@@ -354,6 +356,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         context,
                         MaterialPageRoute(builder: (_) => const ReportScreen()),
                       );
+                    },
+                  ),
+
+                  _profileTile(
+                    icon: Icons.cloud_sync_rounded,
+                    title: 'Sync New Attendance Report',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const RefreshPdfScreen(),
+                        ),
+                      ).then((_) => _loadProfileData());
                     },
                   ),
 

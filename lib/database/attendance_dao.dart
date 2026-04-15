@@ -101,7 +101,7 @@ class AttendanceDao {
       INNER JOIN timetable t ON a.timetable_entry_id = t.id
       INNER JOIN subjects s ON t.subject_id = s.id
       WHERE s.semester = ? AND a.date >= ? AND a.date <= ?
-        AND length(a.date) = 10
+        AND a.date NOT LIKE 'pad_%'
       GROUP BY t.subject_id
     ''',
       [semester, startDate, endDate],
@@ -132,7 +132,7 @@ class AttendanceDao {
       FROM attendance_records a
       INNER JOIN timetable t ON a.timetable_entry_id = t.id
       WHERE t.subject_id = ?
-        AND length(a.date) = 10
+        AND a.date NOT LIKE 'pad_%'
       ORDER BY a.date DESC
     ''',
       [subjectId],
@@ -156,14 +156,15 @@ class AttendanceDao {
       INNER JOIN timetable t ON a.timetable_entry_id = t.id
       INNER JOIN subjects s ON t.subject_id = s.id
       WHERE s.semester = ? AND a.date >= ? AND a.date <= ?
-        AND length(a.date) = 10
+        AND a.date NOT LIKE 'pad_%'
     ''',
       [semester, startDate, endDate],
     );
 
     final Map<String, List<String>> dateStatuses = {};
     for (final row in result) {
-      final date = row['date'] as String;
+      final rawDate = row['date'] as String;
+      final date = rawDate.split('_')[0]; // Strip suffix to match UI (YYYY-MM-DD)
       final status = row['status'] as String;
       if (!dateStatuses.containsKey(date)) {
         dateStatuses[date] = [];
@@ -198,11 +199,11 @@ class AttendanceDao {
       INNER JOIN timetable t
         ON t.subject_id = s.id AND t.day_of_week = 0
       INNER JOIN attendance_records a
-        ON a.timetable_entry_id = t.id AND a.date = ?
+        ON a.timetable_entry_id = t.id AND a.date LIKE ?
       WHERE s.semester = ?
       ORDER BY s.name ASC
     ''',
-      [date, semester],
+      ['$date%', semester],
     );
     return result.map((e) => Map<String, dynamic>.from(e)).toList();
   }
@@ -227,11 +228,11 @@ class AttendanceDao {
       LEFT JOIN timetable t
         ON t.subject_id = s.id AND t.day_of_week = 0
       LEFT JOIN attendance_records a
-        ON a.timetable_entry_id = t.id AND a.date = ?
+        ON a.timetable_entry_id = t.id AND a.date LIKE ?
       WHERE s.semester = ?
       ORDER BY s.name ASC
     ''',
-      [date, semester],
+      ['$date%', semester],
     );
     return result.map((e) => Map<String, dynamic>.from(e)).toList();
   }
@@ -251,9 +252,9 @@ class AttendanceDao {
       FROM attendance_records a
       JOIN timetable t ON a.timetable_entry_id = t.id
       JOIN subjects s ON t.subject_id = s.id
-      WHERE s.semester = ? AND length(a.date) = 10
-      GROUP BY a.date
-      ORDER BY a.date DESC
+      WHERE s.semester = ? AND a.date NOT LIKE 'pad_%'
+      GROUP BY substr(a.date, 1, 10)
+      ORDER BY substr(a.date, 1, 10) DESC
     ''', [semester]);
 
     int streak = 0;

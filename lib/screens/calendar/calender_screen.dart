@@ -682,9 +682,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                           // Toggle P/A
                                           if (timetableId != null) ...[
                                             _inlineToggle(
-                                              label: 'P',
-                                              selected: isPresent,
-                                              color: Colors.green,
+                                              label: isPresent ? 'Present' : 'Absent',
+                                              selected: true,
+                                              color: isPresent ? Colors.green : Colors.red,
                                               theme: theme,
                                               onTap: () async {
                                                 final newStatus =

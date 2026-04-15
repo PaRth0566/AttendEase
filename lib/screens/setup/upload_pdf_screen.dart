@@ -1,9 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
 
+import '../../services/local_pdf_parser.dart';
 import 'basic_info_screen.dart';
 
 class UploadPdfScreen extends StatefulWidget {
@@ -40,60 +38,26 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
 
       setState(() => _isUploading = true);
 
-      final uri = Uri.parse('https://attendease-backend-ndxs.onrender.com/api/extract-setup-data');
-      final request = http.MultipartRequest('POST', uri);
-      
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'report',
-          fileBytes,
-          filename: result.files.first.name,
-          contentType: MediaType('application', 'pdf'),
-        ),
-      );
+      final Map<String, dynamic> parsedData =
+          await LocalPdfParser.extractAttendanceFromPdf(fileBytes);
 
-      final response = await request.send();
-      final responseData = await response.stream.bytesToString();
-      
       setState(() => _isUploading = false);
 
-      if (response.statusCode == 200) {
-        final jsonResult = json.decode(responseData);
-        if (jsonResult['success'] == true) {
-          final extractedStr = jsonResult['data'];
-          if (extractedStr != null) {
-            String cleanedStr = extractedStr.toString().replaceAll('```json', '').replaceAll('```', '').trim();
-            final Map<String, dynamic> parsedData = json.decode(cleanedStr);
-            
-            if (mounted) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => BasicInfoScreen(
-                    isEditMode: false,
-                    prefilledData: parsedData,
-                  ),
-                ),
-              );
-            }
-          } else {
-            throw Exception('No data returned from AI.');
-          }
-        } else {
-          throw Exception(jsonResult['error'] ?? 'Unknown error occurred.');
-        }
-      } else {
-        String serverMsg = 'Server error: ${response.statusCode}';
-        try {
-          final errJson = json.decode(responseData);
-          if (errJson['error'] != null) serverMsg = errJson['error'];
-        } catch (_) {}
-        throw Exception(serverMsg);
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => BasicInfoScreen(
+              isEditMode: false,
+              prefilledData: parsedData,
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isUploading = false);
-        final displayErr = e.toString().replaceAll('Exception: ', '');
+        final displayErr = e.toString().replaceAll('FormatException: ', '').replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: $displayErr'),
@@ -139,7 +103,7 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
               ),
               const SizedBox(height: 32),
               Text(
-                "Gemini AI Extraction",
+                "Smart PDF Extraction",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 24,
@@ -149,7 +113,7 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
               ),
               const SizedBox(height: 16),
               Text(
-                "Upload your attendance PDF to instantly gather your basic details and semester subjects. You'll only need to enter your start and end dates.",
+                "Upload your attendance PDF to instantly extract your subjects and attendance records. Fully offline — no internet needed.",
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 16,
@@ -165,7 +129,7 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
                     CircularProgressIndicator(color: theme.colorScheme.primary),
                     const SizedBox(height: 16),
                     Text(
-                      'Analyzing strictly formatted data...',
+                      'Analyzing PDF locally...',
                       style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -188,6 +152,33 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
                     elevation: 0,
                   ),
                 ),
+                
+              const SizedBox(height: 32),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.blueAccent.withOpacity(0.1) : Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.withOpacity(0.2)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline_rounded, color: isDark ? Colors.blue.shade300 : Colors.blue.shade700, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        "While our offline parser is highly accurate, varying PDF layouts can occasionally cause minor skips. You will be able to review and manually edit any details on the next steps to ensure 100% perfection!",
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.5,
+                          color: isDark ? Colors.blue.shade100 : Colors.blue.shade900,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),

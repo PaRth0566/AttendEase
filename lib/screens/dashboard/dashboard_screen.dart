@@ -218,75 +218,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 16),
 
-            // SYNC NEW REPORT BUTTON
-            GestureDetector(
-              onTap: () async {
-                await Navigator.push<bool>(
-                  context,
-                  MaterialPageRoute(builder: (_) => const RefreshPdfScreen()),
-                );
-                // Always reload — data may have been partially or fully synced
-                setState(() => _loading = true);
-                await _loadDashboardData();
-              },
-              child: Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(bottom: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF6366F1), Color(0xFF3B82F6)],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF6366F1).withOpacity(0.35),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.cloud_sync_rounded, color: Colors.white, size: 22),
-                    ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Sync New Report',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Upload latest PDF to update records',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white70, size: 16),
-                  ],
-                ),
-              ),
-            ),
+
 
             const SizedBox(height: 16),
 
@@ -453,6 +385,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   );
                 },
               ),
+
+            const SizedBox(height: 24),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Text(
+                  'Note: Attendance extraction may have slight deviations.\nPlease verify occasionally to ensure accuracy.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: theme.textTheme.bodySmall?.color?.withOpacity(0.6) ?? Colors.grey,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -621,6 +569,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDisclaimer(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
+      child: Text(
+        'Note: Attendance parsing may have slight deviations. Please verify occasionally to ensure accuracy.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 12,
+          color: theme.textTheme.bodySmall?.color?.withOpacity(0.7) ?? Colors.grey,
         ),
       ),
     );
