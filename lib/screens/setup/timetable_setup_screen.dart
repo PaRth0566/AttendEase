@@ -151,22 +151,30 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
       ).showSnackBar(const SnackBar(content: Text('Timetable updated!')));
       Navigator.pop(context);
     } else {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('is_setup_complete', true);
-
-      await CloudSyncService().backupDataToCloud();
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Timetable setup complete!')),
-      );
-
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const RootScreen()),
-        (route) => false,
-      );
+      await _completeSetupAndNavigate();
     }
+  }
+
+  Future<void> _skipSetup() async {
+    if (widget.isEditMode) {
+      Navigator.pop(context);
+      return;
+    }
+    await _completeSetupAndNavigate();
+  }
+
+  Future<void> _completeSetupAndNavigate() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_setup_complete', true);
+
+    await CloudSyncService().backupDataToCloud();
+
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const RootScreen()),
+      (route) => false,
+    );
   }
 
   @override
@@ -370,7 +378,34 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
+                if (!widget.isEditMode) ...
+                [
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _skipSetup,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: BorderSide(
+                          color: theme.colorScheme.secondary,
+                          width: 1.5,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Skip',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.secondary,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 10),
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _finishSetup,
@@ -384,7 +419,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                       ),
                     ),
                     child: Text(
-                      widget.isEditMode ? 'Save Changes' : 'Finish Setup',
+                      widget.isEditMode ? 'Save Changes' : 'Finish',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

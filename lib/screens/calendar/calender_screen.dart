@@ -7,7 +7,6 @@ import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
-import '../../models/timetable_entry.dart';
 import '../../services/notification_service.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -18,26 +17,28 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
-  final TimetableDao _timetableDao = TimetableDao();
-  final SubjectDao _subjectDao = SubjectDao();
   final AttendanceDao _attendanceDao = AttendanceDao();
+  final SubjectDao _subjectDao = SubjectDao();
+  final TimetableDao _timetableDao = TimetableDao();
 
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   DateTime _firstDay = DateTime.now().subtract(const Duration(days: 365));
   DateTime _lastDay = DateTime.now().add(const Duration(days: 365));
 
-  List<TimetableEntry> _dayEntries = [];
-  Map<int, Subject> _subjectMap = {};
-
   bool _loading = true;
   bool _isCalendarReady = false;
 
-  final Map<int, String> _attendanceSelection = {};
-
-  // HEATMAP DATA VARIABLES
+  // Heatmap: normalized UTC date -> status string
   Map<DateTime, String> _monthStatuses = {};
-  Map<int, int> _lecturesPerDay = {};
+
+  // Records for the selected date: subjectId, subjectName, timetableEntryId, status
+  List<Map<String, dynamic>> _dayRecords = [];
+
+  // All subjects for the semester (used in the add-record sheet)
+  List<Subject> _allSubjects = [];
+
+  int _activeSemester = 1;
 
   @override
   void initState() {
@@ -47,10 +48,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   Future<void> _initCalendarDates() async {
     final prefs = await SharedPreferences.getInstance();
-    final sem = prefs.getInt('semester') ?? 1;
+    _activeSemester = prefs.getInt('semester') ?? 1;
 
-    final startStr = prefs.getString('semester_start_$sem');
-    final endStr = prefs.getString('semester_end_$sem');
+    final startStr = prefs.getString('semester_start_$_activeSemester');
+    final endStr = prefs.getString('semester_end_$_activeSemester');
 
     DateTime normalize(DateTime d) => DateTime.utc(d.year, d.month, d.day);
 
@@ -66,23 +67,23 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     final now = DateTime.now();
     DateTime initialFocus = now;
+    if (now.isBefore(parsedStart)) initialFocus = parsedStart;
+    if (now.isAfter(parsedEnd)) initialFocus = parsedEnd;
 
-    if (now.isBefore(parsedStart)) {
-      initialFocus = parsedStart;
-    } else if (now.isAfter(parsedEnd)) {
-      initialFocus = parsedEnd;
+    // Load all subjects once for the add-record sheet
+    final subjects = await _subjectDao.getSubjectsBySemester(_activeSemester);
+    // Ensure seed slots exist for all subjects
+    for (final sub in subjects) {
+      await _timetableDao.ensureSeedEntry(sub.id!);
     }
 
-    for (int i = 1; i <= 6; i++) {
-      final entries = await _timetableDao.getEntriesForDay(i, sem);
-      _lecturesPerDay[i] = entries.length;
-    }
-
+    if (!mounted) return;
     setState(() {
       _firstDay = normalize(parsedStart);
       _lastDay = normalize(parsedEnd);
       _focusedDay = normalize(initialFocus);
       _selectedDay = normalize(initialFocus);
+      _allSubjects = subjects;
       _isCalendarReady = true;
     });
 
@@ -91,11 +92,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Future<void> _fetchMonthData(DateTime month) async {
-    final prefs = await SharedPreferences.getInstance();
-    final sem = prefs.getInt('semester') ?? 1;
-
-    DateTime monthStart = DateTime(month.year, month.month, 1);
-    DateTime monthEnd = DateTime(month.year, month.month + 1, 0);
+    final monthStart = DateTime(month.year, month.month, 1);
+    final monthEnd = DateTime(month.year, month.month + 1, 0);
 
     final startStr = DateFormat('yyyy-MM-dd').format(monthStart);
     final endStr = DateFormat('yyyy-MM-dd').format(monthEnd);
@@ -103,24 +101,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final dateStatuses = await _attendanceDao.getMonthlyAttendanceStatus(
       startStr,
       endStr,
-      sem,
+      _activeSemester,
     );
 
-    Map<DateTime, String> newStatuses = {};
-    DateTime today = DateTime.utc(
-      DateTime.now().year,
-      DateTime.now().month,
-      DateTime.now().day,
-    );
+    final Map<DateTime, String> newStatuses = {};
+    final today = DateTime.utc(DateTime.now().year, DateTime.now().month, DateTime.now().day);
 
     for (int i = 1; i <= monthEnd.day; i++) {
-      DateTime day = DateTime.utc(month.year, month.month, i);
+      final day = DateTime.utc(month.year, month.month, i);
 
-      // ✅ FIX: Separate "Outside" dates from "Holiday" dates
       if (day.isBefore(_firstDay) || day.isAfter(_lastDay)) {
         newStatuses[day] = 'outside';
-      } else if (day.weekday == DateTime.sunday ||
-          (_lecturesPerDay[day.weekday] ?? 0) == 0) {
+      } else if (day.weekday == DateTime.sunday) {
         newStatuses[day] = 'holiday';
       } else if (day.isAfter(today)) {
         newStatuses[day] = 'future';
@@ -129,7 +121,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         final statuses = dateStatuses[dateKey] ?? [];
 
         if (statuses.isEmpty) {
-          newStatuses[day] = 'forgot';
+          newStatuses[day] = 'no_record';
         } else if (statuses.every((s) => s == 'P')) {
           newStatuses[day] = 'all_p';
         } else if (statuses.every((s) => s == 'A')) {
@@ -141,117 +133,253 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }
 
     if (!mounted) return;
-    setState(() {
-      _monthStatuses = newStatuses;
-    });
+    setState(() => _monthStatuses = newStatuses);
   }
 
+  /// Loads only subjects with actual records on this date (INNER JOIN).
   Future<void> _loadForDate(DateTime date) async {
     setState(() => _loading = true);
 
-    final prefs = await SharedPreferences.getInstance();
-    final sem = prefs.getInt('semester') ?? 1;
-
-    if (date.weekday == DateTime.sunday) {
-      setState(() {
-        _dayEntries = [];
-        _attendanceSelection.clear();
-        _loading = false;
-      });
-      return;
-    }
-
-    final entries = await _timetableDao.getEntriesForDay(date.weekday, sem);
-    final subjects = await _subjectDao.getSubjectsBySemester(sem);
-
-    _subjectMap = {for (final s in subjects) s.id!: s};
-
     final dateKey = DateFormat('yyyy-MM-dd').format(date);
-    final savedAttendance = await _attendanceDao.getAttendanceForDate(dateKey);
+
+    final records = await _attendanceDao.getAttendanceForDateBySeedSlot(
+      dateKey,
+      _activeSemester,
+    );
 
     if (!mounted) return;
-
     setState(() {
-      _dayEntries = entries;
-      _attendanceSelection
-        ..clear()
-        ..addAll(savedAttendance);
+      _dayRecords = records;
       _loading = false;
     });
   }
 
-  Future<void> _saveAttendance() async {
-    if (_selectedDay == null) return;
-
-    final dateKey = DateFormat('yyyy-MM-dd').format(_selectedDay!);
-
-    for (final entry in _dayEntries) {
-      final timetableId = entry.id!;
-      final status = _attendanceSelection[timetableId];
-
-      if (status == null) {
-        await _attendanceDao.deleteAttendance(timetableId, dateKey);
-      } else {
-        await _attendanceDao.upsertAttendance(
-          timetableId: timetableId,
-          date: dateKey,
-          status: status,
-        );
-      }
-    }
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Attendance updated')));
+  Future<void> _saveRecord(int timetableEntryId, String date, String status) async {
+    await _attendanceDao.upsertAttendance(
+      timetableId: timetableEntryId,
+      date: date,
+      status: status,
+    );
     await _fetchMonthData(_focusedDay);
-
     await NotificationService().scheduleSmartNotifications();
   }
 
-  Widget _attendanceButton(
-    int timetableId,
-    String value,
-    String label,
-    ThemeData theme,
-  ) {
-    final selected = _attendanceSelection[timetableId] == value;
-    final baseColor = value == 'P' ? Colors.green : Colors.red;
+  Future<void> _deleteRecord(int timetableEntryId, String date) async {
+    await _attendanceDao.deleteAttendance(timetableEntryId, date);
+    if (_selectedDay != null) await _loadForDate(_selectedDay!);
+    await _fetchMonthData(_focusedDay);
+    await NotificationService().scheduleSmartNotifications();
+  }
 
-    return Padding(
-      padding: const EdgeInsets.only(left: 6),
-      child: ChoiceChip(
-        label: Text(label),
-        selected: selected,
-        selectedColor: baseColor.withAlpha(38),
-        backgroundColor: theme.scaffoldBackgroundColor,
-        labelStyle: TextStyle(
-          color: selected ? baseColor : theme.textTheme.bodyLarge?.color,
-          fontWeight: FontWeight.w600,
-        ),
-        side: BorderSide(
-          color: selected ? Colors.transparent : theme.dividerColor,
-        ),
-        onSelected: (bool isSelected) {
-          setState(() {
-            if (isSelected) {
-              _attendanceSelection[timetableId] = value;
-            } else {
-              _attendanceSelection.remove(timetableId);
-            }
-          });
+  // Opens bottom sheet to add a new attendance record for the selected date
+  void _showAddRecordSheet(String? dateKey) {
+    if (dateKey == null) return;
+    // Subjects that don't already have a record for this date
+    final recordedSubjectIds = _dayRecords
+        .map((r) => r['subject_id'] as int)
+        .toSet();
+    final available = _allSubjects
+        .where((s) => !recordedSubjectIds.contains(s.id))
+        .toList();
+
+    if (available.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All subjects already have a record for this date')),
+      );
+      return;
+    }
+
+    Subject? selectedSubject;
+    String selectedStatus = 'P';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          final theme = Theme.of(context);
+          return Container(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+            ),
+            decoration: BoxDecoration(
+              color: theme.cardColor,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: theme.dividerColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+
+                Text(
+                  'Add Record — $dateKey',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: theme.textTheme.bodyLarge?.color,
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Subject picker
+                DropdownButtonFormField<Subject>(
+                  value: selectedSubject,
+                  decoration: InputDecoration(
+                    labelText: 'Select Subject',
+                    labelStyle: TextStyle(color: theme.textTheme.bodyMedium?.color),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: theme.dividerColor),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+                    ),
+                  ),
+                  dropdownColor: theme.cardColor,
+                  style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+                  items: available
+                      .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
+                      .toList(),
+                  onChanged: (v) => setSheetState(() => selectedSubject = v),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Status selector
+                Text(
+                  'Attendance Status',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: theme.textTheme.bodyMedium?.color,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _statusToggleButton(
+                        label: 'Present',
+                        icon: Icons.check_circle_outline_rounded,
+                        value: 'P',
+                        selected: selectedStatus == 'P',
+                        color: Colors.green,
+                        theme: theme,
+                        onTap: () => setSheetState(() => selectedStatus = 'P'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _statusToggleButton(
+                        label: 'Absent',
+                        icon: Icons.cancel_outlined,
+                        value: 'A',
+                        selected: selectedStatus == 'A',
+                        color: Colors.red,
+                        theme: theme,
+                        onTap: () => setSheetState(() => selectedStatus = 'A'),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
+
+                // Save button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: selectedSubject == null
+                        ? null
+                        : () async {
+                            final sub = selectedSubject!;
+                            final seedId = await _timetableDao.ensureSeedEntry(sub.id!);
+                            await _saveRecord(seedId, dateKey, selectedStatus);
+                            if (!mounted) return;
+                            Navigator.pop(ctx);
+                            await _loadForDate(_selectedDay!);
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      disabledBackgroundColor: theme.dividerColor,
+                    ),
+                    child: const Text(
+                      'Save Record',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
         },
       ),
     );
   }
 
-  Widget _buildLegendItem(
-    Color color,
-    String label,
-    ThemeData theme, {
-    Widget? icon,
+  // Status toggle button used inside the add-record sheet
+  Widget _statusToggleButton({
+    required String label,
+    required IconData icon,
+    required String value,
+    required bool selected,
+    required Color color,
+    required ThemeData theme,
+    required VoidCallback onTap,
   }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: selected ? color.withAlpha(38) : theme.scaffoldBackgroundColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? color : theme.dividerColor,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: selected ? color : theme.iconTheme.color, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: selected ? color : theme.textTheme.bodyLarge?.color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(Color color, String label, ThemeData theme) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -259,7 +387,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
           width: 12,
           height: 12,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          child: Center(child: icon),
         ),
         const SizedBox(width: 4),
         Flexible(
@@ -279,32 +406,39 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    DateTime today = DateTime.utc(
-      DateTime.now().year,
-      DateTime.now().month,
-      DateTime.now().day,
-    );
-    bool isFutureDay = _selectedDay != null && _selectedDay!.isAfter(today);
-
+    final today = DateTime.utc(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final isFutureDay = _selectedDay != null && _selectedDay!.isAfter(today);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
     final colorPresentBg = Colors.green.withAlpha(64);
     final colorAbsentBg = Colors.red.withAlpha(64);
     final colorMixedBg = Colors.orange.withAlpha(64);
-    final colorForgotBg = isDark
-        ? Colors.purple.withAlpha(64)
-        : const Color(0xFFF3E8FF);
-    final colorHolidayBg = isDark
-        ? Colors.white.withAlpha(25)
-        : Colors.grey.withAlpha(38);
+    final colorHolidayBg = isDark ? Colors.white.withAlpha(25) : Colors.grey.withAlpha(38);
+
+    // Date key for selected day
+    final selectedDateKey = _selectedDay != null
+        ? DateFormat('yyyy-MM-dd').format(_selectedDay!)
+        : null;
+    final isSunday = _selectedDay?.weekday == DateTime.sunday;
+    final canAddRecord = !isFutureDay && !isSunday && selectedDateKey != null;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(title: const Text('Calendar'), elevation: 0),
+      floatingActionButton: canAddRecord
+          ? FloatingActionButton.extended(
+              onPressed: () => _showAddRecordSheet(selectedDateKey),
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add Record', style: TextStyle(fontWeight: FontWeight.w600)),
+              backgroundColor: theme.colorScheme.primary,
+              foregroundColor: Colors.white,
+            )
+          : null,
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Calendar widget
           Container(
             decoration: BoxDecoration(
               color: theme.cardColor,
@@ -313,59 +447,44 @@ class _CalendarScreenState extends State<CalendarScreen> {
             child: Column(
               children: [
                 !_isCalendarReady
-                    ? Center(
-                        child: CircularProgressIndicator(
-                          color: theme.colorScheme.primary,
-                        ),
+                    ? const SizedBox(
+                        height: 80,
+                        child: Center(child: CircularProgressIndicator()),
                       )
                     : TableCalendar(
                         firstDay: _firstDay,
                         lastDay: _lastDay,
                         focusedDay: _focusedDay,
-                        selectedDayPredicate: (day) =>
-                            isSameDay(_selectedDay, day),
+                        selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                         calendarFormat: CalendarFormat.month,
-                        availableCalendarFormats: const {
-                          CalendarFormat.month: 'Month',
-                        },
+                        availableCalendarFormats: const {CalendarFormat.month: 'Month'},
                         rowHeight: 42,
                         daysOfWeekHeight: 20,
                         headerStyle: HeaderStyle(
                           formatButtonVisible: false,
                           titleCentered: true,
-                          headerPadding: const EdgeInsets.symmetric(
-                            vertical: 4,
-                          ),
+                          headerPadding: const EdgeInsets.symmetric(vertical: 4),
                           titleTextStyle: TextStyle(
                             color: theme.textTheme.bodyLarge?.color,
                             fontSize: 17,
                           ),
-                          leftChevronIcon: Icon(
-                            Icons.chevron_left,
-                            color: theme.iconTheme.color,
-                          ),
-                          rightChevronIcon: Icon(
-                            Icons.chevron_right,
-                            color: theme.iconTheme.color,
-                          ),
+                          leftChevronIcon:
+                              Icon(Icons.chevron_left, color: theme.iconTheme.color),
+                          rightChevronIcon:
+                              Icon(Icons.chevron_right, color: theme.iconTheme.color),
                         ),
                         daysOfWeekStyle: DaysOfWeekStyle(
-                          weekdayStyle: TextStyle(
-                            color: theme.textTheme.bodyMedium?.color,
-                          ),
-                          weekendStyle: TextStyle(
-                            color: theme.textTheme.bodyMedium?.color,
-                          ),
+                          weekdayStyle:
+                              TextStyle(color: theme.textTheme.bodyMedium?.color),
+                          weekendStyle:
+                              TextStyle(color: theme.textTheme.bodyMedium?.color),
                         ),
                         calendarBuilders: CalendarBuilders(
                           prioritizedBuilder: (context, day, focusedDay) {
-                            final normalizedDay = DateTime.utc(
-                              day.year,
-                              day.month,
-                              day.day,
-                            );
-                            bool isSelected = isSameDay(_selectedDay, day);
-                            bool isToday = isSameDay(DateTime.now(), day);
+                            final normalizedDay =
+                                DateTime.utc(day.year, day.month, day.day);
+                            final bool isSelected = isSameDay(_selectedDay, day);
+                            final bool isToday = isSameDay(DateTime.now(), day);
 
                             if (isSelected) {
                               return Container(
@@ -389,56 +508,44 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             final status = _monthStatuses[normalizedDay];
                             Color? bgColor;
                             Color textColor =
-                                theme.textTheme.bodyLarge?.color ??
-                                Colors.black;
-                            FontWeight weight = isToday
-                                ? FontWeight.bold
-                                : FontWeight.normal;
+                                theme.textTheme.bodyLarge?.color ?? Colors.black;
+                            final FontWeight weight =
+                                isToday ? FontWeight.bold : FontWeight.normal;
 
-                            // ✅ FIX: No background bubble at all if outside semester dates
-                            if (status == 'outside') {
-                              bgColor = Colors.transparent;
-                              textColor = isDark
-                                  ? Colors.white.withAlpha(50)
-                                  : Colors.black.withAlpha(
-                                      50,
-                                    ); // Highly faded text
-                            } else if (status == 'holiday') {
-                              bgColor = colorHolidayBg;
-                              textColor =
-                                  theme.textTheme.bodyMedium?.color ??
-                                  Colors.grey.shade600;
-                            } else if (status == 'all_p') {
-                              bgColor = colorPresentBg;
-                            } else if (status == 'all_a') {
-                              bgColor = colorAbsentBg;
-                            } else if (status == 'mixed') {
-                              bgColor = colorMixedBg;
-                            } else if (status == 'forgot') {
-                              bgColor = colorForgotBg;
+                            switch (status) {
+                              case 'outside':
+                                bgColor = Colors.transparent;
+                                textColor = isDark
+                                    ? Colors.white.withAlpha(50)
+                                    : Colors.black.withAlpha(50);
+                              case 'holiday':
+                                bgColor = colorHolidayBg;
+                                textColor = theme.textTheme.bodyMedium?.color ?? Colors.grey;
+                              case 'all_p':
+                                bgColor = colorPresentBg;
+                              case 'all_a':
+                                bgColor = colorAbsentBg;
+                              case 'mixed':
+                                bgColor = colorMixedBg;
+                              default:
+                                bgColor = null;
                             }
-
-                            Border? border = isToday
-                                ? Border.all(
-                                    color: theme.colorScheme.primary,
-                                    width: 1.5,
-                                  )
-                                : null;
 
                             return Container(
                               margin: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
                                 color: bgColor,
                                 shape: BoxShape.circle,
-                                border: border,
+                                border: isToday
+                                    ? Border.all(
+                                        color: theme.colorScheme.primary, width: 1.5)
+                                    : null,
                               ),
                               child: Center(
                                 child: Text(
                                   '${day.day}',
                                   style: TextStyle(
-                                    color: textColor,
-                                    fontWeight: weight,
-                                  ),
+                                      color: textColor, fontWeight: weight),
                                 ),
                               ),
                             );
@@ -459,62 +566,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         },
                       ),
 
+                // Legend
                 if (_isCalendarReady)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                    child: Column(
+                    child: Row(
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildLegendItem(
-                                theme.colorScheme.primary,
-                                'Selected',
-                                theme,
-                              ),
-                            ),
-                            Expanded(
-                              child: _buildLegendItem(
-                                colorPresentBg,
-                                'All Present',
-                                theme,
-                              ),
-                            ),
-                            Expanded(
-                              child: _buildLegendItem(
-                                colorAbsentBg,
-                                'All Absent',
-                                theme,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildLegendItem(
-                                colorMixedBg,
-                                'Mixed',
-                                theme,
-                              ),
-                            ),
-                            Expanded(
-                              child: _buildLegendItem(
-                                colorForgotBg,
-                                'Forgot / Not Held',
-                                theme,
-                              ),
-                            ),
-                            Expanded(
-                              child: _buildLegendItem(
-                                colorHolidayBg,
-                                'Holiday / Off',
-                                theme,
-                              ),
-                            ),
-                          ],
-                        ),
+                        Expanded(child: _buildLegendItem(colorPresentBg, 'All Present', theme)),
+                        Expanded(child: _buildLegendItem(colorAbsentBg, 'All Absent', theme)),
+                        Expanded(child: _buildLegendItem(colorMixedBg, 'Mixed', theme)),
+                        Expanded(child: _buildLegendItem(colorHolidayBg, 'Off', theme)),
                       ],
                     ),
                   ),
@@ -522,144 +583,192 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           ),
 
-          const SizedBox(height: 12),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              _selectedDay != null
-                  ? DateFormat('EEEE, MMM d').format(_selectedDay!)
-                  : '',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: theme.textTheme.bodyLarge?.color,
+          // Selected day label
+          if (_selectedDay != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+              child: Text(
+                DateFormat('EEEE, MMMM d, yyyy').format(_selectedDay!),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: theme.textTheme.bodyLarge?.color,
+                ),
               ),
             ),
-          ),
 
-          const SizedBox(height: 8),
-
+          // Records list
           Expanded(
             child: _loading
-                ? Center(
-                    child: CircularProgressIndicator(
-                      color: theme.colorScheme.primary,
-                    ),
-                  )
-                : _dayEntries.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'No lectures for this day',
-                          style: TextStyle(
-                            color: theme.textTheme.bodyMedium?.color,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _dayEntries.length,
-                    itemBuilder: (_, i) {
-                      final entry = _dayEntries[i];
-                      final subject = _subjectMap[entry.subjectId]!;
+                ? Center(child: CircularProgressIndicator(color: theme.colorScheme.primary))
+                : isSunday
+                    ? _emptyState(Icons.weekend_rounded, 'Sunday — no classes', theme)
+                    : isFutureDay
+                        ? _emptyState(Icons.event_outlined, 'No records yet', theme)
+                        : _dayRecords.isEmpty
+                            ? _emptyState(
+                                Icons.event_note_outlined,
+                                'No records for this date\nTap + to add one',
+                                theme,
+                              )
+                            : ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
+                                itemCount: _dayRecords.length,
+                                itemBuilder: (_, i) {
+                                  final record = _dayRecords[i];
 
-                      return Card(
-                        color: theme.cardColor,
-                        elevation: 0,
-                        margin: const EdgeInsets.only(bottom: 8),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: theme.dividerColor),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  subject.name,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: theme.textTheme.bodyLarge?.color,
-                                  ),
-                                ),
+                                  final subjectName =
+                                      record['subject_name'] as String? ?? 'Unknown';
+                                  final status = record['status'] as String? ?? '';
+                                  final timetableId =
+                                      record['timetable_entry_id'] as int?;
+
+                                  final isPresent = status == 'P';
+                                  final statusColor =
+                                      isPresent ? Colors.green : Colors.red;
+
+                                  return Card(
+                                    color: theme.cardColor,
+                                    elevation: 0,
+                                    margin: const EdgeInsets.only(bottom: 10),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      side: BorderSide(
+                                        color: statusColor.withAlpha(80),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 10),
+                                      child: Row(
+                                        children: [
+                                          // Status dot
+                                          Container(
+                                            width: 10,
+                                            height: 10,
+                                            margin: const EdgeInsets.only(right: 12),
+                                            decoration: BoxDecoration(
+                                              color: statusColor,
+                                              shape: BoxShape.circle,
+                                            ),
+                                          ),
+                                          // Subject name
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  subjectName,
+                                                  style: TextStyle(
+                                                    fontSize: 15,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: theme.textTheme.bodyLarge?.color,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  isPresent ? 'Present' : 'Absent',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: statusColor,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          // Toggle P/A
+                                          if (timetableId != null) ...[
+                                            _inlineToggle(
+                                              label: 'P',
+                                              selected: isPresent,
+                                              color: Colors.green,
+                                              theme: theme,
+                                              onTap: () async {
+                                                final newStatus =
+                                                    isPresent ? 'A' : 'P';
+                                                await _saveRecord(timetableId,
+                                                    selectedDateKey!, newStatus);
+                                                await _loadForDate(_selectedDay!);
+                                              },
+                                            ),
+                                            const SizedBox(width: 6),
+                                            // Delete
+                                            IconButton(
+                                              icon: Icon(
+                                                Icons.delete_outline_rounded,
+                                                size: 20,
+                                                color: theme.textTheme.bodyMedium?.color,
+                                              ),
+                                              onPressed: () async {
+                                                await _deleteRecord(
+                                                  timetableId,
+                                                  selectedDateKey!,
+                                                );
+                                              },
+                                              visualDensity: VisualDensity.compact,
+                                              padding: EdgeInsets.zero,
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
                               ),
-                              if (isFutureDay)
-                                const Text(
-                                  'Upcoming',
-                                  style: TextStyle(
-                                    color: Colors.grey,
-                                    fontWeight: FontWeight.w500,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                )
-                              else ...[
-                                _attendanceButton(
-                                  entry.id!,
-                                  'P',
-                                  'Present',
-                                  theme,
-                                ),
-                                _attendanceButton(
-                                  entry.id!,
-                                  'A',
-                                  'Absent',
-                                  theme,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
           ),
+        ],
+      ),
+    );
+  }
 
-          if (!isFutureDay && _dayEntries.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _saveAttendance,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Save Changes',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            )
-          else if (isFutureDay && _dayEntries.isNotEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
-              child: Center(
-                child: Text(
-                  'Cannot mark attendance for future dates',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
+  Widget _inlineToggle({
+    required String label,
+    required bool selected,
+    required Color color,
+    required ThemeData theme,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? color.withAlpha(38) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: selected ? color : theme.dividerColor),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: selected ? color : theme.textTheme.bodyMedium?.color,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyState(IconData icon, String message, ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 48, color: theme.textTheme.bodyMedium?.color?.withAlpha(100)),
+          const SizedBox(height: 12),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: theme.textTheme.bodyMedium?.color,
+              fontSize: 15,
+              height: 1.6,
             ),
+          ),
         ],
       ),
     );

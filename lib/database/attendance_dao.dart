@@ -101,6 +101,7 @@ class AttendanceDao {
       INNER JOIN timetable t ON a.timetable_entry_id = t.id
       INNER JOIN subjects s ON t.subject_id = s.id
       WHERE s.semester = ? AND a.date >= ? AND a.date <= ?
+        AND length(a.date) = 10
       GROUP BY t.subject_id
     ''',
       [semester, startDate, endDate],
@@ -119,7 +120,8 @@ class AttendanceDao {
   // ================================
   // FETCH HISTORY FOR A SPECIFIC SUBJECT (DEEP-DIVE)
   // ================================
-  // ✅ UPDATED: Now fetches the specific timetable_entry_id for editing/deleting
+  // Only returns real-dated records (yyyy-MM-dd) — pseudo-dates used for
+  // stats padding are excluded so the UI never crashes on DateTime.parse.
   Future<List<Map<String, dynamic>>> getAttendanceHistoryForSubject(
     int subjectId,
   ) async {
@@ -130,6 +132,7 @@ class AttendanceDao {
       FROM attendance_records a
       INNER JOIN timetable t ON a.timetable_entry_id = t.id
       WHERE t.subject_id = ?
+        AND length(a.date) = 10
       ORDER BY a.date DESC
     ''',
       [subjectId],
@@ -153,6 +156,7 @@ class AttendanceDao {
       INNER JOIN timetable t ON a.timetable_entry_id = t.id
       INNER JOIN subjects s ON t.subject_id = s.id
       WHERE s.semester = ? AND a.date >= ? AND a.date <= ?
+        AND length(a.date) = 10
     ''',
       [semester, startDate, endDate],
     );
@@ -170,12 +174,76 @@ class AttendanceDao {
   }
 
   // ================================
+  // GET ATTENDANCE FOR A DATE VIA SEED SLOTS (for calendar detail view)
+  // Returns all subjects for the semester with their saved status for 'date'.
+  // Uses day=0 seed timetable entries as the canonical attendance slot.
+  // ================================
+  // GET ATTENDANCE FOR A DATE — ONLY SUBJECTS WITH ACTUAL RECORDS
+  // Returns subjects that have a real attendance entry (P or A) on 'date'.
+  // Used by the calendar detail view to show "what was conducted on this day".
+  // ================================
+  Future<List<Map<String, dynamic>>> getAttendanceForDateBySeedSlot(
+    String date,
+    int semester,
+  ) async {
+    final db = await DBHelper.instance.database;
+    final result = await db.rawQuery(
+      '''
+      SELECT
+        s.id        AS subject_id,
+        s.name      AS subject_name,
+        t.id        AS timetable_entry_id,
+        a.status    AS status
+      FROM subjects s
+      INNER JOIN timetable t
+        ON t.subject_id = s.id AND t.day_of_week = 0
+      INNER JOIN attendance_records a
+        ON a.timetable_entry_id = t.id AND a.date = ?
+      WHERE s.semester = ?
+      ORDER BY s.name ASC
+    ''',
+      [date, semester],
+    );
+    return result.map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  // ================================
+  // GET ALL SUBJECTS FOR MANUAL MARKING (LEFT JOIN — no records required)
+  // Used as fallback when a selected date has no PDF records.
+  // ================================
+  Future<List<Map<String, dynamic>>> getAllSubjectsWithStatusForDate(
+    String date,
+    int semester,
+  ) async {
+    final db = await DBHelper.instance.database;
+    final result = await db.rawQuery(
+      '''
+      SELECT
+        s.id        AS subject_id,
+        s.name      AS subject_name,
+        t.id        AS timetable_entry_id,
+        a.status    AS status
+      FROM subjects s
+      LEFT JOIN timetable t
+        ON t.subject_id = s.id AND t.day_of_week = 0
+      LEFT JOIN attendance_records a
+        ON a.timetable_entry_id = t.id AND a.date = ?
+      WHERE s.semester = ?
+      ORDER BY s.name ASC
+    ''',
+      [date, semester],
+    );
+    return result.map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  // ================================
   // CALCULATE CURRENT STREAK
   // ================================
   Future<int> getCurrentStreak(int semester) async {
     final db = await DBHelper.instance.database;
 
-    // Groups records by date and counts Presents and Absents for each day
+    // Groups real-dated records by date, counting P and A per day.
+    // Pseudo-dates (pad_P_, pad_A_) excluded via length(a.date)=10.
     final result = await db.rawQuery('''
       SELECT a.date,
              SUM(CASE WHEN a.status = 'A' THEN 1 ELSE 0 END) as absent_count,
@@ -183,7 +251,7 @@ class AttendanceDao {
       FROM attendance_records a
       JOIN timetable t ON a.timetable_entry_id = t.id
       JOIN subjects s ON t.subject_id = s.id
-      WHERE s.semester = ?
+      WHERE s.semester = ? AND length(a.date) = 10
       GROUP BY a.date
       ORDER BY a.date DESC
     ''', [semester]);

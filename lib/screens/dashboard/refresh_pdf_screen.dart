@@ -10,7 +10,6 @@ import '../../database/db_helper.dart';
 import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
-import '../../models/timetable_entry.dart';
 
 class RefreshPdfScreen extends StatefulWidget {
   const RefreshPdfScreen({super.key});
@@ -76,7 +75,8 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
       final extractedStr = jsonResult['data'];
       if (extractedStr == null) throw Exception('No data returned from AI.');
 
-      final cleanedStr = extractedStr.toString()
+      final cleanedStr = extractedStr
+          .toString()
           .replaceAll('```json', '')
           .replaceAll('```', '')
           .trim();
@@ -116,7 +116,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
     final timetableDao = TimetableDao();
     final attendanceDao = AttendanceDao();
 
-    // --- Sync Subjects (add any new ones, don't delete existing) ---
+    // Step 1: Sync subjects — add new ones, never delete existing
     final List<dynamic> newSubjects = data['subjects'] ?? [];
     final existing = await subjectDao.getSubjectsBySemester(activeSemester);
     final existingNames = existing.map((s) => s.name).toSet();
@@ -130,97 +130,107 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
       }
     }
 
-    // Build name → id map from current DB state
+    // Build name → id map
     final allSubjects = await subjectDao.getSubjectsBySemester(activeSemester);
     final Map<String, int> subjectNameToId = {
       for (var s in allSubjects) s.name: s.id!
     };
 
-    // --- Sync Timetable (only overwrite days that are in the new data) ---
-    final List<dynamic> timetable = data['timetable'] ?? [];
-    for (var dayObj in timetable) {
-      final int dayOfWeek = dayObj['dayOfWeek'] ?? 1;
-      final List<dynamic> daySubjects = dayObj['subjects'] ?? [];
-
-      // 1. Delete attendance records for this day's timetable entries FIRST
-      //    so we don't leave orphaned rows pointing to deleted timetable IDs.
-      final db = await DBHelper.instance.database;
-      await db.rawDelete('''
-        DELETE FROM attendance_records
-        WHERE timetable_entry_id IN (
-          SELECT id FROM timetable
-          WHERE day_of_week = ? AND subject_id IN (
-            SELECT id FROM subjects WHERE semester = ?
-          )
-        )
-      ''', [dayOfWeek, activeSemester]);
-
-      // 2. Now safe to delete and replace timetable entries
-      await timetableDao.deleteEntriesForDay(dayOfWeek, activeSemester);
-      for (int i = 0; i < daySubjects.length; i++) {
-        final subName = daySubjects[i].toString().trim();
-        final subId = subjectNameToId[subName];
-        if (subId != null) {
-          await timetableDao.insertEntry(TimetableEntry(
-            dayOfWeek: dayOfWeek,
-            subjectId: subId,
-            lectureOrder: i + 1,
-          ));
-        }
-      }
+    // Step 2: Ensure seed slots (day=0) exist for all subjects
+    final Map<int, int> subjectIdToSeedEntryId = {};
+    for (final subId in subjectNameToId.values) {
+      final seedId = await timetableDao.ensureSeedEntry(subId);
+      subjectIdToSeedEntryId[subId] = seedId;
     }
 
-    // Rebuild timetable entry lookup (subjectId → list of entries per day)
-    final allTimetableEntries = <int, List<TimetableEntry>>{};
-    for (int day = 1; day <= 7; day++) {
-      final dayEntries = await timetableDao.getEntriesForDay(day, activeSemester);
-      for (var entry in dayEntries) {
-        allTimetableEntries.putIfAbsent(entry.subjectId, () => []).add(entry);
-      }
-    }
+    // Step 3A: Insert real-dated records from AI (populates calendar heatmap)
+    final Map<String, int> insertedP = {};
+    final Map<String, int> insertedA = {};
 
-    // --- Sync Attendance Records (upsert = overwrite on collision) ---
-    final List<dynamic> history = data['attendanceRecords'] ?? [];
-    for (var record in history) {
-      final dateStr = record['date'];
-      final subjectName = record['subject']?.toString().trim();
-      final status = record['status']?.toString().toUpperCase();
-      // Use record['lectureNumber'] (1st, 2nd, etc. occurrence that day)
-      final int lectureNumber = (record['lectureNumber'] ?? 1) as int;
+    final List<dynamic> records = data['attendanceRecords'] ?? [];
+    for (final rec in records) {
+      var dateStr = rec['date']?.toString().trim();
+      final subName = rec['subject']?.toString().trim();
+      final status = rec['status']?.toString().toUpperCase();
 
-      if (dateStr == null || subjectName == null || status == null) continue;
+      if (dateStr == null || subName == null || status == null) continue;
       if (status != 'P' && status != 'A') continue;
 
-      final subId = subjectNameToId[subjectName];
-      if (subId == null) continue;
-
-      DateTime? parsedDate;
-      try {
-        parsedDate = DateTime.parse(dateStr);
-      } catch (_) {}
-      if (parsedDate == null) continue;
-
-      // 1. Get ALL timetable entries for this subject
-      final allEntriesForSub = allTimetableEntries[subId] ?? [];
+      // Smart Date Parsing
+      final parsedDate = DateTime.tryParse(dateStr);
+      if (parsedDate == null) {
+        debugPrint('Skipping invalid date format: "$dateStr"');
+        continue;
+      }
       
-      // 2. Filter for entries occurring on this specific day of the week
-      final entriesOnThisDay = allEntriesForSub
-          .where((e) => e.dayOfWeek == parsedDate!.weekday)
-          .toList()
-        ..sort((a, b) => a.lectureOrder.compareTo(b.lectureOrder));
+      // Enforce strict YYYY-MM-DD format for DB/Calendar compatibility
+      dateStr = '${parsedDate.year.toString().padLeft(4, '0')}-${parsedDate.month.toString().padLeft(2, '0')}-${parsedDate.day.toString().padLeft(2, '0')}';
 
-      if (entriesOnThisDay.isEmpty) continue;
-
-      // 3. Pick the entry matching the lectureNumber (1-indexed)
-      // If AI says lectureNumber 2 but we only have 1 slot, clamp to last slot.
-      final targetIndex = (lectureNumber - 1).clamp(0, entriesOnThisDay.length - 1);
-      final matchingEntryId = entriesOnThisDay[targetIndex].id!;
+      final subId = subjectNameToId[subName];
+      if (subId == null) continue;
+      final seedEntryId = subjectIdToSeedEntryId[subId];
+      if (seedEntryId == null) continue;
 
       await attendanceDao.upsertAttendance(
-        timetableId: matchingEntryId,
+        timetableId: seedEntryId,
         date: dateStr,
         status: status,
       );
+
+      if (status == 'P') {
+        insertedP[subName] = (insertedP[subName] ?? 0) + 1;
+      } else {
+        insertedA[subName] = (insertedA[subName] ?? 0) + 1;
+      }
+    }
+
+    // Step 3B: Wipe old pseudo-dates before re-padding (avoid double-counting)
+    final db = await DBHelper.instance.database;
+    await db.rawDelete('''
+      DELETE FROM attendance_records
+      WHERE length(date) != 10
+        AND timetable_entry_id IN (
+          SELECT t.id FROM timetable t
+          INNER JOIN subjects s ON t.subject_id = s.id
+          WHERE s.semester = ?
+        )
+    ''', [activeSemester]);
+
+    // Step 3C: Pad pseudo-dates to match authoritative subjectStats counts
+    final subjectStats = data['subjectStats'] as Map<String, dynamic>? ?? {};
+    for (final entry in subjectStats.entries) {
+      final subjectName = entry.key.toString().trim();
+      final stats = entry.value;
+      if (stats == null) continue;
+
+      final int targetP = (stats['attended'] as num?)?.toInt() ?? 0;
+      final int targetTotal = (stats['total'] as num?)?.toInt() ?? 0;
+      final int targetA = targetTotal - targetP;
+
+      final subId = subjectNameToId[subjectName];
+      if (subId == null) continue;
+      final seedEntryId = subjectIdToSeedEntryId[subId];
+      if (seedEntryId == null) continue;
+
+      final int gotP = insertedP[subjectName] ?? 0;
+      final int gotA = insertedA[subjectName] ?? 0;
+      final int needP = (targetP - gotP).clamp(0, 99999);
+      final int needA = (targetA - gotA).clamp(0, 99999);
+
+      for (int i = 0; i < needP; i++) {
+        await attendanceDao.upsertAttendance(
+          timetableId: seedEntryId,
+          date: 'pad_P_${subId}_$i',
+          status: 'P',
+        );
+      }
+      for (int i = 0; i < needA; i++) {
+        await attendanceDao.upsertAttendance(
+          timetableId: seedEntryId,
+          date: 'pad_A_${subId}_$i',
+          status: 'A',
+        );
+      }
     }
   }
 
@@ -244,10 +254,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: theme.textTheme.bodyLarge?.color,
-        // Always return true so the dashboard always refreshes on pop
-        leading: BackButton(
-          onPressed: () => Navigator.pop(context, _isDone),
-        ),
+        leading: BackButton(onPressed: () => Navigator.pop(context, _isDone)),
       ),
       body: SafeArea(
         child: Padding(
@@ -301,15 +308,10 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
               Text(
                 _statusMessage,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.6,
-                  color: theme.textTheme.bodyMedium?.color,
-                ),
+                style: TextStyle(fontSize: 15, height: 1.6, color: theme.textTheme.bodyMedium?.color),
               ),
               const SizedBox(height: 16),
 
-              // Info chip
               if (!_isDone && !_isUploading)
                 Center(
                   child: Container(
@@ -325,7 +327,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                         const Icon(Icons.info_outline_rounded, size: 14, color: Colors.amber),
                         const SizedBox(width: 6),
                         Text(
-                          'Existing records will be overwritten with latest data',
+                          'New records will be merged with existing data',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -347,10 +349,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                     Text(
                       _statusMessage,
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
                     ),
                   ],
                 )

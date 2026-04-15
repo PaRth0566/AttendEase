@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/subject_dao.dart';
+import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
 import '../setup/timetable_setup_screen.dart';
 
@@ -17,6 +18,7 @@ class AddSubjectsScreen extends StatefulWidget {
 class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
   final TextEditingController _subjectController = TextEditingController();
   final SubjectDao _subjectDao = SubjectDao();
+  final TimetableDao _timetableDao = TimetableDao();
 
   List<Subject> _subjects = [];
   List<int> _deletedSubjectIds = [];
@@ -150,6 +152,12 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
     }
 
     await _loadSubjects();
+
+    // Ensure every subject has a seed slot (day=0) for calendar attendance
+    final savedSubjects = await _subjectDao.getSubjectsBySemester(_activeSemester);
+    for (final sub in savedSubjects) {
+      await _timetableDao.ensureSeedEntry(sub.id!);
+    }
 
     if (!mounted) return;
 

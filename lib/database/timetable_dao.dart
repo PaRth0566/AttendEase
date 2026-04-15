@@ -44,4 +44,21 @@ class TimetableDao {
       [dayOfWeek, semester],
     );
   }
+
+  // Ensures each subject has a seed timetable slot (day=0) used for storing
+  // attendance records when no real timetable is configured.
+  // Creates one if it doesn't exist, then returns the entry id.
+  Future<int> ensureSeedEntry(int subjectId) async {
+    final Database db = await DBHelper.instance.database;
+    final existing = await db.rawQuery(
+      'SELECT id FROM timetable WHERE day_of_week = 0 AND subject_id = ?',
+      [subjectId],
+    );
+    if (existing.isNotEmpty) return existing.first['id'] as int;
+    return await db.insert('timetable', {
+      'day_of_week': 0,
+      'subject_id': subjectId,
+      'lecture_order': 0,
+    });
+  }
 }

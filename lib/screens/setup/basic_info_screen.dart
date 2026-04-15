@@ -7,7 +7,6 @@ import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../database/attendance_dao.dart';
 import '../../models/subject.dart';
-import '../../models/timetable_entry.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 
@@ -25,7 +24,6 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
   final _nameController = TextEditingController();
   final _courseController = TextEditingController();
   final _yearController = TextEditingController();
-  final _divisionController = TextEditingController();
 
   int _selectedSemester = 1;
   DateTime? _startDate;
@@ -56,14 +54,9 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
   }
 
   /// Parses a semester string like "Semester III", "sem 3", "3", "iii" etc.
-  /// Uses regex with word-boundaries to avoid ambiguity (e.g., "viii" ≠ "i").
   int _parseSemesterNumber(String s) {
-    // Try numeric digit first (most reliable)
     final digitMatch = RegExp(r'\b([1-8])\b').firstMatch(s);
-    if (digitMatch != null) {
-      return int.parse(digitMatch.group(1)!);
-    }
-    // Roman numerals — ordered longest-first to avoid partial matches
+    if (digitMatch != null) return int.parse(digitMatch.group(1)!);
     if (RegExp(r'\bviii\b').hasMatch(s)) return 8;
     if (RegExp(r'\bvii\b').hasMatch(s))  return 7;
     if (RegExp(r'\bvi\b').hasMatch(s))   return 6;
@@ -72,7 +65,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     if (RegExp(r'\biii\b').hasMatch(s))  return 3;
     if (RegExp(r'\bii\b').hasMatch(s))   return 2;
     if (RegExp(r'\bi\b').hasMatch(s))    return 1;
-    return 1; // default fallback
+    return 1;
   }
 
   Future<void> _loadSavedData() async {
@@ -81,7 +74,6 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
       _nameController.text = prefs.getString('full_name') ?? '';
       _courseController.text = prefs.getString('course') ?? '';
       _yearController.text = prefs.getString('year') ?? '';
-      _divisionController.text = prefs.getString('division') ?? '';
       _selectedSemester = prefs.getInt('semester') ?? 1;
     });
     await _loadDatesForSemester(_selectedSemester);
@@ -91,21 +83,15 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     final prefs = await SharedPreferences.getInstance();
     final start = prefs.getString('semester_start_$sem');
     final end = prefs.getString('semester_end_$sem');
-
     setState(() {
       _startDate = start != null ? DateTime.parse(start) : null;
       _endDate = end != null ? DateTime.parse(end) : null;
     });
   }
 
-  // ✅ UPDATED: Removed the forced Light Mode wrapper!
   Future<void> _pickDate(bool isStartDate) async {
-    DateTime minDate = isStartDate
-        ? DateTime(2020)
-        : (_startDate ?? DateTime(2020));
-    DateTime maxDate = isStartDate
-        ? (_endDate ?? DateTime(2030))
-        : DateTime(2030);
+    DateTime minDate = isStartDate ? DateTime(2020) : (_startDate ?? DateTime(2020));
+    DateTime maxDate = isStartDate ? (_endDate ?? DateTime(2030)) : DateTime(2030);
 
     DateTime initial = isStartDate
         ? (_startDate ?? DateTime.now())
@@ -135,14 +121,11 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     if (_nameController.text.trim().isEmpty ||
         _courseController.text.trim().isEmpty ||
         _yearController.text.trim().isEmpty ||
-        _divisionController.text.trim().isEmpty ||
         _startDate == null ||
         _endDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Please fill all required fields, including both dates',
-          ),
+          content: Text('Please fill all required fields, including both dates'),
         ),
       );
       return;
@@ -152,7 +135,6 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     await prefs.setString('full_name', _nameController.text.trim());
     await prefs.setString('course', _courseController.text.trim());
     await prefs.setString('year', _yearController.text.trim());
-    await prefs.setString('division', _divisionController.text.trim());
     await prefs.setInt('semester', _selectedSemester);
 
     final startStr = DateFormat('yyyy-MM-dd').format(_startDate!);
@@ -163,10 +145,17 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     if (widget.isEditMode) {
       final db = await DBHelper.instance.database;
       await db.rawDelete(
-        '''DELETE FROM attendance_records WHERE id IN (SELECT a.id FROM attendance_records a INNER JOIN timetable t ON a.timetable_entry_id = t.id INNER JOIN subjects s ON t.subject_id = s.id WHERE s.semester = ? AND (a.date < ? OR a.date > ?))''',
+        '''DELETE FROM attendance_records WHERE id IN (
+             SELECT a.id FROM attendance_records a
+             INNER JOIN timetable t ON a.timetable_entry_id = t.id
+             INNER JOIN subjects s ON t.subject_id = s.id
+             WHERE s.semester = ? AND length(a.date) = 10
+               AND (a.date < ? OR a.date > ?)
+           )''',
         [_selectedSemester, startStr, endStr],
       );
-    } else if (widget.prefilledData != null && widget.prefilledData!['subjects'] != null) {
+    } else if (widget.prefilledData != null &&
+        widget.prefilledData!['subjects'] != null) {
       final List<dynamic> subs = widget.prefilledData!['subjects'];
       if (subs.isNotEmpty) {
         final db = await DBHelper.instance.database;
@@ -174,8 +163,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
         final timetableDao = TimetableDao();
         final attendanceDao = AttendanceDao();
 
-        // ── Step 1: Wipe old data for this semester so re-importing is always clean ──
-        // Delete attendance records → timetable → subjects (in FK order)
+        // Step 1: Wipe all old data for this semester (clean re-import)
         await db.rawDelete('''
           DELETE FROM attendance_records WHERE timetable_entry_id IN (
             SELECT t.id FROM timetable t
@@ -184,7 +172,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
           )
         ''', [_selectedSemester]);
 
-        for (int day = 1; day <= 7; day++) {
+        for (int day = 0; day <= 7; day++) {
           await timetableDao.deleteEntriesForDay(day, _selectedSemester);
         }
 
@@ -193,7 +181,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
           await subjectDao.deleteSubject(sub.id!);
         }
 
-        // ── Step 2: Insert subjects ──────────────────────────────────────────────
+        // Step 2: Insert subjects
         for (var sub in subs) {
           final subName = sub.toString().trim();
           if (subName.isNotEmpty) {
@@ -205,81 +193,99 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
           }
         }
 
-        // Build name → id map
+        // Build name -> id map
         final Map<String, int> subjectNameToId = {};
         final insertedSubjects = await subjectDao.getSubjectsBySemester(_selectedSemester);
         for (var sub in insertedSubjects) {
           subjectNameToId[sub.name] = sub.id!;
         }
 
-        // ── Step 3: Insert timetable ─────────────────────────────────────────────
-        final timetable = widget.prefilledData!['timetable'];
-        if (timetable != null && timetable is List && timetable.isNotEmpty) {
-          for (var dayObj in timetable) {
-            final int dayOfWeek = dayObj['dayOfWeek'] ?? 1;
-            final List<dynamic> daySubjects = dayObj['subjects'] ?? [];
-
-            for (int i = 0; i < daySubjects.length; i++) {
-              final String subName = daySubjects[i].toString().trim();
-              final subId = subjectNameToId[subName];
-              if (subId != null) {
-                await timetableDao.insertEntry(TimetableEntry(
-                  dayOfWeek: dayOfWeek,
-                  subjectId: subId,
-                  lectureOrder: i + 1,
-                ));
-              }
-            }
-          }
+        // Step 3A: Create seed timetable slots (day=0) for every subject
+        final Map<int, int> subjectIdToSeedEntryId = {};
+        for (final subId in subjectNameToId.values) {
+          final seedId = await timetableDao.ensureSeedEntry(subId);
+          subjectIdToSeedEntryId[subId] = seedId;
         }
 
-        // ── Step 4: Build timetable lookup for attendance insertion ───────────────
-        final allTimetableEntries = <int, List<TimetableEntry>>{};
-        for (int day = 1; day <= 7; day++) {
-          final dayEntries = await timetableDao.getEntriesForDay(day, _selectedSemester);
-          for (var entry in dayEntries) {
-            allTimetableEntries.putIfAbsent(entry.subjectId, () => []).add(entry);
-          }
-        }
+        // Step 3B: Insert real-dated records from AI (populates the calendar)
+        final Map<String, int> insertedP = {};
+        final Map<String, int> insertedA = {};
 
-        // ── Step 5: Insert attendance records ────────────────────────────────────
-        final history = widget.prefilledData!['attendanceRecords'];
-        if (history != null && history is List && history.isNotEmpty) {
-          for (var record in history) {
-            final dateStr = record['date']?.toString();
-            final subjectName = record['subject']?.toString().trim();
-            final status = record['status']?.toString().toUpperCase();
-            final int lectureNumber = (record['lectureNumber'] as num?)?.toInt() ?? 1;
+        final rawRecords = widget.prefilledData!['attendanceRecords'];
+        if (rawRecords != null && rawRecords is List) {
+          for (final rec in rawRecords) {
+            var dateStr = rec['date']?.toString().trim();
+            final subName = rec['subject']?.toString().trim();
+            final status = rec['status']?.toString().toUpperCase();
 
-            if (dateStr == null || subjectName == null || status == null) continue;
+            if (dateStr == null || subName == null || status == null) continue;
             if (status != 'P' && status != 'A') continue;
-
-            final subId = subjectNameToId[subjectName];
-            if (subId == null) continue;
-
-            DateTime? parsedDate;
-            try {
-              parsedDate = DateTime.parse(dateStr);
-            } catch (_) {
+            // Smart Date Parsing
+            final parsedDate = DateTime.tryParse(dateStr);
+            if (parsedDate == null) {
+              debugPrint('Skipping invalid date format: "$dateStr"');
               continue;
             }
+            
+            // Enforce strict YYYY-MM-DD format for DB/Calendar compatibility
+            dateStr = '${parsedDate.year.toString().padLeft(4, '0')}-${parsedDate.month.toString().padLeft(2, '0')}-${parsedDate.day.toString().padLeft(2, '0')}';
 
-            final allEntriesForSub = allTimetableEntries[subId] ?? [];
-            final entriesOnThisDay = allEntriesForSub
-                .where((e) => e.dayOfWeek == parsedDate!.weekday)
-                .toList()
-              ..sort((a, b) => a.lectureOrder.compareTo(b.lectureOrder));
-
-            if (entriesOnThisDay.isEmpty) continue;
-
-            final targetIndex = (lectureNumber - 1).clamp(0, entriesOnThisDay.length - 1);
-            final matchingEntryId = entriesOnThisDay[targetIndex].id!;
+            final subId = subjectNameToId[subName];
+            if (subId == null) continue;
+            final seedEntryId = subjectIdToSeedEntryId[subId];
+            if (seedEntryId == null) continue;
 
             await attendanceDao.upsertAttendance(
-              timetableId: matchingEntryId,
+              timetableId: seedEntryId,
               date: dateStr,
               status: status,
             );
+
+            if (status == 'P') {
+              insertedP[subName] = (insertedP[subName] ?? 0) + 1;
+            } else {
+              insertedA[subName] = (insertedA[subName] ?? 0) + 1;
+            }
+          }
+        }
+
+        // Step 3C: Pad with pseudo-dates to match authoritative subjectStats counts
+        // Guarantees accurate stats even if AI underextracted records in Step 3B.
+        final subjectStats = widget.prefilledData!['subjectStats'];
+        if (subjectStats != null && subjectStats is Map) {
+          for (final entry in subjectStats.entries) {
+            final subjectName = entry.key.toString().trim();
+            final stats = entry.value;
+            if (stats == null) continue;
+
+            final int targetP = (stats['attended'] as num?)?.toInt() ?? 0;
+            final int targetTotal = (stats['total'] as num?)?.toInt() ?? 0;
+            final int targetA = targetTotal - targetP;
+
+            final subId = subjectNameToId[subjectName];
+            if (subId == null) continue;
+            final seedEntryId = subjectIdToSeedEntryId[subId];
+            if (seedEntryId == null) continue;
+
+            final int gotP = insertedP[subjectName] ?? 0;
+            final int gotA = insertedA[subjectName] ?? 0;
+            final int needP = (targetP - gotP).clamp(0, 99999);
+            final int needA = (targetA - gotA).clamp(0, 99999);
+
+            for (int i = 0; i < needP; i++) {
+              await attendanceDao.upsertAttendance(
+                timetableId: seedEntryId,
+                date: 'pad_P_${subId}_$i',
+                status: 'P',
+              );
+            }
+            for (int i = 0; i < needA; i++) {
+              await attendanceDao.upsertAttendance(
+                timetableId: seedEntryId,
+                date: 'pad_A_${subId}_$i',
+                status: 'A',
+              );
+            }
           }
         }
       }
@@ -299,7 +305,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor, // ✅ Dynamic background
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -312,14 +318,11 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                widget.isEditMode
-                    ? 'Edit your details'
-                    : "Let's get to know you",
+                widget.isEditMode ? 'Edit your details' : "Let's get to know you",
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
-                  color:
-                      theme.textTheme.bodyLarge?.color, // ✅ Dynamic Title Color
+                  color: theme.textTheme.bodyLarge?.color,
                 ),
               ),
               const SizedBox(height: 32),
@@ -327,15 +330,13 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
               _inputField(_nameController, 'Full Name', theme),
               _inputField(_courseController, 'Course', theme),
               _inputField(_yearController, 'Year', theme),
-              _inputField(_divisionController, 'Division', theme),
 
               const SizedBox(height: 16),
 
               DropdownButtonFormField<int>(
                 value: _selectedSemester,
                 decoration: _inputDecoration('Semester', theme),
-                dropdownColor:
-                    theme.cardColor, // ✅ Fixes invisible dropdowns in dark mode
+                dropdownColor: theme.cardColor,
                 style: TextStyle(color: theme.textTheme.bodyLarge?.color),
                 items: List.generate(
                   8,
@@ -377,26 +378,18 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                           Navigator.pop(context);
                         } else {
                           await AuthService().signOut();
-
                           if (!mounted) return;
                           Navigator.pushAndRemoveUntil(
                             context,
-                            MaterialPageRoute(
-                              builder: (_) => const LoginScreen(),
-                            ),
+                            MaterialPageRoute(builder: (_) => const LoginScreen()),
                             (route) => false,
                           );
                         }
                       },
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        side: BorderSide(
-                          color: theme.colorScheme.primary,
-                          width: 1.5,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        side: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(
                         'Back',
@@ -417,16 +410,11 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
                       child: Text(
                         widget.isEditMode ? 'Save Changes' : 'Next',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -440,18 +428,12 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     );
   }
 
-  Widget _inputField(
-    TextEditingController controller,
-    String label,
-    ThemeData theme,
-  ) {
+  Widget _inputField(TextEditingController controller, String label, ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: TextField(
         controller: controller,
-        style: TextStyle(
-          color: theme.textTheme.bodyLarge?.color,
-        ), // ✅ Dynamic typing color
+        style: TextStyle(color: theme.textTheme.bodyLarge?.color),
         decoration: _inputDecoration(label, theme),
       ),
     );
@@ -469,7 +451,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: theme.dividerColor), // ✅ Dynamic border
+          border: Border.all(color: theme.dividerColor),
         ),
         child: Row(
           children: [
@@ -477,18 +459,12 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
               child: Text(
                 date == null ? label : DateFormat('dd MMM yyyy').format(date),
                 style: TextStyle(
-                  color: date == null
-                      ? Colors.grey
-                      : theme.textTheme.bodyLarge?.color, // ✅ Dynamic Text
+                  color: date == null ? Colors.grey : theme.textTheme.bodyLarge?.color,
                   fontWeight: FontWeight.w500,
                 ),
               ),
             ),
-            Icon(
-              Icons.calendar_today,
-              size: 18,
-              color: theme.iconTheme.color,
-            ), // ✅ Dynamic Icon
+            Icon(Icons.calendar_today, size: 18, color: theme.iconTheme.color),
           ],
         ),
       ),
@@ -498,16 +474,14 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
   InputDecoration _inputDecoration(String label, ThemeData theme) {
     return InputDecoration(
       labelText: label,
-      labelStyle: TextStyle(
-        color: theme.textTheme.bodyMedium?.color,
-      ), // ✅ Dynamic label
+      labelStyle: TextStyle(color: theme.textTheme.bodyMedium?.color),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(color: theme.dividerColor),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: theme.dividerColor), // ✅ Dynamic border
+        borderSide: BorderSide(color: theme.dividerColor),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -521,7 +495,6 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     _nameController.dispose();
     _courseController.dispose();
     _yearController.dispose();
-    _divisionController.dispose();
     super.dispose();
   }
 }
