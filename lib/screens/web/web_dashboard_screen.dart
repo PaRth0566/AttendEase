@@ -177,7 +177,7 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
                                       size: 13, color: Color(0xFF818CF8)),
                                   const SizedBox(width: 6),
                                   Text(
-                                    'Powered by Gemini AI',
+                                    'Smart Offline Parsing',
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
@@ -219,7 +219,7 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
 
                             // Subtext
                             Text(
-                              'Unlock smart insights into your college attendance. Download your report from the SAP portal and let Gemini AI analyze it in seconds.',
+                              'Unlock smart insights into your college attendance. Download your report from the SAP portal and let our Smart Parser analyze it in seconds.',
                               style: TextStyle(
                                 fontSize: 17,
                                 color: isDark
@@ -264,7 +264,7 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
     final steps = [
       (Icons.login_rounded, 'Login to SAP', 'Open the college portal'),
       (Icons.download_rounded, 'Download Report', 'Save your PDF attendance report'),
-      (Icons.upload_file_rounded, 'Upload & Analyze', 'Let AI generate your insights'),
+      (Icons.upload_file_rounded, 'Upload & Analyze', 'Let our Smart Parser generate your insights'),
     ];
 
     return Container(

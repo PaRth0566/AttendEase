@@ -391,7 +391,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16.0),
                 child: Text(
-                  'Note: Attendance extraction may have slight deviations.\nPlease verify occasionally to ensure accuracy.',
+                  'Please verify the report we are not liable for any inconveniences that occurred due to this.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12,
@@ -578,7 +578,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 24.0),
       child: Text(
-        'Note: Attendance parsing may have slight deviations. Please verify occasionally to ensure accuracy.',
+        'Please verify the report we are not liable for any inconveniences that occurred due to this.',
         textAlign: TextAlign.center,
         style: TextStyle(
           fontSize: 12,

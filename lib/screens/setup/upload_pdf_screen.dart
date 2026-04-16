@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/local_pdf_parser.dart';
 import 'basic_info_screen.dart';
@@ -161,18 +162,56 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.withOpacity(0.2)),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Column(
                   children: [
-                    Icon(Icons.info_outline_rounded, color: isDark ? Colors.blue.shade300 : Colors.blue.shade700, size: 20),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        "While our offline parser is highly accurate, varying PDF layouts can occasionally cause minor skips. You will be able to review and manually edit any details on the next steps to ensure 100% perfection!",
-                        style: TextStyle(
-                          fontSize: 13,
-                          height: 1.5,
-                          color: isDark ? Colors.blue.shade100 : Colors.blue.shade900,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline_rounded, color: isDark ? Colors.blue.shade300 : Colors.blue.shade700, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            "This offline parser is exclusively configured for the detailed reports of Mithibai College students.",
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              height: 1.5,
+                              color: isDark ? Colors.blue.shade100 : Colors.blue.shade900,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Divider(color: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.withOpacity(0.2)),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Students from other colleges, please use our Smart AI Web version for accurate insights:",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.blue.shade100 : Colors.blue.shade900,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: () async {
+                        final url = Uri.parse('https://attendease-backend-ndxs.onrender.com/');
+                        if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+                          debugPrint('Could not launch web URL');
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                        child: Text(
+                          "Open Web Version",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                            decoration: TextDecoration.underline,
+                          ),
                         ),
                       ),
                     ),

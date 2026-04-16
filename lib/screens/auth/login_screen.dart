@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../database/db_helper.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
 import '../root/root_screen.dart';
@@ -35,6 +37,37 @@ class _LoginScreenState extends State<LoginScreen> {
     final creationTime = user.metadata.creationTime;
     final lastSignIn = user.metadata.lastSignInTime;
     bool isBrandNewUser = false;
+
+    if (user.isAnonymous && creationTime != null) {
+      final daysSinceCreation = DateTime.now().difference(creationTime).inDays;
+      if (daysSinceCreation >= 30) {
+        try {
+          await user.delete();
+          await _authService.signOut();
+          
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.clear();
+
+          if (!kIsWeb) {
+            final db = await DBHelper.instance.database;
+            await db.delete('attendance_records');
+            await db.delete('timetable');
+            await db.delete('subjects');
+          }
+        } catch (_) {}
+        
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Guest session expired (>30 days). Your local data was deleted.'),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+    }
 
     if (creationTime != null && lastSignIn != null) {
       final difference = lastSignIn.difference(creationTime).inSeconds.abs();

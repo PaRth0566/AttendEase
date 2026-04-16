@@ -137,6 +137,21 @@ class AIDashboardScreen extends StatelessWidget {
               return _buildSubjectCard(subject, percent, stat['attended']!,
                   stat['total']!, isDark);
             }),
+            
+          const SizedBox(height: 24),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+              child: Text(
+                'Please verify the report we are not liable for any inconveniences that occurred due to this.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? Colors.white54 : Colors.grey.shade600,
+                ),
+              ),
+            ),
+          ),
         const SizedBox(height: 8),
       ],
     );

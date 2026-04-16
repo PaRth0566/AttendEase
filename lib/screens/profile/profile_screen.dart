@@ -11,6 +11,8 @@ import '../../theme/theme_provider.dart'; // ✅ NEW IMPORT
 import '../../widgets/backup_sync_card.dart';
 import '../auth/login_screen.dart';
 import '../dashboard/refresh_pdf_screen.dart';
+import 'account_settings_screen.dart';
+import 'bug_report_screen.dart';
 
 import '../report/report_screen.dart';
 import '../setup/add_subjects_screen.dart';
@@ -375,6 +377,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 8),
                   const BackupSyncCard(),
                   const SizedBox(height: 8),
+
+                  _profileTile(
+                    icon: Icons.manage_accounts_rounded,
+                    title: 'Account Settings',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
+                      );
+                    },
+                  ),
+
+                  _profileTile(
+                    icon: Icons.bug_report_rounded,
+                    title: 'Report a Bug',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const BugReportScreen()),
+                      );
+                    },
+                  ),
 
                   _profileTile(
                     icon: Icons.logout_rounded,

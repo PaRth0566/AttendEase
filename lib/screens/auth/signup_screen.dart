@@ -292,6 +292,47 @@ class _SignupScreenState extends State<SignupScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: theme.brightness == Brightness.dark
+                            ? Colors.orange.withOpacity(0.1)
+                            : Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: theme.brightness == Brightness.dark
+                              ? Colors.orange.withOpacity(0.3)
+                              : Colors.orange.withOpacity(0.2),
+                        ),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: theme.brightness == Brightness.dark
+                                ? Colors.orange.shade300
+                                : Colors.orange.shade700,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              "Important: You must verify your email address after sign up. If you don't, you won't be able to sign in using 'Continue with Google' later.",
+                              style: TextStyle(
+                                fontSize: 13,
+                                height: 1.4,
+                                color: theme.brightness == Brightness.dark
+                                    ? Colors.orange.shade100
+                                    : Colors.orange.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 32),
 
                     ElevatedButton(
