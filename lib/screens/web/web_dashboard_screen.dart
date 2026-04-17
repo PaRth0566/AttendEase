@@ -177,7 +177,7 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
                                       size: 13, color: Color(0xFF818CF8)),
                                   const SizedBox(width: 6),
                                   Text(
-                                    'Smart Offline Parsing',
+                                    'Smart AI Parsing',
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
@@ -219,7 +219,7 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
 
                             // Subtext
                             Text(
-                              'Unlock smart insights into your college attendance. Download your report from the SAP portal and let our Smart Parser analyze it in seconds.',
+                              'Unlock smart insights into your college attendance. Download your report from the SAP portal and let our Smart AI Parser analyze it in seconds.',
                               style: TextStyle(
                                 fontSize: 17,
                                 color: isDark

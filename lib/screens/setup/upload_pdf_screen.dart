@@ -156,62 +156,60 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
                 
               const SizedBox(height: 32),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.blueAccent.withOpacity(0.1) : Colors.blue.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.withOpacity(0.2)),
+                  color: isDark ? Colors.indigo.withOpacity(0.15) : Colors.indigo.shade50.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: isDark ? Colors.indigo.withOpacity(0.3) : Colors.indigo.withOpacity(0.2)),
                 ),
                 child: Column(
                   children: [
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.info_outline_rounded, color: isDark ? Colors.blue.shade300 : Colors.blue.shade700, size: 20),
-                        const SizedBox(width: 12),
+                        Icon(Icons.info_rounded, color: isDark ? Colors.indigo.shade300 : Colors.indigo.shade600, size: 22),
+                        const SizedBox(width: 14),
                         Expanded(
                           child: Text(
                             "This offline parser is exclusively configured for the detailed reports of Mithibai College students.",
                             style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
                               height: 1.5,
-                              color: isDark ? Colors.blue.shade100 : Colors.blue.shade900,
+                              color: isDark ? Colors.indigo.shade100 : Colors.indigo.shade900,
                             ),
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 16),
+                    Divider(color: isDark ? Colors.indigo.withOpacity(0.3) : Colors.indigo.withOpacity(0.2)),
                     const SizedBox(height: 12),
-                    Divider(color: isDark ? Colors.blue.withOpacity(0.3) : Colors.blue.withOpacity(0.2)),
-                    const SizedBox(height: 8),
                     Text(
-                      "Students from other colleges, please use our Smart AI Web version for accurate insights:",
+                      "Students from other colleges, please use our Smart AI Web version for accurate insights.",
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.blue.shade100 : Colors.blue.shade900,
+                        fontSize: 13,
+                        color: isDark ? Colors.indigo.shade200 : Colors.indigo.shade800,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    InkWell(
-                      onTap: () async {
-                        final url = Uri.parse('https://attendease-backend-ndxs.onrender.com/');
-                        if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-                          debugPrint('Could not launch web URL');
-                        }
-                      },
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                        child: Text(
-                          "Open Web Version",
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary,
-                            decoration: TextDecoration.underline,
-                          ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final url = Uri.parse('https://attendease-backend-ndxs.onrender.com/');
+                          if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+                            debugPrint('Could not launch web URL');
+                          }
+                        },
+                        icon: const Icon(Icons.open_in_browser_rounded, size: 18),
+                        label: const Text('Open Web Version', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: isDark ? Colors.indigo.shade300 : Colors.indigo.shade700,
+                          side: BorderSide(color: isDark ? Colors.indigo.withOpacity(0.4) : Colors.indigo.withOpacity(0.3)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
                       ),
                     ),

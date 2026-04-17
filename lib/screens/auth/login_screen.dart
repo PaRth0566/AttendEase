@@ -1,9 +1,11 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite/sqflite.dart';
 import '../../database/db_helper.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
@@ -42,6 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final daysSinceCreation = DateTime.now().difference(creationTime).inDays;
       if (daysSinceCreation >= 30) {
         try {
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
           await user.delete();
           await _authService.signOut();
           
@@ -89,10 +92,79 @@ class _LoginScreenState extends State<LoginScreen> {
 
     bool hasRestored = await _syncService.restoreDataFromCloud();
 
+    // Check for pending email transfer data (from "Change Email" flow)
+    if (!hasRestored && user.email != null) {
+      try {
+        final transferEmail = user.email!.toLowerCase();
+        final transferDoc = await FirebaseFirestore.instance
+            .collection('data_transfers')
+            .doc(transferEmail)
+            .get();
+
+        if (transferDoc.exists && transferDoc.data() != null) {
+          final data = transferDoc.data()!;
+          final db = kIsWeb ? null : await DBHelper.instance.database;
+          final prefs = await SharedPreferences.getInstance();
+
+          // Restore SharedPreferences
+          final Map<String, dynamic> prefsData = data['preferences'] ?? {};
+          for (var entry in prefsData.entries) {
+            if (entry.value is String) await prefs.setString(entry.key, entry.value);
+            if (entry.value is int) await prefs.setInt(entry.key, entry.value);
+            if (entry.value is double) await prefs.setDouble(entry.key, entry.value);
+            if (entry.value is bool) await prefs.setBool(entry.key, entry.value);
+          }
+
+          // Restore SQLite data
+          if (!kIsWeb && db != null) {
+            await db.delete('subjects');
+            await db.delete('timetable');
+            await db.delete('attendance_records');
+
+            for (var row in (data['subjects'] as List<dynamic>? ?? [])) {
+              await db.insert('subjects', Map<String, dynamic>.from(row),
+                  conflictAlgorithm: ConflictAlgorithm.replace);
+            }
+            for (var row in (data['timetable'] as List<dynamic>? ?? [])) {
+              await db.insert('timetable', Map<String, dynamic>.from(row),
+                  conflictAlgorithm: ConflictAlgorithm.replace);
+            }
+            for (var row in (data['attendance_records'] as List<dynamic>? ?? [])) {
+              await db.insert('attendance_records', Map<String, dynamic>.from(row),
+                  conflictAlgorithm: ConflictAlgorithm.replace);
+            }
+          }
+
+          // Also backup to the new user's Firestore doc so future logins work
+          await _syncService.backupDataToCloud();
+
+          // Delete the transfer document — it's been consumed
+          await FirebaseFirestore.instance
+              .collection('data_transfers')
+              .doc(transferEmail)
+              .delete();
+
+          hasRestored = true;
+        }
+      } catch (e) {
+        debugPrint('Transfer restore error: $e');
+      }
+    }
+
+    // Also check if local data already exists on this device
+    bool hasLocalData = false;
+    if (!hasRestored && !kIsWeb) {
+      try {
+        final db = await DBHelper.instance.database;
+        final subjects = await db.query('subjects', limit: 1);
+        hasLocalData = subjects.isNotEmpty;
+      } catch (_) {}
+    }
+
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (hasRestored) {
+    if (hasRestored || hasLocalData) {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const RootScreen()),

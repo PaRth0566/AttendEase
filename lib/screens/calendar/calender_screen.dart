@@ -617,17 +617,32 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                 itemBuilder: (_, i) {
                                   final record = _dayRecords[i];
 
+                                  final recordId = record['record_id'] as int?;
                                   final subjectName =
                                       record['subject_name'] as String? ?? 'Unknown';
                                   final status = record['status'] as String? ?? '';
                                   final timetableId =
                                       record['timetable_entry_id'] as int?;
+                                  final recordDate = 
+                                      record['record_date'] as String? ?? selectedDateKey!;
+
+                                  // Determine lecture index for duplicate subjects
+                                  int lectureNum = 1;
+                                  for (int j = 0; j < i; j++) {
+                                    if (_dayRecords[j]['subject_name'] == subjectName) {
+                                      lectureNum++;
+                                    }
+                                  }
+                                  final bool hasDuplicates = _dayRecords
+                                      .where((r) => r['subject_name'] == subjectName)
+                                      .length > 1;
 
                                   final isPresent = status == 'P';
                                   final statusColor =
                                       isPresent ? Colors.green : Colors.red;
 
                                   return Card(
+                                    key: ValueKey(recordId ?? 'rec_$i'),
                                     color: theme.cardColor,
                                     elevation: 0,
                                     margin: const EdgeInsets.only(bottom: 10),
@@ -669,7 +684,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                                 ),
                                                 const SizedBox(height: 2),
                                                 Text(
-                                                  isPresent ? 'Present' : 'Absent',
+                                                  hasDuplicates
+                                                      ? '${isPresent ? 'Present' : 'Absent'} · Lecture $lectureNum'
+                                                      : (isPresent ? 'Present' : 'Absent'),
                                                   style: TextStyle(
                                                     fontSize: 12,
                                                     fontWeight: FontWeight.w500,
@@ -690,7 +707,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                                 final newStatus =
                                                     isPresent ? 'A' : 'P';
                                                 await _saveRecord(timetableId,
-                                                    selectedDateKey!, newStatus);
+                                                    recordDate, newStatus);
                                                 await _loadForDate(_selectedDay!);
                                               },
                                             ),
@@ -705,7 +722,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                               onPressed: () async {
                                                 await _deleteRecord(
                                                   timetableId,
-                                                  selectedDateKey!,
+                                                  recordDate,
                                                 );
                                               },
                                               visualDensity: VisualDensity.compact,

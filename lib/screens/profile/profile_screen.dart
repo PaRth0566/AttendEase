@@ -119,15 +119,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               );
 
               try {
+                bool backedUp = false;
                 if (!kIsWeb) {
-                  await CloudSyncService().backupDataToCloud();
+                  backedUp = await CloudSyncService().backupDataToCloud();
                 }
                 await AuthService().signOut();
 
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.clear();
 
-                if (!kIsWeb) {
+                // Only wipe local data if cloud backup succeeded
+                if (!kIsWeb && backedUp) {
                   final db = await DBHelper.instance.database;
                   await db.delete('attendance_records');
                   await db.delete('timetable');

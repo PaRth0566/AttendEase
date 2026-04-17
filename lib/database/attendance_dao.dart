@@ -191,19 +191,19 @@ class AttendanceDao {
     final result = await db.rawQuery(
       '''
       SELECT
+        a.id        AS record_id,
         s.id        AS subject_id,
         s.name      AS subject_name,
         t.id        AS timetable_entry_id,
-        a.status    AS status
-      FROM subjects s
-      INNER JOIN timetable t
-        ON t.subject_id = s.id AND t.day_of_week = 0
-      INNER JOIN attendance_records a
-        ON a.timetable_entry_id = t.id AND a.date LIKE ?
-      WHERE s.semester = ?
-      ORDER BY s.name ASC
+        a.status    AS status,
+        a.date      AS record_date
+      FROM attendance_records a
+      INNER JOIN timetable t ON a.timetable_entry_id = t.id AND t.day_of_week = 0
+      INNER JOIN subjects s  ON t.subject_id = s.id
+      WHERE s.semester = ? AND a.date LIKE ?
+      ORDER BY s.name ASC, a.date ASC
     ''',
-      ['$date%', semester],
+      [semester, '$date%'],
     );
     return result.map((e) => Map<String, dynamic>.from(e)).toList();
   }
@@ -220,17 +220,19 @@ class AttendanceDao {
     final result = await db.rawQuery(
       '''
       SELECT
+        a.id        AS record_id,
         s.id        AS subject_id,
         s.name      AS subject_name,
         t.id        AS timetable_entry_id,
-        a.status    AS status
+        a.status    AS status,
+        a.date      AS record_date
       FROM subjects s
       LEFT JOIN timetable t
         ON t.subject_id = s.id AND t.day_of_week = 0
       LEFT JOIN attendance_records a
         ON a.timetable_entry_id = t.id AND a.date LIKE ?
       WHERE s.semester = ?
-      ORDER BY s.name ASC
+      ORDER BY s.name ASC, a.date ASC
     ''',
       ['$date%', semester],
     );
