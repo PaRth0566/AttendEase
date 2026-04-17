@@ -66,6 +66,11 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
   }
 
   Future<Widget> _getInitialScreen() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      return const RootScreen();
+    }
+
     // Web: always start on the marketing/AI landing page
     if (kIsWeb) {
       return const WebDashboardScreen();

@@ -61,21 +61,72 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     );
   }
 
-  Future<void> _resetPassword() async {
-    setState(() => _isLoading = true);
-    try {
-      final email = _auth.currentUser?.email;
-      if (email != null && email.isNotEmpty) {
-        await _authService.sendPasswordResetEmail(email);
-        _showSnackBar('Password reset email sent!');
-      } else {
-        _showSnackBar('No email associated with this account to reset password.');
-      }
-    } catch (e) {
-      _showSnackBar('Failed to send reset email.');
-    } finally {
-      setState(() => _isLoading = false);
-    }
+  Future<void> _changePassword() async {
+    final TextEditingController currentPassCtrl = TextEditingController();
+    final TextEditingController newPassCtrl = TextEditingController();
+    
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Change Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: currentPassCtrl,
+              decoration: const InputDecoration(labelText: 'Current Password', border: OutlineInputBorder()),
+              obscureText: true,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: newPassCtrl,
+              decoration: const InputDecoration(labelText: 'New Password', border: OutlineInputBorder()),
+              obscureText: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final currentPass = currentPassCtrl.text;
+              final newPass = newPassCtrl.text;
+              
+              if (currentPass.isEmpty || newPass.isEmpty) {
+                 _showSnackBar('Both passwords are required.');
+                 return;
+              }
+              
+              setState(() => _isLoading = true);
+              try {
+                final user = _auth.currentUser;
+                if (user != null && user.email != null) {
+                  final cred = EmailAuthProvider.credential(email: user.email!, password: currentPass);
+                  await user.reauthenticateWithCredential(cred);
+                  await user.updatePassword(newPass);
+                  _showSnackBar('Password changed successfully within the app!');
+                }
+              } on FirebaseAuthException catch (e) {
+                if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+                  _showSnackBar('Current password is incorrect.');
+                } else if (e.code == 'weak-password') {
+                  _showSnackBar('New password is too weak.');
+                } else {
+                  _showSnackBar(e.message ?? 'An error occurred.');
+                }
+              } catch (e) {
+                _showSnackBar('Error updating password: $e');
+              } finally {
+                setState(() => _isLoading = false);
+              }
+            },
+            child: const Text('Change Password'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _linkWithGoogle() async {
@@ -255,14 +306,14 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                       theme: theme,
                     ),
                     _actionTile(
-                      icon: Icons.lock_reset,
-                      title: 'Reset Password',
-                      subtitle: 'We will send a reset link to your email.',
+                      icon: Icons.password,
+                      title: 'Change Password',
+                      subtitle: 'Update your password directly within the app.',
                       onTap: () {
                         if (hasGoogleLinked) {
-                          _showSnackBar('Your account is linked to Google. Password resets must be managed through Google.');
+                          _showSnackBar('Your account is linked to Google. Passwords must be managed through Google.');
                         } else {
-                          _resetPassword();
+                          _changePassword();
                         }
                       },
                       theme: theme,

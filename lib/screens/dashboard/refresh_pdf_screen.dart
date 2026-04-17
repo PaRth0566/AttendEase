@@ -80,14 +80,22 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
     final timetableDao = TimetableDao();
     final attendanceDao = AttendanceDao();
 
-    // Step 1: Sync subjects — add new ones, never delete existing
-    final List<dynamic> newSubjects = data['subjects'] ?? [];
-    final existing = await subjectDao.getSubjectsBySemester(activeSemester);
-    final existingNames = existing.map((s) => s.name).toSet();
+    // Step 0: Aggressive Wipe of Existing Semester Data
+    // We actively delete the subjects for the active semester. 
+    // Thanks to ON DELETE CASCADE set up in db_helper.dart, this automatically 
+    // annihilates all orphaned timetable and attendance_record rows instantly.
+    final db = await DBHelper.instance.database;
+    await db.delete(
+      'subjects',
+      where: 'semester = ?',
+      whereArgs: [activeSemester],
+    );
 
+    // Step 1: Insert new subjects from PDF
+    final List<dynamic> newSubjects = data['subjects'] ?? [];
     for (var sub in newSubjects) {
       final subName = sub.toString().trim();
-      if (subName.isNotEmpty && !existingNames.contains(subName)) {
+      if (subName.isNotEmpty) {
         await subjectDao.insertSubject(
           Subject(name: subName, requiredPercent: 75.0, semester: activeSemester),
         );
@@ -163,17 +171,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
       }
     }
 
-    // Step 3B: Wipe old pseudo-dates before re-padding (avoid double-counting)
-    final db = await DBHelper.instance.database;
-    await db.rawDelete('''
-      DELETE FROM attendance_records
-      WHERE length(date) != 10
-        AND timetable_entry_id IN (
-          SELECT t.id FROM timetable t
-          INNER JOIN subjects s ON t.subject_id = s.id
-          WHERE s.semester = ?
-        )
-    ''', [activeSemester]);
+    // Step 3B: (Wiping old pseudo-dates is no longer necessary as Step 0 cleared all records)
 
     // Step 3C: Pad pseudo-dates to match authoritative subjectStats counts
     final subjectStats = data['subjectStats'] as Map<String, dynamic>? ?? {};
