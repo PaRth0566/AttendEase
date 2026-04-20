@@ -92,7 +92,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
           style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
           decoration: InputDecoration(
             hintText: 'Enter subject name',
-            hintStyle: const TextStyle(color: Colors.grey),
+            hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
             focusedBorder: UnderlineInputBorder(
               borderSide: BorderSide(
                 color: Theme.of(context).colorScheme.primary,
@@ -104,7 +104,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: Text('Cancel', style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
           ),
           IconButton(
             icon: const Icon(Icons.check, color: Colors.green),
@@ -233,7 +233,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
                     ), // ✅ Dynamic typing text
                     decoration: InputDecoration(
                       hintText: 'Enter subject name',
-                      hintStyle: const TextStyle(color: Colors.grey),
+                      hintStyle: TextStyle(color: theme.textTheme.bodyMedium?.color),
                       filled: true,
                       fillColor: theme.cardColor, // ✅ Dynamic input background
                       contentPadding: const EdgeInsets.symmetric(

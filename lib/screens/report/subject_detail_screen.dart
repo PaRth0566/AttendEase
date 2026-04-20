@@ -197,7 +197,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                         'Tap to edit • Swipe to delete',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade500,
+                          color: theme.textTheme.bodyMedium?.color,
                           fontStyle: FontStyle.italic,
                         ),
                       ),

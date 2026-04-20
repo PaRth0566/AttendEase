@@ -90,8 +90,8 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
   InputDecoration _inputStyle(String hint, ThemeData theme) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(
-        color: Colors.grey,
+      hintStyle: TextStyle(
+        color: theme.textTheme.bodyMedium?.color,
         fontWeight: FontWeight.normal,
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),

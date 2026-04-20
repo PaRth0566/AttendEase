@@ -21,10 +21,11 @@ void main() async {
   // ☁️ INITIALIZE FIREBASE
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Read the saved theme from memory BEFORE the app starts!
+  // Read the saved theme mode BEFORE the app starts!
+  // Defaults to 'system' if the user has never changed it.
   final prefs = await SharedPreferences.getInstance();
-  final isDark = prefs.getBool('isDarkMode') ?? false;
-  themeProvider.initializeTheme(isDark);
+  final savedMode = prefs.getString('themeMode');
+  themeProvider.initializeTheme(savedMode);
 
   // Disable orientation limitations on web to prevent startup crashes
   if (kIsWeb) {

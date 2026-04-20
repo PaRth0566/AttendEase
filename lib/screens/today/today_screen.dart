@@ -122,6 +122,7 @@ class _TodayScreenState extends State<TodayScreen> {
   }
 
   Widget _attendanceButton(int timetableId, String value, String label) {
+    final theme = Theme.of(context);
     final selected = _attendanceSelection[timetableId] == value;
     final color = value == 'P' ? Colors.green : Colors.red;
 
@@ -132,7 +133,7 @@ class _TodayScreenState extends State<TodayScreen> {
         selected: selected,
         selectedColor: color.withAlpha(38),
         labelStyle: TextStyle(
-          color: selected ? color : Colors.black,
+          color: selected ? color : theme.textTheme.bodyLarge?.color,
           fontWeight: FontWeight.w600,
         ),
         onSelected: (bool isSelected) {
@@ -177,7 +178,7 @@ class _TodayScreenState extends State<TodayScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(formattedDate, style: const TextStyle(color: Colors.grey)),
+            Text(formattedDate, style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
             const SizedBox(height: 24),
 
             Expanded(
@@ -189,8 +190,8 @@ class _TodayScreenState extends State<TodayScreen> {
                         _isOutsideSemester
                             ? 'Today is outside your active semester dates.'
                             : 'No lectures today',
-                        style: const TextStyle(
-                          color: Colors.grey,
+                        style: TextStyle(
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
                           fontSize: 16,
                         ),
                       ),
@@ -206,7 +207,7 @@ class _TodayScreenState extends State<TodayScreen> {
                           margin: const EdgeInsets.only(bottom: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
-                            side: const BorderSide(color: Color(0xFFE2E8F0)),
+                            side: BorderSide(color: Theme.of(context).dividerColor),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
@@ -240,7 +241,7 @@ class _TodayScreenState extends State<TodayScreen> {
                 child: ElevatedButton(
                   onPressed: _saveAttendance,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2563EB),
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(

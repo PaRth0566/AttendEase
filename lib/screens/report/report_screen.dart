@@ -165,9 +165,9 @@ class _ReportScreenState extends State<ReportScreen> {
             ),
             const SizedBox(height: 24),
             ListTile(
-              leading: const Icon(
+              leading: Icon(
                 Icons.download_rounded,
-                color: Color(0xFF2563EB),
+                color: Theme.of(context).colorScheme.primary,
               ),
               title: Text(
                 "Save to Downloads",
@@ -187,9 +187,9 @@ class _ReportScreenState extends State<ReportScreen> {
               },
             ),
             ListTile(
-              leading: const Icon(
+              leading: Icon(
                 Icons.share_rounded,
-                color: Color(0xFF2563EB),
+                color: Theme.of(context).colorScheme.primary,
               ),
               title: Text(
                 "Share PDF",
@@ -611,9 +611,9 @@ class _ReportScreenState extends State<ReportScreen> {
         actions: [
           if (_reportGenerated && _totalLectures > 0)
             IconButton(
-              icon: const Icon(
+              icon: Icon(
                 Icons.file_download_outlined,
-                color: Color(0xFF2563EB),
+                color: theme.colorScheme.primary,
               ),
               onPressed: _showExportOptions,
             ),

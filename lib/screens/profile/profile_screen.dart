@@ -286,19 +286,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
 
-                  // ✅ NEW: DARK MODE TOGGLE TILE
-                  _profileTile(
-                    icon: Icons.dark_mode_rounded,
-                    title: 'Dark Mode',
-                    onTap: () {
-                      themeProvider.toggleTheme(!themeProvider.isDarkMode);
-                    },
-                    trailing: Switch(
-                      value: themeProvider.isDarkMode,
-                      activeColor: theme.colorScheme.primary,
-                      onChanged: (value) {
-                        themeProvider.toggleTheme(value);
-                      },
+                  // ✅ THEME MODE SELECTOR — System / Light / Dark
+                  Card(
+                    elevation: 0,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    color: theme.cardColor,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: theme.dividerColor),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      child: Row(
+                        children: [
+                          Icon(
+                            themeProvider.themeMode == ThemeMode.dark
+                                ? Icons.dark_mode_rounded
+                                : themeProvider.themeMode == ThemeMode.light
+                                    ? Icons.light_mode_rounded
+                                    : Icons.brightness_auto_rounded,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Text(
+                              'Theme',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: theme.textTheme.bodyLarge?.color,
+                              ),
+                            ),
+                          ),
+                          SegmentedButton<ThemeMode>(
+                            segments: const [
+                              ButtonSegment(
+                                value: ThemeMode.system,
+                                icon: Icon(Icons.brightness_auto_rounded, size: 18),
+                              ),
+                              ButtonSegment(
+                                value: ThemeMode.light,
+                                icon: Icon(Icons.light_mode_rounded, size: 18),
+                              ),
+                              ButtonSegment(
+                                value: ThemeMode.dark,
+                                icon: Icon(Icons.dark_mode_rounded, size: 18),
+                              ),
+                            ],
+                            selected: {themeProvider.themeMode},
+                            onSelectionChanged: (Set<ThemeMode> selected) {
+                              themeProvider.setThemeMode(selected.first);
+                            },
+                            showSelectedIcon: false,
+                            style: ButtonStyle(
+                              visualDensity: VisualDensity.compact,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
 
