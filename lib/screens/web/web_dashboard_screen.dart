@@ -23,7 +23,6 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
   @override
   void initState() {
     super.initState();
-
     _fadeController = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 900));
     _fadeAnimation =
@@ -79,6 +78,13 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
 
   // ── LANDING PAGE ──────────────────────────────────────────
   Widget _buildLandingPage(ThemeData theme, bool isDark) {
+    final mq = MediaQuery.of(context);
+    final w = mq.size.width;
+
+    // Responsive breakpoints
+    final isMobile = w < 600;
+    final isTablet = w >= 600 && w < 1024;
+
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -107,150 +113,66 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
             Positioned(
               top: -80,
               right: -80,
-              child: _glowCircle(280, const Color(0xFF6366F1).withOpacity(0.15)),
+              child:
+                  _glowCircle(280, const Color(0xFF6366F1).withOpacity(0.15)),
             ),
             Positioned(
               bottom: -60,
               left: -60,
-              child: _glowCircle(220, const Color(0xFF3B82F6).withOpacity(0.12)),
+              child:
+                  _glowCircle(220, const Color(0xFF3B82F6).withOpacity(0.12)),
             ),
 
-            // Main content
-            Center(
-              child: SingleChildScrollView(
-                child: FadeTransition(
-                  opacity: _fadeAnimation,
-                  child: SlideTransition(
-                    position: _slideAnimation,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24.0, vertical: 48),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 600),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // Logo
-                            Container(
-                              width: 96,
-                              height: 96,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(26),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(0xFF6366F1)
-                                        .withOpacity(0.3),
-                                    blurRadius: 40,
-                                    offset: const Offset(0, 12),
-                                  ),
-                                ],
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(
-                                      isDark ? 0.12 : 0.7),
-                                  width: 2,
-                                ),
-                                image: const DecorationImage(
-                                  image:
-                                      AssetImage('assets/icon/app_icon2.png'),
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
+            // ── Scrollable content with HIDDEN scrollbar ──
+            SafeArea(
+              child: ScrollConfiguration(
+                behavior:
+                    ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                child: CustomScrollView(
+                  slivers: [
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: SlideTransition(
+                          position: _slideAnimation,
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: isMobile ? 20 : (isTablet ? 40 : 60),
+                              vertical: isMobile ? 28 : 40,
                             ),
-                            const SizedBox(height: 36),
-
-                            // Badge
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF6366F1).withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(100),
-                                border: Border.all(
-                                  color:
-                                      const Color(0xFF6366F1).withOpacity(0.3),
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.auto_awesome,
-                                      size: 13, color: Color(0xFF818CF8)),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Smart AI Parsing',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark
-                                          ? const Color(0xFF818CF8)
-                                          : const Color(0xFF4F46E5),
+                            child: Column(
+                              children: [
+                                // ── Hero Section ──
+                                Expanded(
+                                  child: Center(
+                                    child: ConstrainedBox(
+                                      constraints:
+                                          const BoxConstraints(maxWidth: 640),
+                                      child: _buildHeroSection(
+                                          isDark, isMobile, isTablet),
                                     ),
                                   ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 20),
+                                ),
 
-                            // Title
-                            Text(
-                              'AttendEase',
-                              style: TextStyle(
-                                fontSize: 56,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -2,
-                                height: 1.05,
-                                foreground: Paint()
-                                  ..shader = LinearGradient(
-                                    colors: isDark
-                                        ? [
-                                            Colors.white,
-                                            const Color(0xFFA5B4FC),
-                                          ]
-                                        : [
-                                            const Color(0xFF1E1B4B),
-                                            const Color(0xFF4F46E5),
-                                          ],
-                                  ).createShader(const Rect.fromLTWH(
-                                      0, 0, 400, 70)),
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 18),
+                                SizedBox(height: isMobile ? 24 : 36),
 
-                            // Subtext
-                            Text(
-                              'Unlock smart insights into your college attendance. Download your report from the SAP portal and let our Smart AI Parser analyze it in seconds.',
-                              style: TextStyle(
-                                fontSize: 17,
-                                color: isDark
-                                    ? Colors.white.withOpacity(0.6)
-                                    : const Color(0xFF64748B),
-                                height: 1.7,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 52),
+                                // ── Feature Cards ──
+                                ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 960),
+                                  child: _buildFeatureCards(
+                                      isDark, isMobile, isTablet),
+                                ),
 
-                            // Step guide
-                            _buildStepGuide(isDark),
-                            const SizedBox(height: 40),
-
-                            // CTA Buttons
-                            Wrap(
-                              spacing: 16,
-                              runSpacing: 16,
-                              alignment: WrapAlignment.center,
-                              children: [
-                                _buildOutlinedBtn(isDark),
-                                _buildPrimaryBtn(),
-                                _buildSignInBtn(isDark),
+                                SizedBox(height: isMobile ? 16 : 24),
                               ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -260,95 +182,391 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
     );
   }
 
-  Widget _buildStepGuide(bool isDark) {
-    final steps = [
-      (Icons.login_rounded, 'Login to SAP', 'Open the college portal'),
-      (Icons.download_rounded, 'Download Report', 'Save your PDF attendance report'),
-      (Icons.upload_file_rounded, 'Upload & Analyze', 'Let our Smart Parser generate your insights'),
+  // ── HERO SECTION ──────────────────────────────────────────
+  Widget _buildHeroSection(bool isDark, bool isMobile, bool isTablet) {
+    final titleSize = isMobile ? 36.0 : (isTablet ? 46.0 : 54.0);
+    final subtextSize = isMobile ? 14.0 : 16.0;
+    final logoSize = isMobile ? 72.0 : 88.0;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Logo
+        Container(
+          width: logoSize,
+          height: logoSize,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(isMobile ? 20 : 24),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF6366F1).withOpacity(0.3),
+                blurRadius: 36,
+                offset: const Offset(0, 10),
+              ),
+            ],
+            border: Border.all(
+              color: Colors.white.withOpacity(isDark ? 0.12 : 0.7),
+              width: 2,
+            ),
+            image: const DecorationImage(
+              image: AssetImage('assets/icon/app_icon2.png'),
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+        SizedBox(height: isMobile ? 20 : 28),
+
+        // Badge
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: const Color(0xFF6366F1).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(100),
+            border: Border.all(
+              color: const Color(0xFF6366F1).withOpacity(0.3),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.auto_awesome,
+                  size: 13, color: Color(0xFF818CF8)),
+              const SizedBox(width: 6),
+              Text(
+                'Smart Attendance Insights',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isDark
+                      ? const Color(0xFF818CF8)
+                      : const Color(0xFF4F46E5),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: isMobile ? 14 : 20),
+
+        // Title
+        Text(
+          'AttendEase',
+          style: TextStyle(
+            fontSize: titleSize,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -2,
+            height: 1.05,
+            foreground: Paint()
+              ..shader = LinearGradient(
+                colors: isDark
+                    ? [Colors.white, const Color(0xFFA5B4FC)]
+                    : [const Color(0xFF1E1B4B), const Color(0xFF4F46E5)],
+              ).createShader(const Rect.fromLTWH(0, 0, 400, 70)),
+          ),
+          textAlign: TextAlign.center,
+        ),
+        SizedBox(height: isMobile ? 12 : 16),
+
+        // Subtitle
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: isMobile ? 4 : 20),
+          child: Text(
+            'Upload your detailed attendance report and get instant insights '
+            'into your college attendance — track progress, spot trends, and '
+            'stay on top of every subject.',
+            style: TextStyle(
+              fontSize: subtextSize,
+              color: isDark
+                  ? Colors.white.withOpacity(0.6)
+                  : const Color(0xFF64748B),
+              height: 1.65,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ),
+        SizedBox(height: isMobile ? 22 : 30),
+
+        // CTA Buttons
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          alignment: WrapAlignment.center,
+          children: [
+            _buildPrimaryBtn(isMobile),
+            _buildSignInBtn(isDark, isMobile),
+          ],
+        ),
+        SizedBox(height: isMobile ? 14 : 18),
+
+        // SAP Portal Note
+        _buildSAPPortalNote(isDark, isMobile),
+      ],
+    );
+  }
+
+  // ── SAP PORTAL NOTE ───────────────────────────────────────
+  Widget _buildSAPPortalNote(bool isDark, bool isMobile) {
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isMobile ? 12 : 16,
+        vertical: isMobile ? 8 : 10,
+      ),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.04)
+            : const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withOpacity(0.08)
+              : const Color(0xFFFDBA74).withOpacity(0.5),
+        ),
+      ),
+      child: isMobile
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.school_rounded,
+                        size: 15,
+                        color: isDark
+                            ? const Color(0xFFFBBF24)
+                            : const Color(0xFFD97706)),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'SVKM / Mithibai students? Get your report from',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: isDark
+                              ? Colors.white.withOpacity(0.55)
+                              : const Color(0xFF92400E),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                _sapPortalChip(isDark),
+              ],
+            )
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.school_rounded,
+                    size: 16,
+                    color: isDark
+                        ? const Color(0xFFFBBF24)
+                        : const Color(0xFFD97706)),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text.rich(
+                    TextSpan(
+                      text: 'SVKM / Mithibai students? ',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: isDark
+                            ? const Color(0xFFFBBF24)
+                            : const Color(0xFFD97706),
+                      ),
+                      children: [
+                        TextSpan(
+                          text: 'Get your report from ',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w400,
+                            color: isDark
+                                ? Colors.white.withOpacity(0.5)
+                                : const Color(0xFF92400E),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _sapPortalChip(isDark),
+              ],
+            ),
+    );
+  }
+
+  Widget _sapPortalChip(bool isDark) {
+    return InkWell(
+      onTap: _launchSAPPortal,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isDark
+              ? const Color(0xFFFBBF24).withOpacity(0.15)
+              : const Color(0xFFFBBF24).withOpacity(0.2),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isDark
+                ? const Color(0xFFFBBF24).withOpacity(0.3)
+                : const Color(0xFFD97706).withOpacity(0.3),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.open_in_new_rounded,
+                size: 12,
+                color: isDark
+                    ? const Color(0xFFFBBF24)
+                    : const Color(0xFFD97706)),
+            const SizedBox(width: 4),
+            Text(
+              'SAP Portal',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: isDark
+                    ? const Color(0xFFFBBF24)
+                    : const Color(0xFFD97706),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── FEATURE CARDS ─────────────────────────────────────────
+  Widget _buildFeatureCards(bool isDark, bool isMobile, bool isTablet) {
+    final features = [
+      (
+        Icons.upload_file_rounded,
+        'Upload & Analyze',
+        'Get a complete breakdown from your PDF report.',
+        const Color(0xFF6366F1),
+      ),
+      (
+        Icons.bar_chart_rounded,
+        'Track Progress',
+        'See percentages, lectures attended, and targets.',
+        const Color(0xFF3B82F6),
+      ),
+      (
+        Icons.calendar_month_rounded,
+        'Calendar View',
+        'Visualize attendance day by day on a calendar.',
+        const Color(0xFF8B5CF6),
+      ),
+      (
+        Icons.notifications_active_rounded,
+        'Stay Informed',
+        'Know how many lectures you can skip or must attend.',
+        const Color(0xFF06B6D4),
+      ),
     ];
 
+    if (isMobile) {
+      // Mobile: 2x2 grid
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                  child: _featureCard(features[0], isDark, compact: true)),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: _featureCard(features[1], isDark, compact: true)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                  child: _featureCard(features[2], isDark, compact: true)),
+              const SizedBox(width: 10),
+              Expanded(
+                  child: _featureCard(features[3], isDark, compact: true)),
+            ],
+          ),
+        ],
+      );
+    }
+
+    // Tablet & Desktop: single row
+    return Row(
+      children: features
+          .map((f) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: _featureCard(f, isDark, compact: isTablet),
+                ),
+              ))
+          .toList(),
+    );
+  }
+
+  Widget _featureCard(
+    (IconData, String, String, Color) data,
+    bool isDark, {
+    bool compact = false,
+  }) {
+    final (icon, title, desc, color) = data;
+
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(compact ? 14 : 18),
       decoration: BoxDecoration(
         color: isDark
             ? Colors.white.withOpacity(0.04)
             : Colors.white.withOpacity(0.7),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isDark
               ? Colors.white.withOpacity(0.08)
               : Colors.black.withOpacity(0.06),
         ),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(steps.length, (i) {
-          final step = steps[i];
-          return Expanded(
-            child: Column(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF6366F1).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(step.$1, color: const Color(0xFF6366F1), size: 22),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  step.$2,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                    color: isDark ? Colors.white : const Color(0xFF1E293B),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  step.$3,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: isDark
-                        ? Colors.white.withOpacity(0.45)
-                        : const Color(0xFF94A3B8),
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: compact ? 32 : 38,
+            height: compact ? 32 : 38,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
             ),
-          );
-        }),
+            child: Icon(icon, color: color, size: compact ? 16 : 18),
+          ),
+          SizedBox(height: compact ? 8 : 12),
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: compact ? 12 : 13,
+              color: isDark ? Colors.white : const Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            desc,
+            style: TextStyle(
+              fontSize: compact ? 10 : 11,
+              height: 1.4,
+              color: isDark
+                  ? Colors.white.withOpacity(0.4)
+                  : const Color(0xFF94A3B8),
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildOutlinedBtn(bool isDark) {
-    return OutlinedButton.icon(
-      onPressed: _launchSAPPortal,
-      icon: const Icon(Icons.open_in_new_rounded, size: 18),
-      label: const Text('SAP Portal'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: isDark ? Colors.white70 : const Color(0xFF475569),
-        side: BorderSide(
-          color: isDark
-              ? Colors.white.withOpacity(0.2)
-              : const Color(0xFFCBD5E1),
-        ),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
-        textStyle:
-            const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPrimaryBtn() {
+  // ── BUTTONS ───────────────────────────────────────────────
+  Widget _buildPrimaryBtn(bool isMobile) {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(14),
@@ -357,7 +575,7 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF6366F1).withOpacity(0.45),
+            color: const Color(0xFF6366F1).withOpacity(0.4),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -365,46 +583,50 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
       ),
       child: ElevatedButton.icon(
         onPressed: _goToInsights,
-        icon: const Icon(Icons.auto_awesome, size: 18),
+        icon: const Icon(Icons.upload_file_rounded, size: 18),
         label: const Text('Analyze PDF Report'),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.transparent,
           foregroundColor: Colors.white,
           shadowColor: Colors.transparent,
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
-          textStyle:
-              const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 20 : 28,
+            vertical: isMobile ? 14 : 18,
           ),
+          textStyle: TextStyle(
+              fontSize: isMobile ? 14 : 15, fontWeight: FontWeight.w700),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14)),
         ),
       ),
     );
   }
 
-  Widget _buildSignInBtn(bool isDark) {
+  Widget _buildSignInBtn(bool isDark, bool isMobile) {
     return OutlinedButton.icon(
       onPressed: () {
         Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-        );
+            context, MaterialPageRoute(builder: (_) => const LoginScreen()));
       },
       icon: const Icon(Icons.person_rounded, size: 18),
       label: const Text('Sign In'),
       style: OutlinedButton.styleFrom(
-        foregroundColor: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
+        foregroundColor:
+            isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5),
         side: BorderSide(
           color: isDark
               ? const Color(0xFF6366F1).withOpacity(0.5)
               : const Color(0xFF6366F1).withOpacity(0.4),
           width: 1.5,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
-        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 20 : 28,
+          vertical: isMobile ? 14 : 18,
         ),
+        textStyle: TextStyle(
+            fontSize: isMobile ? 14 : 15, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14)),
       ),
     );
   }
@@ -413,10 +635,7 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color,
-      ),
+      decoration: BoxDecoration(shape: BoxShape.circle, color: color),
     );
   }
 }
@@ -430,7 +649,8 @@ class _WebInsightsScreen extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+      backgroundColor:
+          isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
       body: Column(
         children: [
           // Top nav bar
@@ -474,11 +694,9 @@ class _WebInsightsScreen extends StatelessWidget {
                 const Spacer(),
                 TextButton.icon(
                   onPressed: () => Navigator.pop(context),
-                  icon: Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    size: 14,
-                    color: isDark ? Colors.white70 : Colors.black54,
-                  ),
+                  icon: Icon(Icons.arrow_back_ios_new_rounded,
+                      size: 14,
+                      color: isDark ? Colors.white70 : Colors.black54),
                   label: Text(
                     'Back to Home',
                     style: TextStyle(
@@ -490,7 +708,6 @@ class _WebInsightsScreen extends StatelessWidget {
               ],
             ),
           ),
-
           // Content
           Expanded(
             child: SingleChildScrollView(

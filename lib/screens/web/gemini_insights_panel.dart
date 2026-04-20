@@ -263,7 +263,7 @@ class _GeminiInsightsPanelState extends State<GeminiInsightsPanel>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'AI Attendance Analyzer',
+                      'Attendance Report Analyzer',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -477,7 +477,7 @@ class _GeminiInsightsPanelState extends State<GeminiInsightsPanel>
           ),
           const SizedBox(height: 10),
           Text(
-            'Upload your PDF attendance report above\nto generate instant AI-powered insights.',
+            'Upload your PDF attendance report above\nto generate instant attendance insights.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 14,

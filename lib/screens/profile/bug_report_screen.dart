@@ -63,8 +63,14 @@ class _BugReportScreenState extends State<BugReportScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Report a Bug')),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 540),
+            child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 24,
+            vertical: 24,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -134,6 +140,8 @@ class _BugReportScreenState extends State<BugReportScreen> {
                       ),
               ),
             ],
+          ),
+        ),
           ),
         ),
       ),

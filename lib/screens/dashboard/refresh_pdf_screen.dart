@@ -234,8 +234,14 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
         leading: BackButton(onPressed: () => Navigator.pop(context, _isDone)),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 540),
+            child: Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 24,
+            vertical: 24,
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -374,6 +380,8 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                   ),
                 ),
             ],
+          ),
+        ),
           ),
         ),
       ),

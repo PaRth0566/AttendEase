@@ -189,8 +189,14 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 24,
+          vertical: 20,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -430,6 +436,8 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
               ],
             ),
           ],
+        ),
+      ),
         ),
       ),
     );

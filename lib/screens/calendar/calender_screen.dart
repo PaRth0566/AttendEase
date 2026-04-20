@@ -435,7 +435,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
               foregroundColor: Colors.white,
             )
           : null,
-      body: Column(
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 700),
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Calendar widget
@@ -737,6 +740,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               ),
           ),
         ],
+      ),
+        ),
       ),
     );
   }

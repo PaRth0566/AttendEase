@@ -397,8 +397,15 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       appBar: AppBar(title: const Text('Account Settings')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+          : Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: MediaQuery.of(context).size.width > 600 ? 32 : 16,
+                vertical: 16,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -475,6 +482,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                     isDestructive: true,
                   ),
                 ],
+              ),
+            ),
               ),
             ),
     );

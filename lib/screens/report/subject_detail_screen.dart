@@ -106,7 +106,10 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                 color: theme.colorScheme.primary,
               ),
             )
-          : Column(
+          : Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 700),
+                child: Column(
               children: [
                 // OVERALL STATS CARD
                 Padding(
@@ -378,6 +381,8 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                         ),
                 ),
               ],
+            ),
+              ),
             ),
     );
   }
