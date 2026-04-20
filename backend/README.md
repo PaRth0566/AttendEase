@@ -1,4 +1,6 @@
-# AttendEase Backend 🚀
+# AttendEase Backend 
+
+<br><a href="https://github.com/PaRth0566/AttendEase"><img src="https://img.shields.io/badge/Main_App-Repository-1FBCFD?logo=flutter&logoColor=00CCFF" width="250" align="center"></a><br><br>
 
 This is a secure Node.js proxy server designed to handle sensitive AI processing for the **Attend Ease** application. It acts as a bridge between the Flutter frontend and Google Gemini.
 
