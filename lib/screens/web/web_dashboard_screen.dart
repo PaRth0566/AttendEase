@@ -142,16 +142,15 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
                               vertical: isMobile ? 28 : 40,
                             ),
                             child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 // ── Hero Section ──
-                                Expanded(
-                                  child: Center(
-                                    child: ConstrainedBox(
-                                      constraints:
-                                          const BoxConstraints(maxWidth: 640),
-                                      child: _buildHeroSection(
-                                          isDark, isMobile, isTablet),
-                                    ),
+                                Center(
+                                  child: ConstrainedBox(
+                                    constraints:
+                                        const BoxConstraints(maxWidth: 640),
+                                    child: _buildHeroSection(
+                                        isDark, isMobile, isTablet),
                                   ),
                                 ),
 
