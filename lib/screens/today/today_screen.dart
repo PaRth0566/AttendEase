@@ -7,6 +7,7 @@ import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
 import '../../models/timetable_entry.dart';
+import '../../services/cloud_sync_service.dart';
 
 class TodayScreen extends StatefulWidget {
   const TodayScreen({super.key});
@@ -113,6 +114,8 @@ class _TodayScreenState extends State<TodayScreen> {
         );
       }
     }
+
+    CloudSyncService().backupDataToCloud(); // Auto-sync
 
     if (!mounted) return;
 

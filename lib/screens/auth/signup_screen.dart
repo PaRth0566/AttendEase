@@ -152,10 +152,12 @@ class _SignupScreenState extends State<SignupScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            Center(
+            Align(
+              alignment: Alignment.topCenter,
               child: SingleChildScrollView(
                 padding: EdgeInsets.symmetric(
                   horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 24,
+                  vertical: 32, // Add top padding to prevent hugging the top edge
                 ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 480),

@@ -14,6 +14,8 @@ import 'screens/setup/setup_choice_screen.dart';
 import 'screens/web/web_dashboard_screen.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
+import 'database/db_helper.dart';
+import 'services/cloud_sync_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +49,14 @@ class AttendEaseApp extends StatefulWidget {
   State<AttendEaseApp> createState() => _AttendEaseAppState();
 }
 
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+    // Hide scrollbars globally, especially useful for Web aesthetics
+    return child;
+  }
+}
+
 class _AttendEaseAppState extends State<AttendEaseApp> {
   // CACHE THE FUTURE: This stops the app from redirecting when the theme changes!
   late Future<Widget> _initialScreen;
@@ -60,6 +70,25 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
   Future<Widget> _getInitialScreen() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
+      // Check if user has ANY data before allowing them to bypass setup
+      bool hasData = false;
+      try {
+        final db = await DBHelper.instance.database;
+        final subjects = await db.query('subjects', limit: 1);
+        if (subjects.isNotEmpty) {
+          hasData = true;
+        } else {
+          // No local data, check cloud
+          hasData = await CloudSyncService().restoreDataFromCloud();
+        }
+      } catch (e) {
+        debugPrint('Init data check error: $e');
+      }
+
+      if (!hasData) {
+        return const SetupChoiceScreen();
+      }
+
       return const RootScreen();
     }
 
@@ -80,6 +109,7 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'AttendEase',
+          scrollBehavior: AppScrollBehavior(),
 
           // DYNAMIC THEME IMPLEMENTATION
           themeMode: themeProvider.themeMode,
