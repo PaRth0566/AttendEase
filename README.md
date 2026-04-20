@@ -52,7 +52,7 @@ Before you begin, ensure you have met the following requirements:
 ### 🛠 Tech Stack
 <a href="https://flutter.dev/"><img src="https://img.shields.io/badge/Flutter-00CCFF?labelColor=333333&logo=Flutter&logoColor=00CCFF" height="30" width="106" align="left"></a>
 <a href="https://dart.dev/"><img src="https://img.shields.io/badge/Dart-40C4FF?labelColor=333333&logo=Dart&logoColor=40C4FF" height="30" width="88" align="left"></a>
-<a href="https://ai.google.dev/"><img src="https://img.shields.io/badge/Google_AI_Studio-8E75FF?labelColor=333333&logo=GoogleGemini&logoColor=8E75FF" height="30" width="160"></a>  
+<a href="https://ai.google.dev/"><img src="https://img.shields.io/badge/Google_AI_Studio-8E75FF?labelColor=333333&logo=GoogleGemini&logoColor=8E75FF" height="30" width="190"></a>  
 <a href="https://firebase.google.com/"><img src="https://img.shields.io/badge/Firebase-FFCA28?labelColor=333333&logo=Firebase&logoColor=FFCA28" height="30" width="120" align="left"></a>
 <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/Node.js-339933?labelColor=333333&logo=nodedotjs&logoColor=339933" height="30" width="112" align="left"></a>
 <a href="https://www.sqlite.org/"><img src="https://img.shields.io/badge/SQLite-007FFF?labelColor=333333&logo=SQLite&logoColor=007FFF" height="30" width="103" align="left"></a>
