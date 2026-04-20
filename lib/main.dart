@@ -12,8 +12,6 @@ import 'screens/setup/attendance_criteria_screen.dart';
 import 'screens/setup/basic_info_screen.dart';
 import 'screens/setup/setup_choice_screen.dart';
 import 'screens/web/web_dashboard_screen.dart';
-// Web dashboards removed to unify UI
-import 'services/notification_service.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
 
@@ -22,13 +20,6 @@ void main() async {
 
   // ☁️ INITIALIZE FIREBASE
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-
-  // 🔔 INITIALIZE NOTIFICATIONS (skip on web as it causes MissingPlugin errors)
-  if (!kIsWeb) {
-    await NotificationService().init();
-    await NotificationService().scheduleSmartNotifications();
-  }
 
   // Read the saved theme from memory BEFORE the app starts!
   final prefs = await SharedPreferences.getInstance();

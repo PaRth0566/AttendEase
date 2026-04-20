@@ -320,7 +320,8 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
         automaticallyImplyLeading: false,
       ),
       body: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 540),
             child: SingleChildScrollView(

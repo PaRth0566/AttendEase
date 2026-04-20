@@ -7,7 +7,6 @@ import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
-import '../../services/notification_service.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -161,14 +160,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
       status: status,
     );
     await _fetchMonthData(_focusedDay);
-    await NotificationService().scheduleSmartNotifications();
   }
 
   Future<void> _deleteRecord(int timetableEntryId, String date) async {
     await _attendanceDao.deleteAttendance(timetableEntryId, date);
     if (_selectedDay != null) await _loadForDate(_selectedDay!);
     await _fetchMonthData(_focusedDay);
-    await NotificationService().scheduleSmartNotifications();
   }
 
   // Opens bottom sheet to add a new attendance record for the selected date

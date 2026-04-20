@@ -29,7 +29,7 @@ class AuthService {
       return userCredential.user;
     } catch (e) {
       print("Google Auth Error: $e");
-      return null;
+      throw e;
     }
   }
 

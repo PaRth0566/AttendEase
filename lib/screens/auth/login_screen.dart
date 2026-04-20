@@ -272,8 +272,9 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Google Sign-In failed or was cancelled.'),
+          SnackBar(
+            content: Text('Google Sign-In Error: $e\n(Make sure SHA-1 is added in Firebase)'),
+            duration: const Duration(seconds: 5),
           ),
         );
       }

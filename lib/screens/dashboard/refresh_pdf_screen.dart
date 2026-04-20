@@ -234,7 +234,8 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
         leading: BackButton(onPressed: () => Navigator.pop(context, _isDone)),
       ),
       body: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 540),
             child: Padding(

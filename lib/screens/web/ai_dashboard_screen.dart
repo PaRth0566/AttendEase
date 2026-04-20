@@ -139,17 +139,37 @@ class AIDashboardScreen extends StatelessWidget {
             }),
             
           const SizedBox(height: 24),
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: Text(
-                'Please verify the report we are not liable for any inconveniences that occurred due to this.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDark ? Colors.white54 : Colors.grey.shade600,
-                ),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.red.withOpacity(0.1) : Colors.red.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? Colors.red.withOpacity(0.3) : Colors.red.shade200,
               ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  size: 22,
+                  color: isDark ? Colors.red.shade400 : Colors.red.shade700,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Disclaimer: AttendEase is an automated tool. We are not liable for any calculation inaccuracies or resulting consequences. Please verify your attendance with official college records.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      height: 1.4,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.red.shade200 : Colors.red.shade900,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         const SizedBox(height: 8),

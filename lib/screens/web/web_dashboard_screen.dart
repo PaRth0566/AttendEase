@@ -155,6 +155,46 @@ class _WebDashboardScreenState extends State<WebDashboardScreen>
                                   ),
                                 ),
 
+                                SizedBox(height: isMobile ? 16 : 24),
+
+                                // ── Disclaimer ──
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 640),
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                    decoration: BoxDecoration(
+                                      color: isDark ? Colors.red.withOpacity(0.1) : Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isDark ? Colors.red.withOpacity(0.3) : Colors.red.shade200,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(
+                                          Icons.info_outline_rounded,
+                                          size: 22,
+                                          color: isDark ? Colors.red.shade400 : Colors.red.shade700,
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            'Disclaimer: AttendEase is an automated tool. We are not liable for any calculation inaccuracies or resulting consequences. Please verify your attendance with official college records.',
+                                            style: TextStyle(
+                                              fontSize: isMobile ? 12 : 13,
+                                              height: 1.4,
+                                              fontWeight: FontWeight.w500,
+                                              color: isDark ? Colors.red.shade200 : Colors.red.shade900,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+
                                 SizedBox(height: isMobile ? 24 : 36),
 
                                 // ── Feature Cards ──
