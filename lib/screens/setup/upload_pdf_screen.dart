@@ -205,7 +205,7 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
                       width: double.infinity,
                       child: OutlinedButton.icon(
                         onPressed: () async {
-                          final url = Uri.parse('https://attendease-backend-ndxs.onrender.com/');
+                          final url = Uri.parse('https://attendease-cbc6f.web.app/');
                           if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
                             debugPrint('Could not launch web URL');
                           }
