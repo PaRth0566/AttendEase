@@ -50,18 +50,39 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final prefs = await SharedPreferences.getInstance();
     _activeSemester = prefs.getInt('semester') ?? 1;
 
-    final startStr = prefs.getString('semester_start_$_activeSemester');
-    final endStr = prefs.getString('semester_end_$_activeSemester');
+    // Try the semester-specific keys first, then fall back to generic keys
+    String? startStr = prefs.getString('semester_start_$_activeSemester');
+    String? endStr = prefs.getString('semester_end_$_activeSemester');
+
+    // Fallback: try without semester suffix (older data format)
+    startStr ??= prefs.getString('semester_start');
+    endStr ??= prefs.getString('semester_end');
 
     DateTime normalize(DateTime d) => DateTime.utc(d.year, d.month, d.day);
 
     DateTime parsedStart = DateTime.now();
     DateTime parsedEnd = DateTime.now().add(const Duration(days: 180));
 
-    if (startStr != null) parsedStart = DateTime.parse(startStr);
-    if (endStr != null) {
-      parsedEnd = DateTime.parse(endStr);
+    if (startStr != null && startStr.isNotEmpty) {
+      try {
+        parsedStart = DateTime.parse(startStr);
+      } catch (_) {
+        debugPrint('Calendar: Failed to parse semester start: $startStr');
+      }
+    }
+    if (endStr != null && endStr.isNotEmpty) {
+      try {
+        parsedEnd = DateTime.parse(endStr);
+      } catch (_) {
+        debugPrint('Calendar: Failed to parse semester end: $endStr');
+        parsedEnd = parsedStart.add(const Duration(days: 180));
+      }
     } else {
+      parsedEnd = parsedStart.add(const Duration(days: 180));
+    }
+
+    // Ensure end is after start
+    if (parsedEnd.isBefore(parsedStart)) {
       parsedEnd = parsedStart.add(const Duration(days: 180));
     }
 
@@ -90,6 +111,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     await _fetchMonthData(_focusedDay);
     await _loadForDate(_selectedDay!);
   }
+
 
   Future<void> _fetchMonthData(DateTime month) async {
     final monthStart = DateTime(month.year, month.month, 1);

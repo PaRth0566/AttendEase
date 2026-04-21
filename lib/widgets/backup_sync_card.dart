@@ -1,15 +1,14 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // ✅ NEW: Added for beautiful time formatting
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Make sure this path matches exactly where your DBHelper is located!
-import '../../database/db_helper.dart';
+import '../services/cloud_sync_service.dart';
 
 class BackupSyncCard extends StatefulWidget {
-  const BackupSyncCard({super.key});
+  /// Called after a successful sync so parent screens can reload data.
+  final VoidCallback? onSyncComplete;
+
+  const BackupSyncCard({super.key, this.onSyncComplete});
 
   @override
   State<BackupSyncCard> createState() => _BackupSyncCardState();
@@ -25,16 +24,13 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
     _loadLastSyncTime();
   }
 
-  // ✅ NEW: Smart formatting function
+  // Smart formatting function
   String _formatTime(String rawTime) {
     if (rawTime == "Never") return rawTime;
     try {
-      // Try parsing the ugly database string (e.g., 2026-04-10 17:06:28.062483)
       DateTime parsedDate = DateTime.parse(rawTime);
-      // Converts it to "Apr 10, 5:06 PM"
       return DateFormat('MMM d, h:mm a').format(parsedDate);
     } catch (e) {
-      // Fallback just in case
       return rawTime;
     }
   }
@@ -49,86 +45,54 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
     });
   }
 
-  Future<void> _handleManualBackup() async {
-    // 1. Check internet before starting the loader
-    final List<ConnectivityResult> connectivityResult = await (Connectivity()
-        .checkConnectivity());
-
-    // If offline, show error and STOP
-    if (connectivityResult.contains(ConnectivityResult.none)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              "No internet connection. Connect to a network to backup.",
-            ),
-          ),
-        );
-      }
-      return;
-    }
-
-    // 2. Internet is on, start loading animation
+  /// Performs a **bidirectional** sync:
+  /// - If cloud has newer data → pulls it down (restore)
+  /// - If local has newer data → pushes it up (backup)
+  /// This ensures changes made on web show up in app and vice versa.
+  Future<void> _handleSync() async {
     setState(() => _isLoading = true);
 
     try {
-      // 3. Get the currently logged-in user
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        throw Exception("You must be logged in to backup data.");
+      final result = await CloudSyncService().syncBidirectional();
+
+      if (!mounted) return;
+
+      String message;
+      switch (result) {
+        case 'restored':
+          message = 'Synced! Data pulled from cloud.';
+          break;
+        case 'backed_up':
+          message = 'Synced! Data pushed to cloud.';
+          break;
+        case 'no_network':
+          message = 'No internet connection. Connect to sync.';
+          break;
+        case 'no_user':
+          message = 'You must be logged in to sync.';
+          break;
+        default:
+          message = 'Sync failed. Please try again.';
       }
 
-      // 4. Open the local SQLite database
-      final db = await DBHelper.instance.database;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
 
-      // 5. Fetch all data from your local tables
-      final subjects = await db.query('subjects');
-      final timetable = await db.query('timetable');
-      final attendanceRecords = await db.query('attendance_records');
+      // Reload the sync time display
+      await _loadLastSyncTime();
 
-      // 6. Package it all up into one Map
-      final backupData = {
-        'subjects': subjects,
-        'timetable': timetable,
-        'attendance_records': attendanceRecords,
-        'last_backed_up':
-            FieldValue.serverTimestamp(), // Saves the exact time on Firebase
-      };
-
-      // 7. Upload to Firestore under a 'users' collection -> their specific UID
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .set(backupData);
-
-      // 8. Save the precise time locally, and format it for the UI
-      final now = DateTime.now();
-      final rawString = now.toString();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        'last_sync_time',
-        rawString,
-      ); // Save raw for the system
-
-      if (mounted) {
-        setState(() {
-          _lastSyncTime = _formatTime(
-            rawString,
-          ); // Format beautifully for the user
-        });
-
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text("Backup successful!")));
+      // Notify parent to reload its data
+      if (result == 'restored' || result == 'backed_up') {
+        widget.onSyncComplete?.call();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text("Backup failed: $e")));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Sync failed: $e")),
+        );
       }
     } finally {
-      // 9. Stop loader no matter what happens
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -144,7 +108,7 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
           color: Theme.of(context).dividerColor,
-        ), // ✅ Dynamic border for dark mode
+        ),
       ),
       margin: const EdgeInsets.only(bottom: 12),
       child: Padding(
@@ -192,7 +156,7 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
                     ),
                   )
                 : TextButton(
-                    onPressed: _handleManualBackup,
+                    onPressed: _handleSync,
                     style: TextButton.styleFrom(
                       foregroundColor: const Color(0xFF2563EB),
                     ),

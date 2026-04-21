@@ -119,10 +119,72 @@ class CloudSyncService {
         );
       }
 
+      // Update local sync time after successful restore
+      await prefs.setString('last_sync_time', DateTime.now().toString());
+
       return true; // Successfully restored data for a returning user!
     } catch (e) {
       print("Restore Error: $e");
       return false;
+    }
+  }
+
+  // 3. BIDIRECTIONAL SYNC — Pull from cloud first, then push local changes
+  // Used by the "Sync Now" button to ensure both platforms stay in sync.
+  // Returns 'restored' if cloud was newer (data pulled), 'backed_up' if
+  // local was pushed, or 'error' / 'no_user' on failure.
+  Future<String> syncBidirectional() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return 'no_user';
+
+      // Check network
+      final List<ConnectivityResult> connectivityResult =
+          await Connectivity().checkConnectivity();
+      if (connectivityResult.contains(ConnectivityResult.none)) {
+        return 'no_network';
+      }
+
+      final docSnapshot =
+          await _firestore.collection('users').doc(user.uid).get();
+
+      if (!docSnapshot.exists || docSnapshot.data() == null) {
+        // No cloud data — just backup local
+        await backupDataToCloud();
+        return 'backed_up';
+      }
+
+      final data = docSnapshot.data()!;
+      final prefs = await SharedPreferences.getInstance();
+
+      // Compare timestamps to decide direction
+      DateTime? cloudTime;
+      final cloudTimestamp = data['last_backed_up'];
+      if (cloudTimestamp is Timestamp) {
+        cloudTime = cloudTimestamp.toDate();
+      }
+
+      DateTime? localTime;
+      final localTimeStr = prefs.getString('last_sync_time');
+      if (localTimeStr != null && localTimeStr != 'Never') {
+        try {
+          localTime = DateTime.parse(localTimeStr);
+        } catch (_) {}
+      }
+
+      // If cloud is newer than local, restore from cloud first
+      if (cloudTime != null &&
+          (localTime == null || cloudTime.isAfter(localTime))) {
+        await restoreDataFromCloud();
+        return 'restored';
+      } else {
+        // Local is newer or same — push to cloud
+        await backupDataToCloud();
+        return 'backed_up';
+      }
+    } catch (e) {
+      print("Bidirectional Sync Error: $e");
+      return 'error';
     }
   }
 }

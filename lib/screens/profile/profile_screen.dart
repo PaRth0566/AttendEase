@@ -386,7 +386,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
 
                   const SizedBox(height: 8),
-                  const BackupSyncCard(),
+                  BackupSyncCard(onSyncComplete: _loadProfileData),
                   const SizedBox(height: 8),
 
                   _profileTile(

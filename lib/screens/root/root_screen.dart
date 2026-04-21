@@ -15,16 +15,15 @@ class RootScreen extends StatefulWidget {
 
 class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
-  late List<Widget> _pages;
   bool _isSyncing = kIsWeb; // Only sync on start for Web
+
+  // Use a key to force-rebuild pages when data changes
+  int _pageRebuildKey = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (!kIsWeb) {
-      _buildPages();
-    }
     _initialSync();
   }
 
@@ -33,8 +32,8 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
       await CloudSyncService().restoreDataFromCloud();
       if (mounted) {
         setState(() {
-          _buildPages();
-          _isSyncing = false; // Sync finished, safe to mount Dashboard
+          _isSyncing = false;
+          _pageRebuildKey++; // Force fresh pages after sync
         });
       }
     }
@@ -58,12 +57,20 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     debugPrint('☁️ Silent Auto-Backup Completed on App Close!');
   }
 
-  void _buildPages() {
-    _pages = [
-      const DashboardScreen(),
-      const CalendarScreen(),
-      const ProfileScreen(),
-    ];
+  /// Build the page for the given index. Uses _pageRebuildKey as a ValueKey
+  /// to force Flutter to recreate the widget (and fire initState) whenever
+  /// data is synced or the tab is re-selected.
+  Widget _buildPage(int index) {
+    switch (index) {
+      case 0:
+        return DashboardScreen(key: ValueKey('dashboard_$_pageRebuildKey'));
+      case 1:
+        return CalendarScreen(key: ValueKey('calendar_$_pageRebuildKey'));
+      case 2:
+        return ProfileScreen(key: ValueKey('profile_$_pageRebuildKey'));
+      default:
+        return DashboardScreen(key: ValueKey('dashboard_$_pageRebuildKey'));
+    }
   }
 
   @override
@@ -80,14 +87,14 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     }
 
     return Scaffold(
-      body: _pages[_currentIndex],
+      body: _buildPage(_currentIndex),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {
           setState(() {
             _currentIndex = index;
-            // Force dashboard refresh when switching to it
-            if (index == 0) _buildPages();
+            // Force rebuild on every tab switch to pick up latest data
+            _pageRebuildKey++;
           });
         },
         type: BottomNavigationBarType.fixed,
