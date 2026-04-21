@@ -79,12 +79,25 @@ class CloudSyncService {
       // 1. Restore SharedPreferences (Name, Course, Dates)
       final Map<String, dynamic> prefsData = data['preferences'] ?? {};
       for (var entry in prefsData.entries) {
-        if (entry.value is String)
-          await prefs.setString(entry.key, entry.value);
-        if (entry.value is int) await prefs.setInt(entry.key, entry.value);
-        if (entry.value is double)
-          await prefs.setDouble(entry.key, entry.value);
-        if (entry.value is bool) await prefs.setBool(entry.key, entry.value);
+        final value = entry.value;
+        if (value is String) {
+          await prefs.setString(entry.key, value);
+        } else if (value is bool) {
+          // Check bool BEFORE int/num since Dart's bool is not a num
+          await prefs.setBool(entry.key, value);
+        } else if (value is int) {
+          await prefs.setInt(entry.key, value);
+        } else if (value is double) {
+          await prefs.setDouble(entry.key, value);
+        } else if (value is num) {
+          // Firestore can return numbers as 'num' in nested maps.
+          // Decide if it's an int or double based on its actual value.
+          if (value == value.toInt()) {
+            await prefs.setInt(entry.key, value.toInt());
+          } else {
+            await prefs.setDouble(entry.key, value.toDouble());
+          }
+        }
       }
 
       // 2. Wipe current local SQLite data to avoid duplicates
@@ -117,6 +130,22 @@ class CloudSyncService {
           Map<String, dynamic>.from(record),
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
+      }
+
+      // 4. Auto-detect semester if preferences didn't include it
+      //    (handles old backups that didn't save preferences)
+      if (!prefsData.containsKey('semester') || prefs.getInt('semester') == null) {
+        final semResult = await db.rawQuery(
+          'SELECT DISTINCT semester FROM subjects ORDER BY semester DESC LIMIT 1',
+        );
+        if (semResult.isNotEmpty) {
+          final detectedSem = semResult.first['semester'];
+          if (detectedSem is int) {
+            await prefs.setInt('semester', detectedSem);
+          } else if (detectedSem is num) {
+            await prefs.setInt('semester', detectedSem.toInt());
+          }
+        }
       }
 
       // Update local sync time after successful restore
