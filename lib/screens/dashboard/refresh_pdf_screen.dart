@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/local_pdf_parser.dart';
+import '../../services/cloud_sync_service.dart';
 
 import '../../database/attendance_dao.dart';
 import '../../database/db_helper.dart';
@@ -49,6 +50,9 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
       setState(() => _statusMessage = 'Syncing records to database...');
       await _applyData(data);
 
+      setState(() => _statusMessage = 'Backing up to cloud...');
+      await CloudSyncService().backupDataToCloud();
+
       setState(() {
         _isUploading = false;
         _isDone = true;
@@ -72,23 +76,47 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
     }
   }
 
+  /// Parses a semester string like "Semester III", "sem 3", "3", "iii" etc.
+  int _parseSemesterNumber(String s) {
+    final digitMatch = RegExp(r'\b([1-8])\b').firstMatch(s);
+    if (digitMatch != null) return int.parse(digitMatch.group(1)!);
+    if (RegExp(r'\bviii\b').hasMatch(s)) return 8;
+    if (RegExp(r'\bvii\b').hasMatch(s))  return 7;
+    if (RegExp(r'\bvi\b').hasMatch(s))   return 6;
+    if (RegExp(r'\biv\b').hasMatch(s))   return 4;
+    if (RegExp(r'\bv\b').hasMatch(s))    return 5;
+    if (RegExp(r'\biii\b').hasMatch(s))  return 3;
+    if (RegExp(r'\bii\b').hasMatch(s))   return 2;
+    if (RegExp(r'\bi\b').hasMatch(s))    return 1;
+    return 1;
+  }
+
   Future<void> _applyData(Map<String, dynamic> data) async {
     final prefs = await SharedPreferences.getInstance();
     final activeSemester = prefs.getInt('semester') ?? 1;
+    
+    final semStr = data['semester']?.toString().toLowerCase().trim() ?? '';
+    int targetSemester = activeSemester;
+    if (semStr.isNotEmpty) {
+       targetSemester = _parseSemesterNumber(semStr);
+    }
+
+    // Automatically switch the user to the newly uploaded semester
+    await prefs.setInt('semester', targetSemester);
 
     final subjectDao = SubjectDao();
     final timetableDao = TimetableDao();
     final attendanceDao = AttendanceDao();
 
     // Step 0: Aggressive Wipe of Existing Semester Data
-    // We actively delete the subjects for the active semester. 
+    // We actively delete the subjects for the TARGET semester. 
     // Thanks to ON DELETE CASCADE set up in db_helper.dart, this automatically 
     // annihilates all orphaned timetable and attendance_record rows instantly.
     final db = await DBHelper.instance.database;
     await db.delete(
       'subjects',
       where: 'semester = ?',
-      whereArgs: [activeSemester],
+      whereArgs: [targetSemester],
     );
 
     // Step 1: Insert new subjects from PDF
@@ -97,13 +125,13 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
       final subName = sub.toString().trim();
       if (subName.isNotEmpty) {
         await subjectDao.insertSubject(
-          Subject(name: subName, requiredPercent: 75.0, semester: activeSemester),
+          Subject(name: subName, requiredPercent: 75.0, semester: targetSemester),
         );
       }
     }
 
     // Build name → id map
-    final allSubjects = await subjectDao.getSubjectsBySemester(activeSemester);
+    final allSubjects = await subjectDao.getSubjectsBySemester(targetSemester);
     final Map<String, int> subjectNameToId = {
       for (var s in allSubjects) s.name: s.id!
     };
@@ -126,8 +154,8 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
       final endStr = data['endDate'].toString();
       // Only update if they parse successfully
       if (DateTime.tryParse(startStr) != null && DateTime.tryParse(endStr) != null) {
-        await prefs.setString('semester_start_$activeSemester', startStr);
-        await prefs.setString('semester_end_$activeSemester', endStr);
+        await prefs.setString('semester_start_$targetSemester', startStr);
+        await prefs.setString('semester_end_$targetSemester', endStr);
         debugPrint('Updated semester bounds from new PDF: $startStr to $endStr');
       }
     }
@@ -301,22 +329,22 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
-                      color: Colors.amber.withOpacity(isDark ? 0.15 : 0.1),
+                      color: Colors.blue.withOpacity(isDark ? 0.15 : 0.1),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                      border: Border.all(color: Colors.blue.withOpacity(0.4)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.info_outline_rounded, size: 14, color: Colors.amber),
+                        const Icon(Icons.info_outline_rounded, size: 14, color: Colors.blue),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'Warning: New records will OVERRIDE current data for this semester!',
+                            'Note: Semester is auto-detected. Only that specific semester will be updated, leaving others untouched.',
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? Colors.red.shade300 : Colors.red.shade800,
+                              color: isDark ? Colors.blue.shade300 : Colors.blue.shade800,
                             ),
                           ),
                         ),

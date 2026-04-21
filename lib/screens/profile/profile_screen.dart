@@ -119,17 +119,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
               );
 
               try {
-                bool backedUp = false;
-                if (!kIsWeb) {
-                  backedUp = await CloudSyncService().backupDataToCloud();
-                }
+                bool backedUp = await CloudSyncService().backupDataToCloud();
                 await AuthService().signOut();
 
                 final prefs = await SharedPreferences.getInstance();
                 await prefs.clear();
 
                 // Only wipe local data if cloud backup succeeded
-                if (!kIsWeb && backedUp) {
+                if (backedUp) {
                   final db = await DBHelper.instance.database;
                   await db.delete('attendance_records');
                   await db.delete('timetable');
@@ -286,65 +283,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
 
-                  // ✅ THEME MODE SELECTOR — System / Light / Dark
-                  Card(
-                    elevation: 0,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    color: theme.cardColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: theme.dividerColor),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      child: Row(
-                        children: [
-                          Icon(
-                            themeProvider.themeMode == ThemeMode.dark
-                                ? Icons.dark_mode_rounded
-                                : themeProvider.themeMode == ThemeMode.light
-                                    ? Icons.light_mode_rounded
-                                    : Icons.brightness_auto_rounded,
-                            color: theme.colorScheme.primary,
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Text(
-                              'Theme',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: theme.textTheme.bodyLarge?.color,
-                              ),
-                            ),
-                          ),
-                          SegmentedButton<ThemeMode>(
-                            segments: const [
-                              ButtonSegment(
-                                value: ThemeMode.system,
-                                icon: Icon(Icons.brightness_auto_rounded, size: 18),
-                              ),
-                              ButtonSegment(
-                                value: ThemeMode.light,
-                                icon: Icon(Icons.light_mode_rounded, size: 18),
-                              ),
-                              ButtonSegment(
-                                value: ThemeMode.dark,
-                                icon: Icon(Icons.dark_mode_rounded, size: 18),
-                              ),
-                            ],
-                            selected: {themeProvider.themeMode},
-                            onSelectionChanged: (Set<ThemeMode> selected) {
-                              themeProvider.setThemeMode(selected.first);
-                            },
-                            showSelectedIcon: false,
-                            style: ButtonStyle(
-                              visualDensity: VisualDensity.compact,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                          ),
-                        ],
+                  _profileTile(
+                    icon: themeProvider.themeMode == ThemeMode.dark
+                        ? Icons.dark_mode_rounded
+                        : themeProvider.themeMode == ThemeMode.light
+                            ? Icons.light_mode_rounded
+                            : Icons.brightness_auto_rounded,
+                    title: 'App Theme',
+                    trailing: Text(
+                      themeProvider.themeMode == ThemeMode.dark
+                          ? 'Dark Mode'
+                          : themeProvider.themeMode == ThemeMode.light
+                              ? 'Light Mode'
+                              : 'System Default',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: theme.colorScheme.primary,
                       ),
                     ),
+                    onTap: () => _showThemePicker(context),
                   ),
 
                   _profileTile(
@@ -467,6 +425,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
               ),
             ),
+    );
+  }
+
+  void _showThemePicker(BuildContext context) {
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: theme.scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Select App Theme',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: theme.textTheme.bodyLarge?.color,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _themeOptionTile(context, 'System Default', ThemeMode.system, Icons.settings),
+                _themeOptionTile(context, 'Light Mode', ThemeMode.light, Icons.wb_sunny),
+                _themeOptionTile(context, 'Dark Mode', ThemeMode.dark, Icons.nightlight_round),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _themeOptionTile(BuildContext context, String title, ThemeMode mode, IconData icon) {
+    final theme = Theme.of(context);
+    final isSelected = themeProvider.themeMode == mode;
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? theme.colorScheme.primary : theme.iconTheme.color),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected ? theme.colorScheme.primary : theme.textTheme.bodyLarge?.color,
+        ),
+      ),
+      trailing: isSelected ? Icon(Icons.check_circle, color: theme.colorScheme.primary) : null,
+      onTap: () {
+        themeProvider.setThemeMode(mode);
+        Navigator.pop(context);
+        setState(() {}); // refresh profile screen to update the tile text
+      },
     );
   }
 

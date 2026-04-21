@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../database/attendance_dao.dart';
 import '../../models/subject.dart';
+import '../../services/cloud_sync_service.dart';
 
 class SubjectDetailScreen extends StatefulWidget {
   final Subject subject;
@@ -54,6 +55,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
   Future<void> _deleteRecord(int timetableId, String date) async {
     await _attendanceDao.deleteAttendance(timetableId, date);
     _loadHistory(); // Refresh the UI
+    CloudSyncService().backupDataToCloud(); // Auto-sync
 
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -76,6 +78,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
     );
 
     _loadHistory(); // Refresh the UI
+    CloudSyncService().backupDataToCloud(); // Auto-sync
   }
 
   @override
