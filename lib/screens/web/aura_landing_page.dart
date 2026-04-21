@@ -16,7 +16,7 @@ class AuraLandingPage extends StatefulWidget {
   State<AuraLandingPage> createState() => _AuraLandingPageState();
 }
 
-class _AuraLandingPageState extends State<AuraLandingPage> {
+class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProviderStateMixin {
   int _currentIndex = 0; // 0 = Home, 1 = Upload, 2 = Dashboard, 3 = Alerts (mobile only text)
 
   List<Subject>? _parsedSubjects;
@@ -24,6 +24,23 @@ class _AuraLandingPageState extends State<AuraLandingPage> {
   Map<String, String>? _reportMeta;
   double _overallTarget = 75.0;
   double _subjectTarget = 70.0;
+
+  late AnimationController _bgAnimController;
+
+  @override
+  void initState() {
+    super.initState();
+    _bgAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 15),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _bgAnimController.dispose();
+    super.dispose();
+  }
 
   void _onNavTap(int index) {
     setState(() {
@@ -39,6 +56,56 @@ class _AuraLandingPageState extends State<AuraLandingPage> {
       backgroundColor: isDark ? const Color(0xFF020617) : const Color(0xFFF1F5F9),
       body: Stack(
         children: [
+          // Ambient Background Shapes
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _bgAnimController,
+              builder: (context, child) {
+                final animValue = _bgAnimController.value;
+                return Stack(
+                  children: [
+                    Positioned(
+                      top: -150 + (animValue * 80),
+                      right: -100 - (animValue * 60),
+                      child: Container(
+                        width: 500,
+                        height: 500,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              isDark ? const Color(0xFF6366F1).withOpacity(0.15) : const Color(0xFF6366F1).withOpacity(0.08),
+                              Colors.transparent,
+                            ],
+                            stops: const [0.0, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: MediaQuery.of(context).size.height * 0.4 - (animValue * 60),
+                      left: -200 + (animValue * 80),
+                      child: Container(
+                        width: 600,
+                        height: 600,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: RadialGradient(
+                            colors: [
+                              isDark ? const Color(0xFF8B5CF6).withOpacity(0.1) : const Color(0xFF8B5CF6).withOpacity(0.05),
+                              Colors.transparent,
+                            ],
+                            stops: const [0.0, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          
           // Main Canvas
           Column(
             children: [
@@ -246,7 +313,7 @@ class _AuraLandingPageState extends State<AuraLandingPage> {
               _bottomNavItem(Icons.home_rounded, 'Home', 0, isDark),
               _bottomNavItem(Icons.cloud_upload_rounded, 'Upload', 1, isDark),
               if (_parsedSubjects != null)
-                _bottomNavItem(Icons.dashboard_rounded, 'Stats', 2, isDark),
+                _bottomNavItem(Icons.dashboard_rounded, 'Dashboard', 2, isDark),
             ],
           ),
         ),

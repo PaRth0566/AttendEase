@@ -652,7 +652,7 @@ class AuraAIDashboard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: isDark ? Colors.red.withOpacity(0.1) : Colors.red.shade50,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: isDark ? Colors.red.withOpacity(0.3) : Colors.red.shade200,
         ),
