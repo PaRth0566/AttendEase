@@ -11,7 +11,7 @@ import 'screens/root/root_screen.dart';
 import 'screens/setup/attendance_criteria_screen.dart';
 import 'screens/setup/basic_info_screen.dart';
 import 'screens/setup/setup_choice_screen.dart';
-import 'screens/web/web_dashboard_screen.dart';
+import 'screens/web/aura_landing_page.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
 import 'database/db_helper.dart';
@@ -94,7 +94,7 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
 
     // Web: always start on the marketing/AI landing page
     if (kIsWeb) {
-      return const WebDashboardScreen();
+      return const AuraLandingPage();
     }
     
     // Android: Always start on the Auth screen

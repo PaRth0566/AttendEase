@@ -32,6 +32,7 @@ dependencies:
   http: ^1.6.0
   url_launcher: ^6.3.2
   syncfusion_flutter_pdf: ^33.1.49
+  desktop_drop: ^0.7.1
 
 dev_dependencies:
   flutter_test:

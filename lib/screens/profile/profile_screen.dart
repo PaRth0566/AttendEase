@@ -19,7 +19,7 @@ import '../setup/add_subjects_screen.dart';
 import '../setup/attendance_criteria_screen.dart';
 import '../setup/basic_info_screen.dart';
 import '../setup/timetable_setup_screen.dart';
-import '../web/web_dashboard_screen.dart';
+import '../web/aura_landing_page.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -139,7 +139,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 rootContext,
                 MaterialPageRoute(
                   builder: (context) => kIsWeb
-                      ? const WebDashboardScreen()
+                      ? const AuraLandingPage()
                       : const LoginScreen(),
                 ),
                 (route) => false,
