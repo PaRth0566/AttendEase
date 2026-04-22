@@ -1,6 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../services/cloud_sync_service.dart';
 import '../../theme/theme_provider.dart';
 import '../../models/subject.dart';
 import '../auth/login_screen.dart';
@@ -22,6 +25,7 @@ class AuraLandingPage extends StatefulWidget {
 
 class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProviderStateMixin {
   late int _currentIndex; // 0 = Home, 1 = Upload, 2 = Dashboard, 3 = Alerts (mobile only text)
+  int _refreshKey = 0; // forces tab content rebuild on refresh
 
   List<Subject>? _parsedSubjects;
   Map<int, Map<String, int>>? _parsedStats;
@@ -39,6 +43,26 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
       vsync: this,
       duration: const Duration(seconds: 15),
     )..repeat(reverse: true);
+    // Restore the last-viewed tab after a browser refresh
+    _restoreTabIndex();
+  }
+
+  /// Reads the saved tab index from storage and jumps to it.
+  Future<void> _restoreTabIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getInt('web_tab_index') ?? 0;
+    // Only restore tabs 0 (Home) and 1 (Upload). Dashboard (2) requires
+    // in-memory parsed data which won't survive a refresh, so fall back to Upload.
+    final restoredIndex = saved == 2 ? 1 : saved;
+    if (mounted && restoredIndex != _currentIndex) {
+      setState(() => _currentIndex = restoredIndex);
+    }
+  }
+
+  /// Saves the current tab index so a browser refresh can restore it.
+  Future<void> _saveTabIndex(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('web_tab_index', index);
   }
 
   @override
@@ -51,6 +75,32 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
     setState(() {
       _currentIndex = index;
     });
+    _saveTabIndex(index); // persist so browser refresh restores this tab
+  }
+
+  /// Pull-to-refresh handler: syncs cloud data and rebuilds current tab.
+  Future<void> _handleRefresh() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      await CloudSyncService().restoreDataFromCloud();
+    }
+    if (mounted) {
+      setState(() {
+        _refreshKey++; // force tab content to rebuild
+      });
+    }
+  }
+
+  /// Cycles the theme: system → light → dark → system.
+  void _cycleTheme() {
+    final current = themeProvider.themeMode;
+    if (current == ThemeMode.system) {
+      themeProvider.setThemeMode(ThemeMode.light);
+    } else if (current == ThemeMode.light) {
+      themeProvider.setThemeMode(ThemeMode.dark);
+    } else {
+      themeProvider.setThemeMode(ThemeMode.system);
+    }
   }
 
   @override
@@ -119,9 +169,14 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
               
               // Scrollable Content Region
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.only(bottom: 100), // padding for mobile nav
-                  child: _buildCurrentTab(isDark),
+                child: RefreshIndicator(
+                  onRefresh: _handleRefresh,
+                  color: const Color(0xFF6366F1),
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: 100), // padding for mobile nav
+                    child: _buildCurrentTab(isDark),
+                  ),
                 ),
               ),
             ],
@@ -144,6 +199,7 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
     switch (_currentIndex) {
       case 1:
         return AuraUploadConfig(
+          key: ValueKey('upload_$_refreshKey'),
           onConfigured: (subjects, stats, meta, overall, subject) {
             setState(() {
               _parsedSubjects = subjects;
@@ -158,6 +214,7 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
       case 2:
         if (_parsedSubjects != null && _parsedStats != null) {
           return AuraAIDashboard(
+            key: ValueKey('dashboard_$_refreshKey'),
             subjects: _parsedSubjects!,
             attendanceStats: _parsedStats!,
             overallTarget: _overallTarget,
@@ -165,7 +222,7 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
             reportMeta: _reportMeta,
           );
         }
-        return const ProfileScreen();
+        return ProfileScreen(key: ValueKey('profile_$_refreshKey'));
       case 0:
       default:
         return _buildHomeTab(isDark);
@@ -210,32 +267,38 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
               // Left Section: Brand + Nav
               Row(
                 children: [
-                  // Brand
-                  Row(
-                    children: [
-                      Image.asset('assets/icon/app_icon2.png',
-                          width: 32,
-                          height: 32,
-                          errorBuilder: (c, e, s) => Icon(Icons.school,
-                              color: isDark
-                                  ? const Color(0xFFA5B4FC)
-                                  : const Color(0xFF4F46E5))),
-                      const SizedBox(width: 12),
-                      Text(
-                        'AttendEase',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: -0.5,
-                          foreground: Paint()
-                            ..shader = LinearGradient(
-                              colors: isDark
-                                  ? [const Color(0xFFA5B4FC), const Color(0xFFC7D2FE)]
-                                  : [const Color(0xFF4F46E5), const Color(0xFF7C3AED)],
-                            ).createShader(const Rect.fromLTWH(0, 0, 150, 40)),
-                        ),
+                  // Brand — tapping returns to Home
+                  GestureDetector(
+                    onTap: () => _onNavTap(0),
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: Row(
+                        children: [
+                          Image.asset('assets/icon/app_icon2.png',
+                              width: 32,
+                              height: 32,
+                              errorBuilder: (c, e, s) => Icon(Icons.school,
+                                  color: isDark
+                                      ? const Color(0xFFA5B4FC)
+                                      : const Color(0xFF4F46E5))),
+                          const SizedBox(width: 12),
+                          Text(
+                            'AttendEase',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.5,
+                              foreground: Paint()
+                                ..shader = LinearGradient(
+                                  colors: isDark
+                                      ? [const Color(0xFFA5B4FC), const Color(0xFFC7D2FE)]
+                                      : [const Color(0xFF4F46E5), const Color(0xFF7C3AED)],
+                                ).createShader(const Rect.fromLTWH(0, 0, 150, 40)),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
 
                   // Desktop Nav
@@ -256,18 +319,27 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                 ],
               ),
 
-              // Trailing (Theme Toggle)
+              // Trailing — 3-way theme toggle: system → light → dark → system
               Row(
                 children: [
-                  IconButton(
-                    onPressed: () => themeProvider.toggleTheme(!isDark),
-                    icon: Icon(
-                      isDark
-                          ? Icons.light_mode_rounded
-                          : Icons.dark_mode_rounded,
-                      color: isDark
-                          ? const Color(0xFFC7D2FE)
-                          : const Color(0xFF6366F1),
+                  Tooltip(
+                    message: themeProvider.themeMode == ThemeMode.system
+                        ? 'Theme: System (auto)'
+                        : themeProvider.themeMode == ThemeMode.light
+                            ? 'Theme: Light'
+                            : 'Theme: Dark',
+                    child: IconButton(
+                      onPressed: _cycleTheme,
+                      icon: Icon(
+                        themeProvider.themeMode == ThemeMode.system
+                            ? Icons.brightness_auto_rounded
+                            : themeProvider.themeMode == ThemeMode.light
+                                ? Icons.light_mode_rounded
+                                : Icons.dark_mode_rounded,
+                        color: isDark
+                            ? const Color(0xFFC7D2FE)
+                            : const Color(0xFF6366F1),
+                      ),
                     ),
                   ),
                 ],

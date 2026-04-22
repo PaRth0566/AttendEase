@@ -55,7 +55,8 @@ class AppScrollBehavior extends MaterialScrollBehavior {
   }
 }
 
-class _AttendEaseAppState extends State<AttendEaseApp> {
+class _AttendEaseAppState extends State<AttendEaseApp>
+    with WidgetsBindingObserver {
   // CACHE THE FUTURE: This stops the app from redirecting when the theme changes!
   late Future<Widget> _initialScreen;
 
@@ -63,22 +64,31 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
   void initState() {
     super.initState();
     _initialScreen = _getInitialScreen();
+    // Listen for OS-level brightness changes so ThemeMode.system reacts live
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  /// Called by Flutter whenever the platform brightness changes (e.g. the user
+  /// switches between light and dark mode in their OS settings).
+  @override
+  void didChangePlatformBrightness() {
+    super.didChangePlatformBrightness();
+    // Delegates to ThemeProvider which only fires if we're in system mode.
+    themeProvider.onPlatformBrightnessChanged();
   }
 
   Future<Widget> _getInitialScreen() async {
     if (kIsWeb) {
-      // Web: Check auth state on every load (including page refresh).
-      // If the user is already signed in, restore them to the Upload tab
-      // so a browser refresh doesn't eject them back to the Home/landing tab.
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        // Logged-in: start on the Upload tab (index 1) so they can
-        // immediately use the app. The landing page manages its own
-        // in-memory navigation state from there.
-        return const AuraLandingPage(initialIndex: 1);
-      }
-      // Not logged in: show the landing/home tab as usual
-      return const AuraLandingPage();
+      // Web: Always start on the Home tab (index 0) — the landing page.
+      // This ensures a page refresh never redirects the user to a different tab.
+      // The AuraLandingPage handles its own in-app navigation from there.
+      return const AuraLandingPage(initialIndex: 0);
     }
 
     final user = FirebaseAuth.instance.currentUser;

@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
-import '../setup/basic_info_screen.dart';
+import '../setup/setup_choice_screen.dart';
 import 'login_screen.dart';
 
 class SignupScreen extends StatefulWidget {
@@ -94,7 +94,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const BasicInfoScreen(isEditMode: false),
+                      builder: (_) => const SetupChoiceScreen(),
                     ),
                   );
                 },

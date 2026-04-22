@@ -40,6 +40,14 @@ class ThemeProvider extends ChangeNotifier {
     setThemeMode(isOn ? ThemeMode.dark : ThemeMode.light);
   }
 
+  /// Called when the OS-level brightness changes so that ThemeMode.system
+  /// widgets rebuild immediately without needing a restart.
+  void onPlatformBrightnessChanged() {
+    if (_themeMode == ThemeMode.system) {
+      notifyListeners();
+    }
+  }
+
   // ── helpers ──────────────────────────────────────────────
 
   static ThemeMode _modeFromString(String? value) {

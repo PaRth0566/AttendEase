@@ -28,12 +28,19 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
   }
 
   Future<void> _loadSavedData() async {
+    // Pre-fill defaults first — the user can always edit them
+    overallController.text = '75';
+    subjectController.text = '70';
+
+    // Override with previously saved values if available
     final prefs = await SharedPreferences.getInstance();
     final overall = prefs.getDouble('overall_required_attendance');
     final subject = prefs.getDouble('subject_required_attendance');
 
-    if (overall != null) overallController.text = overall.toString();
-    if (subject != null) subjectController.text = subject.toString();
+    if (mounted) {
+      if (overall != null) overallController.text = overall.toStringAsFixed(overall.truncateToDouble() == overall ? 0 : 1);
+      if (subject != null) subjectController.text = subject.toStringAsFixed(subject.truncateToDouble() == subject ? 0 : 1);
+    }
   }
 
   Future<void> _saveData() async {
@@ -142,10 +149,19 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: theme.textTheme.bodyLarge?.color, // ✅ Dynamic Title
+                color: theme.textTheme.bodyLarge?.color,
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 8),
+            Text(
+              'Default values are pre-filled — edit them to match your college requirements.',
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 24),
 
             Text(
               'Overall Attendance Required (%)',
@@ -163,8 +179,8 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
               ),
               style: TextStyle(
                 color: theme.textTheme.bodyLarge?.color,
-              ), // ✅ Typing color
-              decoration: _inputStyle('e.g. 75', theme),
+              ),
+              decoration: _inputStyle('e.g. 75 (default)', theme),
             ),
 
             const SizedBox(height: 24),
@@ -185,8 +201,8 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
               ),
               style: TextStyle(
                 color: theme.textTheme.bodyLarge?.color,
-              ), // ✅ Typing color
-              decoration: _inputStyle('e.g. 70', theme),
+              ),
+              decoration: _inputStyle('e.g. 70 (default)', theme),
             ),
 
             const Spacer(),
