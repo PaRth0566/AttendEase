@@ -4,8 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
 import '../../models/subject.dart';
+import '../../services/cloud_sync_service.dart';
 import '../report/subject_detail_screen.dart';
-import 'refresh_pdf_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final List<Subject>? overrideSubjects;
@@ -92,6 +92,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Pull-to-refresh: bidirectional cloud sync then reload
+  Future<void> _syncAndReload() async {
+    await CloudSyncService().syncBidirectional();
+    await _loadDashboardData();
   }
 
   Map<String, dynamic> _getPredictiveInsight(
@@ -208,11 +214,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 700),
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(
-              horizontal: MediaQuery.of(context).size.width > 600 ? 32 : 16,
-              vertical: 16,
-            ),
+          child: RefreshIndicator(
+            onRefresh: _syncAndReload,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: EdgeInsets.symmetric(
+                horizontal: MediaQuery.of(context).size.width > 600 ? 32 : 16,
+                vertical: 16,
+              ),
             child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -431,7 +440,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 24),
           ],
         ),
-      ),
+            ),
+          ),
         ),
       ),
     );

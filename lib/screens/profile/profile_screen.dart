@@ -92,6 +92,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  /// Pull-to-refresh: bidirectional cloud sync then reload
+  Future<void> _syncAndReload() async {
+    await CloudSyncService().syncBidirectional();
+    await _loadProfileData();
+  }
+
   Future<void> _handleLogout() async {
     final rootContext = context; // capture before dialog opens
     showDialog(
@@ -168,11 +174,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           : Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 600),
-                child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(
-                horizontal: MediaQuery.of(context).size.width > 600 ? 32 : 16,
-                vertical: 16,
-              ),
+                child: RefreshIndicator(
+                  onRefresh: _syncAndReload,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: MediaQuery.of(context).size.width > 600 ? 32 : 16,
+                      vertical: 16,
+                    ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -286,27 +295,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                   ),
 
-                  _profileTile(
-                    icon: themeProvider.themeMode == ThemeMode.dark
-                        ? Icons.dark_mode_rounded
-                        : themeProvider.themeMode == ThemeMode.light
-                            ? Icons.light_mode_rounded
-                            : Icons.brightness_auto_rounded,
-                    title: 'App Theme',
-                    trailing: Text(
-                      themeProvider.themeMode == ThemeMode.dark
-                          ? 'Dark Mode'
-                          : themeProvider.themeMode == ThemeMode.light
-                              ? 'Light Mode'
-                              : 'System Default',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                    onTap: () => _showThemePicker(context),
-                  ),
+                  _themeToggleTile(),
 
                   _profileTile(
                     icon: Icons.person_rounded,
@@ -425,65 +414,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   const SizedBox(height: 24),
                 ],
               ),
-            ),
+                  ),
+                ),
               ),
             ),
     );
   }
 
-  void _showThemePicker(BuildContext context) {
+  Widget _themeToggleTile() {
     final theme = Theme.of(context);
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: theme.scaffoldBackgroundColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Select App Theme',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: theme.textTheme.bodyLarge?.color,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _themeOptionTile(context, 'System Default', ThemeMode.system, Icons.settings),
-                _themeOptionTile(context, 'Light Mode', ThemeMode.light, Icons.wb_sunny),
-                _themeOptionTile(context, 'Dark Mode', ThemeMode.dark, Icons.nightlight_round),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+    final isDark = themeProvider.themeMode == ThemeMode.dark;
 
-  Widget _themeOptionTile(BuildContext context, String title, ThemeMode mode, IconData icon) {
-    final theme = Theme.of(context);
-    final isSelected = themeProvider.themeMode == mode;
-    return ListTile(
-      leading: Icon(icon, color: isSelected ? theme.colorScheme.primary : theme.iconTheme.color),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          color: isSelected ? theme.colorScheme.primary : theme.textTheme.bodyLarge?.color,
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 12),
+      color: theme.cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.dividerColor),
+      ),
+      child: ListTile(
+        leading: Icon(
+          isDark ? Icons.nightlight_round : Icons.wb_sunny_rounded,
+          color: theme.colorScheme.primary,
+        ),
+        title: const Text(
+          'Dark Mode',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        trailing: Switch.adaptive(
+          value: isDark,
+          activeColor: theme.colorScheme.primary,
+          onChanged: (bool value) {
+            themeProvider.setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
+            setState(() {});
+          },
         ),
       ),
-      trailing: isSelected ? Icon(Icons.check_circle, color: theme.colorScheme.primary) : null,
-      onTap: () {
-        themeProvider.setThemeMode(mode);
-        Navigator.pop(context);
-        setState(() {}); // refresh profile screen to update the tile text
-      },
     );
   }
 

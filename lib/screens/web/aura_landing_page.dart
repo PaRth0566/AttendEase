@@ -10,14 +10,18 @@ import 'aura_ai_dashboard.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AuraLandingPage extends StatefulWidget {
-  const AuraLandingPage({super.key});
+  /// Which tab to show on first load.
+  /// 0 = Home (default), 1 = Upload, 2 = Dashboard
+  final int initialIndex;
+
+  const AuraLandingPage({super.key, this.initialIndex = 0});
 
   @override
   State<AuraLandingPage> createState() => _AuraLandingPageState();
 }
 
 class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProviderStateMixin {
-  int _currentIndex = 0; // 0 = Home, 1 = Upload, 2 = Dashboard, 3 = Alerts (mobile only text)
+  late int _currentIndex; // 0 = Home, 1 = Upload, 2 = Dashboard, 3 = Alerts (mobile only text)
 
   List<Subject>? _parsedSubjects;
   Map<int, Map<String, int>>? _parsedStats;
@@ -30,6 +34,7 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.initialIndex;
     _bgAnimController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 15),

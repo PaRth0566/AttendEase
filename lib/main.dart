@@ -66,10 +66,18 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
   }
 
   Future<Widget> _getInitialScreen() async {
-    // Web: ALWAYS start on the Aura Landing Page regardless of auth state.
-    // The landing page has its own navigation for Upload/Dashboard/Sign-In.
-    // This prevents web refresh from routing to setup/criteria screens.
     if (kIsWeb) {
+      // Web: Check auth state on every load (including page refresh).
+      // If the user is already signed in, restore them to the Upload tab
+      // so a browser refresh doesn't eject them back to the Home/landing tab.
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        // Logged-in: start on the Upload tab (index 1) so they can
+        // immediately use the app. The landing page manages its own
+        // in-memory navigation state from there.
+        return const AuraLandingPage(initialIndex: 1);
+      }
+      // Not logged in: show the landing/home tab as usual
       return const AuraLandingPage();
     }
 
@@ -96,7 +104,7 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
 
       return const RootScreen();
     }
-    
+
     // Android: Always start on the Auth screen
     return const LoginScreen();
   }

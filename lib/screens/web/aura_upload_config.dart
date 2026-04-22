@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -25,8 +26,101 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
   String? _errorMessage;
   String? _fileName;
 
+  // ── Progress animation state ──────────────────────────────
+  int _progressStep = 0;
+  double _progressValue = 0.0;
+  bool _isHolding = false;      // true when animation has caught up to API
+  int _holdingHintIndex = 0;    // cycles through holding hints
+  Timer? _holdingHintTimer;
+  bool _isStopped = false;      // guard so delayed futures don't fire after done
+
+  /// Steps: (icon, title, subtitle, dwell-ms before moving to next)
+  static const _progressSteps = [
+    // First step absorbs server cold-start (free-tier ~15 s)
+    (Icons.cloud_upload_rounded,     'Uploading PDF',
+        'Securely transferring your report…',          5000),
+    (Icons.document_scanner_rounded, 'Reading document',
+        'Extracting text and structure…',               8000),
+    (Icons.calculate_rounded,        'Calculating lectures',
+        'Counting attended & total classes…',           7000),
+    (Icons.bar_chart_rounded,        'Building subject stats',
+        'Aggregating per-subject data…',                7000),
+    (Icons.auto_graph_rounded,       'Running predictions',
+        'Estimating future attendance needs…',          7000),
+    // ── Hold here until API responds ──────────────────────
+    (Icons.psychology_rounded,       'Analysing attendance',
+        'AI is scanning every lecture row…',            0),
+    // Final step — triggered by _stopProgressAnimation()
+    (Icons.fact_check_rounded,       'Finalising report',
+        'Packaging your personalised insights…',        0),
+  ];
+
+  /// Hints cycled every 4 s while waiting for the API after animation catches up
+  static const _holdingHints = [
+    'Still processing — complex reports take time…',
+    'AI is cross-referencing attendance records…',
+    'Server is working hard, almost there…',
+    'Hang tight! Generating your personalised insights…',
+    'Large PDFs may take a minute — please don\'t close the tab…',
+  ];
+
+  /// Runs each step for its own dwell duration sequentially.
+  Future<void> _startProgressAnimation() async {
+    _progressStep = 0;
+    _progressValue = 0.0;
+    _isHolding = false;
+    _holdingHintIndex = 0;
+    _isStopped = false;
+    if (mounted) setState(() {});
+
+    // Advance through steps until the penultimate one (hold step)
+    final holdAt = _progressSteps.length - 2;
+    for (int i = 1; i <= holdAt; i++) {
+      final dwell = _progressSteps[i - 1].$4;
+      await Future.delayed(Duration(milliseconds: dwell));
+      if (_isStopped || !mounted) return;
+      setState(() {
+        _progressStep = i;
+        _progressValue = i / (_progressSteps.length - 1);
+      });
+    }
+
+    // We've caught up — switch to holding/indeterminate state
+    if (_isStopped || !mounted) return;
+    setState(() => _isHolding = true);
+
+    // Cycle hint text every 4 s while holding
+    _holdingHintTimer = Timer.periodic(const Duration(milliseconds: 4000), (t) {
+      if (!mounted || _isStopped) { t.cancel(); return; }
+      setState(() {
+        _holdingHintIndex =
+            (_holdingHintIndex + 1) % _holdingHints.length;
+      });
+    });
+  }
+
+  void _stopProgressAnimation() {
+    _isStopped = true;
+    _holdingHintTimer?.cancel();
+    _holdingHintTimer = null;
+    setState(() {
+      _isHolding = false;
+      _progressStep = _progressSteps.length - 1;
+      _progressValue = 1.0;
+    });
+  }
+
   final TextEditingController _overallTargetCtrl = TextEditingController(text: '75');
   final TextEditingController _subjectTargetCtrl = TextEditingController(text: '70');
+
+  @override
+  void dispose() {
+    _isStopped = true;
+    _holdingHintTimer?.cancel();
+    _overallTargetCtrl.dispose();
+    _subjectTargetCtrl.dispose();
+    super.dispose();
+  }
 
   List<Subject>? _parsedSubjects;
   Map<int, Map<String, int>>? _parsedStats;
@@ -69,6 +163,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
         _reportMeta = null;
         _fileName = name;
       });
+      _startProgressAnimation();
 
       final request = http.MultipartRequest(
         'POST',
@@ -128,34 +223,40 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
               _reportMeta = meta;
               _isLoading = false;
             });
+            _stopProgressAnimation();
             
             if (widget.onConfigured != null) {
               widget.onConfigured!(extractedSubjects, extractedStats, meta, _overallTarget, _subjectTarget);
             }
           } catch (parseError) {
+            _stopProgressAnimation();
             setState(() {
               _errorMessage = 'Failed to parse AI output: $parseError';
               _isLoading = false;
             });
           }
         } else {
+          _stopProgressAnimation();
           setState(() {
             _errorMessage = data['error'] as String? ?? 'Unknown backend error.';
             _isLoading = false;
           });
         }
       } else {
+        _stopProgressAnimation();
         setState(() {
           _errorMessage = 'Server returned ${response.statusCode}: ${response.body}';
           _isLoading = false;
         });
       }
     } on http.ClientException catch (e) {
+      _stopProgressAnimation();
       setState(() {
         _isLoading = false;
         _errorMessage = 'Network error: ${e.message}';
       });
     } catch (e) {
+      _stopProgressAnimation();
       setState(() {
         _isLoading = false;
         _errorMessage = 'Unexpected error: $e';
@@ -183,7 +284,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
       padding: EdgeInsets.only(
         left: isMobile ? 16 : 24,
         right: isMobile ? 16 : 24,
-        top: isMobile ? 8 : 24,
+        top: isMobile ? 24 : 24,
         bottom: isMobile ? 16 : 24,
       ),
       child: Center(
@@ -499,9 +600,146 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (_isLoading)
-                   const CircularProgressIndicator(color: Color(0xFFA5B4FC))
-                else ...[
+                if (_isLoading) ...[
+                  // ── Animated progress UI ──────────────────────────
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: _progressValue),
+                    duration: const Duration(milliseconds: 700),
+                    curve: Curves.easeInOut,
+                    builder: (context, value, _) {
+                      return Column(
+                        children: [
+                          // Step icon
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 400),
+                            transitionBuilder: (child, anim) =>
+                                FadeTransition(opacity: anim,
+                                  child: ScaleTransition(scale: anim, child: child)),
+                            child: Container(
+                              key: ValueKey(_progressStep),
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? const Color(0xFF312E81).withOpacity(0.4)
+                                    : const Color(0xFFEEF2FF),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: isDark
+                                      ? const Color(0xFF818CF8).withOpacity(0.4)
+                                      : const Color(0xFFC7D2FE),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF6366F1)
+                                        .withOpacity(isDark ? 0.3 : 0.15),
+                                    blurRadius: 40,
+                                  )
+                                ],
+                              ),
+                              child: Icon(
+                                _progressSteps[_progressStep].$1,
+                                size: isMobile ? 40 : 56,
+                                color: isDark
+                                    ? const Color(0xFFA5B4FC)
+                                    : const Color(0xFF4F46E5),
+                              ),
+                            ),
+                          ),
+                          SizedBox(height: isMobile ? 20 : 28),
+
+                          // Step title
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 350),
+                            child: Text(
+                              _progressSteps[_progressStep].$2,
+                              key: ValueKey('title_$_progressStep'),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: isMobile ? 18 : 22,
+                                fontWeight: FontWeight.w700,
+                                color: isDark
+                                    ? const Color(0xFFEEF2FF)
+                                    : const Color(0xFF1E293B),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+
+                          // Step subtitle — holding hint cycles; otherwise fixed
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 400),
+                            child: Text(
+                              _isHolding
+                                  ? _holdingHints[_holdingHintIndex]
+                                  : _progressSteps[_progressStep].$3,
+                              key: ValueKey(_isHolding
+                                  ? 'hint_$_holdingHintIndex'
+                                  : 'sub_$_progressStep'),
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: isMobile ? 12 : 14,
+                                color: isDark
+                                    ? const Color(0xFFC7D2FE).withOpacity(0.7)
+                                    : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+
+                          SizedBox(height: isMobile ? 24 : 32),
+
+                          // Progress bar — indeterminate while holding, determinate otherwise
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: _isHolding
+                                ? LinearProgressIndicator(
+                                    minHeight: 6,
+                                    backgroundColor: isDark
+                                        ? const Color(0xFF312E81).withOpacity(0.4)
+                                        : const Color(0xFFE0E7FF),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      isDark
+                                          ? const Color(0xFF818CF8)
+                                          : const Color(0xFF4F46E5),
+                                    ),
+                                  )
+                                : LinearProgressIndicator(
+                                    value: value,
+                                    minHeight: 6,
+                                    backgroundColor: isDark
+                                        ? const Color(0xFF312E81).withOpacity(0.4)
+                                        : const Color(0xFFE0E7FF),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      isDark
+                                          ? const Color(0xFF818CF8)
+                                          : const Color(0xFF4F46E5),
+                                    ),
+                                  ),
+                          ),
+                          const SizedBox(height: 8),
+
+                          // Status label
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 300),
+                            child: Text(
+                              _isHolding
+                                  ? 'Waiting for server response…'
+                                  : 'Step ${_progressStep + 1} of ${_progressSteps.length}',
+                              key: ValueKey(_isHolding),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: isDark
+                                    ? const Color(0xFFA5B4FC).withOpacity(0.6)
+                                    : const Color(0xFF94A3B8),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ] else ...[
+                  // ── Idle upload UI ────────────────────────────────
                   Container(
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(

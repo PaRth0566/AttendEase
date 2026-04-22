@@ -93,28 +93,48 @@ class CloudSyncService {
       final db = await DBHelper.instance.database;
       final prefs = await SharedPreferences.getInstance();
 
+      // Save the user's current local semester BEFORE restore so we can
+      // protect it from being overwritten by an older cloud value.
+      final int? localSemesterBeforeRestore = prefs.getInt('semester');
+      debugPrint('☁️ [Sync] Semester before restore: $localSemesterBeforeRestore (manual=${prefs.getBool('manual_semester') ?? false})');
+
       debugPrint('☁️ [Sync] Starting Cloud Restoration...');
+
+      // Keys that must always be stored as double (even when Firestore returns int)
+      const _doubleKeys = {'overall_required_attendance', 'subject_required_attendance'};
+
+      // Keys that we intentionally skip during bulk restore and handle separately
+      // 'semester' is protected so a stale cloud value doesn't overwrite the
+      // locally-selected semester.
+      const _skipKeys = {'semester'};
 
       // 1. Restore SharedPreferences (Name, Course, Dates)
       final Map<String, dynamic> prefsData = data['preferences'] ?? {};
       if (prefsData.isNotEmpty) {
         for (var entry in prefsData.entries) {
+          final key = entry.key;
           final value = entry.value;
           if (value == null) continue;
 
+          // Skip protected keys — handled separately below
+          if (_skipKeys.contains(key)) continue;
+
           if (value is String) {
-            await prefs.setString(entry.key, value);
+            await prefs.setString(key, value);
           } else if (value is bool) {
-            await prefs.setBool(entry.key, value);
+            await prefs.setBool(key, value);
+          } else if (_doubleKeys.contains(key)) {
+            // Always store known-double keys as double regardless of Firestore type
+            await prefs.setDouble(key, (value as num).toDouble());
           } else if (value is int) {
-            await prefs.setInt(entry.key, value);
+            await prefs.setInt(key, value);
           } else if (value is double) {
-            await prefs.setDouble(entry.key, value);
+            await prefs.setDouble(key, value);
           } else if (value is num) {
             if (value == value.toInt()) {
-              await prefs.setInt(entry.key, value.toInt());
+              await prefs.setInt(key, value.toInt());
             } else {
-              await prefs.setDouble(entry.key, value.toDouble());
+              await prefs.setDouble(key, value.toDouble());
             }
           }
         }
@@ -149,27 +169,46 @@ class CloudSyncService {
         await db.insert('attendance_records', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
       }
 
-      // 4. Robust Semester Restoration
-      // If the cloud didn't have a 'semester' key, try to detect it from restored subjects.
-      // Do NOT force it to 1 if we have other subjects!
-      if (!prefsData.containsKey('semester') || prefs.getInt('semester') == null) {
-        final semResult = await db.rawQuery(
-          'SELECT DISTINCT semester FROM subjects ORDER BY semester DESC LIMIT 1',
-        );
-        if (semResult.isNotEmpty) {
-          final detectedSem = semResult.first['semester'];
-          int? target;
-          if (detectedSem is int) target = detectedSem;
-          else if (detectedSem is num) target = detectedSem.toInt();
-          
-          if (target != null) {
-            await prefs.setInt('semester', target);
-            debugPrint('☁️ [Sync] Auto-detected semester: $target');
-          }
+      // 4. Robust Semester Resolution
+      // Priority order:
+      //   1. Local semester the user had selected before restore (highest priority)
+      //   2. Semester from the cloud backup (if local had none)
+      //   3. Auto-detected from the highest semester in the restored subjects
+      //   4. Default to 1 only if no subjects exist at all
+      if (localSemesterBeforeRestore != null) {
+        // User already had a semester selected locally — keep it.
+        await prefs.setInt('semester', localSemesterBeforeRestore);
+        debugPrint('☁️ [Sync] Kept local semester: $localSemesterBeforeRestore');
+      } else {
+        // No local semester — try to use cloud value first
+        final cloudSem = prefsData['semester'];
+        int? cloudSemInt;
+        if (cloudSem is int) cloudSemInt = cloudSem;
+        else if (cloudSem is num) cloudSemInt = cloudSem.toInt();
+
+        if (cloudSemInt != null && cloudSemInt >= 1) {
+          await prefs.setInt('semester', cloudSemInt);
+          debugPrint('☁️ [Sync] Restored semester from cloud: $cloudSemInt');
         } else {
-           // Only default to 1 if we literally have NO subjects in ANY semester
-           await prefs.setInt('semester', 1);
-           debugPrint('☁️ [Sync] No subjects found, defaulting to Semester 1');
+          // Fall back: detect from the highest semester present in subjects
+          final semResult = await db.rawQuery(
+            'SELECT DISTINCT semester FROM subjects ORDER BY semester DESC LIMIT 1',
+          );
+          if (semResult.isNotEmpty) {
+            final detectedSem = semResult.first['semester'];
+            int? target;
+            if (detectedSem is int) target = detectedSem;
+            else if (detectedSem is num) target = detectedSem.toInt();
+
+            if (target != null) {
+              await prefs.setInt('semester', target);
+              debugPrint('☁️ [Sync] Auto-detected semester from subjects: $target');
+            }
+          } else {
+            // Only default to 1 if we literally have NO subjects
+            await prefs.setInt('semester', 1);
+            debugPrint('☁️ [Sync] No subjects found, defaulting to Semester 1');
+          }
         }
       }
 

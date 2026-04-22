@@ -193,6 +193,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
     CloudSyncService().backupDataToCloud();
   }
 
+  /// Pull-to-refresh: bidirectional cloud sync then reinitialize calendar
+  Future<void> _syncAndReload() async {
+    await CloudSyncService().syncBidirectional();
+    await _initCalendarDates();
+  }
+
   // Opens bottom sheet to add a new attendance record for the selected date
   void _showAddRecordSheet(String? dateKey) {
     if (dateKey == null) return;
@@ -460,9 +466,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 700),
-          child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+          child: RefreshIndicator(
+            onRefresh: _syncAndReload,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
           // Calendar widget
           Container(
             decoration: BoxDecoration(
@@ -762,7 +770,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               ),
           ),
         ],
-      ),
+            ),
+          ),
         ),
       ),
     );
