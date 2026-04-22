@@ -23,9 +23,12 @@ class AttendanceDao {
     final Map<int, Map<String, int>> stats = {};
 
     for (final row in result) {
-      stats[row['subject_id'] as int] = {
-        'attended': (row['attended'] as int?) ?? 0,
-        'total': (row['total'] as int?) ?? 0,
+      final subjectId = row['subject_id'] is num
+          ? (row['subject_id'] as num).toInt()
+          : row['subject_id'] as int;
+      stats[subjectId] = {
+        'attended': row['attended'] is num ? (row['attended'] as num).toInt() : 0,
+        'total': row['total'] is num ? (row['total'] as num).toInt() : 0,
       };
     }
 

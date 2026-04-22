@@ -8,8 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/root/root_screen.dart';
-import 'screens/setup/attendance_criteria_screen.dart';
-import 'screens/setup/basic_info_screen.dart';
 import 'screens/setup/setup_choice_screen.dart';
 import 'screens/web/aura_landing_page.dart';
 import 'theme/app_theme.dart';
@@ -68,6 +66,13 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
   }
 
   Future<Widget> _getInitialScreen() async {
+    // Web: ALWAYS start on the Aura Landing Page regardless of auth state.
+    // The landing page has its own navigation for Upload/Dashboard/Sign-In.
+    // This prevents web refresh from routing to setup/criteria screens.
+    if (kIsWeb) {
+      return const AuraLandingPage();
+    }
+
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       // Check if user has ANY data before allowing them to bypass setup
@@ -90,11 +95,6 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
       }
 
       return const RootScreen();
-    }
-
-    // Web: always start on the marketing/AI landing page
-    if (kIsWeb) {
-      return const AuraLandingPage();
     }
     
     // Android: Always start on the Auth screen
@@ -140,9 +140,8 @@ class _AttendEaseAppState extends State<AttendEaseApp> {
               return const LoginScreen();
             },
           ),
-          routes: {
-            '/attendance-criteria': (_) => const AttendanceCriteriaScreen(),
-          },
+          // No named routes — all navigation is push-based.
+          // This prevents web URL refresh from hitting stale route paths.
         );
       },
     );

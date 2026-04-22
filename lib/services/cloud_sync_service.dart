@@ -111,23 +111,26 @@ class CloudSyncService {
       final List<dynamic> attendanceRecords = data['attendance_records'] ?? [];
 
       for (var subject in subjects) {
+        final sanitized = _sanitizeRow(Map<String, dynamic>.from(subject));
         await db.insert(
           'subjects',
-          Map<String, dynamic>.from(subject),
+          sanitized,
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
       for (var session in timetable) {
+        final sanitized = _sanitizeRow(Map<String, dynamic>.from(session));
         await db.insert(
           'timetable',
-          Map<String, dynamic>.from(session),
+          sanitized,
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
       for (var record in attendanceRecords) {
+        final sanitized = _sanitizeRow(Map<String, dynamic>.from(record));
         await db.insert(
           'attendance_records',
-          Map<String, dynamic>.from(record),
+          sanitized,
           conflictAlgorithm: ConflictAlgorithm.replace,
         );
       }
@@ -215,5 +218,30 @@ class CloudSyncService {
       print("Bidirectional Sync Error: $e");
       return 'error';
     }
+  }
+
+  /// Sanitizes a row from Firestore for safe SQLite insertion.
+  /// Firestore stores all numbers as `num` (or sometimes `int` where `double`
+  /// is expected). SQLite's sqflite driver is strict about types. This method
+  /// ensures integer columns stay int and real columns stay double.
+  Map<String, dynamic> _sanitizeRow(Map<String, dynamic> row) {
+    final sanitized = <String, dynamic>{};
+    for (final entry in row.entries) {
+      final key = entry.key;
+      var value = entry.value;
+
+      if (value is num) {
+        // These columns are REAL in SQLite
+        if (key == 'required_percent') {
+          value = value.toDouble();
+        } else {
+          // All other numeric columns are INTEGER
+          value = value.toInt();
+        }
+      }
+
+      sanitized[key] = value;
+    }
+    return sanitized;
   }
 }

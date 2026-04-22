@@ -9,6 +9,7 @@ import '../../database/attendance_dao.dart';
 import '../../models/subject.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
+import '../setup/attendance_criteria_screen.dart';
 
 class BasicInfoScreen extends StatefulWidget {
   final bool isEditMode;
@@ -304,7 +305,10 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     if (widget.isEditMode) {
       Navigator.pop(context);
     } else {
-      Navigator.pushNamed(context, '/attendance-criteria');
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const AttendanceCriteriaScreen()),
+      );
     }
   }
 

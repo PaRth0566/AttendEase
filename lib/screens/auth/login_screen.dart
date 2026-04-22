@@ -109,28 +109,40 @@ class _LoginScreenState extends State<LoginScreen> {
           // Restore SharedPreferences
           final Map<String, dynamic> prefsData = data['preferences'] ?? {};
           for (var entry in prefsData.entries) {
-            if (entry.value is String) await prefs.setString(entry.key, entry.value);
-            if (entry.value is int) await prefs.setInt(entry.key, entry.value);
-            if (entry.value is double) await prefs.setDouble(entry.key, entry.value);
-            if (entry.value is bool) await prefs.setBool(entry.key, entry.value);
+            final value = entry.value;
+            if (value is String) {
+              await prefs.setString(entry.key, value);
+            } else if (value is bool) {
+              await prefs.setBool(entry.key, value);
+            } else if (value is int) {
+              await prefs.setInt(entry.key, value);
+            } else if (value is double) {
+              await prefs.setDouble(entry.key, value);
+            } else if (value is num) {
+              if (value == value.toInt()) {
+                await prefs.setInt(entry.key, value.toInt());
+              } else {
+                await prefs.setDouble(entry.key, value.toDouble());
+              }
+            }
           }
 
-          // Restore SQLite data
+          // Restore SQLite data (sanitize Firestore num types)
           if (!kIsWeb && db != null) {
             await db.delete('subjects');
             await db.delete('timetable');
             await db.delete('attendance_records');
 
             for (var row in (data['subjects'] as List<dynamic>? ?? [])) {
-              await db.insert('subjects', Map<String, dynamic>.from(row),
+              await db.insert('subjects', _sanitizeRow(Map<String, dynamic>.from(row)),
                   conflictAlgorithm: ConflictAlgorithm.replace);
             }
             for (var row in (data['timetable'] as List<dynamic>? ?? [])) {
-              await db.insert('timetable', Map<String, dynamic>.from(row),
+              await db.insert('timetable', _sanitizeRow(Map<String, dynamic>.from(row)),
                   conflictAlgorithm: ConflictAlgorithm.replace);
             }
             for (var row in (data['attendance_records'] as List<dynamic>? ?? [])) {
-              await db.insert('attendance_records', Map<String, dynamic>.from(row),
+              await db.insert('attendance_records', _sanitizeRow(Map<String, dynamic>.from(row)),
                   conflictAlgorithm: ConflictAlgorithm.replace);
             }
           }
@@ -312,6 +324,24 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     }
+  }
+
+  /// Sanitizes a Firestore row for safe SQLite insertion.
+  Map<String, dynamic> _sanitizeRow(Map<String, dynamic> row) {
+    final sanitized = <String, dynamic>{};
+    for (final entry in row.entries) {
+      final key = entry.key;
+      var value = entry.value;
+      if (value is num) {
+        if (key == 'required_percent') {
+          value = value.toDouble();
+        } else {
+          value = value.toInt();
+        }
+      }
+      sanitized[key] = value;
+    }
+    return sanitized;
   }
 
   @override

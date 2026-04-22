@@ -22,10 +22,14 @@ class Subject {
 
   factory Subject.fromMap(Map<String, dynamic> map) {
     return Subject(
-      id: map['id'],
-      name: map['name'],
-      requiredPercent: map['required_percent'],
-      semester: map['semester'] ?? 1,
+      id: map['id'] is num ? (map['id'] as num).toInt() : map['id'],
+      name: map['name']?.toString() ?? '',
+      requiredPercent: map['required_percent'] is num
+          ? (map['required_percent'] as num).toDouble()
+          : 75.0,
+      semester: map['semester'] is num
+          ? (map['semester'] as num).toInt()
+          : (map['semester'] ?? 1),
     );
   }
 }
