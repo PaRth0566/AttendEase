@@ -76,8 +76,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
     }
   }
 
-  /// Parses a semester string like "Semester III", "sem 3", "3", "iii" etc.
-  int _parseSemesterNumber(String s) {
+  int _parseSemesterNumber(String s, int fallback) {
     final digitMatch = RegExp(r'\b([1-8])\b').firstMatch(s);
     if (digitMatch != null) return int.parse(digitMatch.group(1)!);
     if (RegExp(r'\bviii\b').hasMatch(s)) return 8;
@@ -88,7 +87,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
     if (RegExp(r'\biii\b').hasMatch(s))  return 3;
     if (RegExp(r'\bii\b').hasMatch(s))   return 2;
     if (RegExp(r'\bi\b').hasMatch(s))    return 1;
-    return 1;
+    return fallback;
   }
 
   Future<void> _applyData(Map<String, dynamic> data) async {
@@ -98,7 +97,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
     final semStr = data['semester']?.toString().toLowerCase().trim() ?? '';
     int targetSemester = activeSemester;
     if (semStr.isNotEmpty) {
-       targetSemester = _parseSemesterNumber(semStr);
+       targetSemester = _parseSemesterNumber(semStr, activeSemester);
     }
 
     // Automatically switch the user to the newly uploaded semester

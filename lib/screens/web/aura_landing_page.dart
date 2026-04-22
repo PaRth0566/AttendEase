@@ -431,7 +431,7 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                     ).createShader(const Rect.fromLTWH(0, 0, 400, 100)),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 10),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 640),
                 child: Padding(
@@ -460,7 +460,9 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                     InkWell(
                       onTap: () => _onNavTap(1), // Go to upload
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: isMobile ? 24 : 32, vertical: isMobile ? 12 : 16),
+                        padding: EdgeInsets.symmetric(
+                            horizontal: isMobile ? 22 : 30,
+                            vertical: isMobile ? 10 : 14),
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
                             colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
@@ -476,9 +478,14 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.analytics_rounded, color: Colors.white, size: 20),
-                            const SizedBox(width: 8),
-                            Text('Analyze PDF Report', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: isMobile ? 14 : 16)),
+                            const Icon(Icons.plagiarism_rounded,
+                                color: Colors.white, size: 26),
+                            const SizedBox(width: 6),
+                            Text('Analyze PDF Report',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: isMobile ? 14 : 16)),
                           ],
                         ),
                       ),
@@ -488,7 +495,9 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                         Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
                       },
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: isMobile ? 24 : 32, vertical: isMobile ? 12 : 16),
+                        padding: EdgeInsets.symmetric(
+                            horizontal: isMobile ? 22 : 30,
+                            vertical: isMobile ? 10 : 14),
                         decoration: BoxDecoration(
                            color: isDark ? const Color(0xFF0F172A).withOpacity(0.5) : Colors.white,
                            borderRadius: BorderRadius.circular(12),
@@ -499,7 +508,11 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.login_rounded, color: isDark ? Colors.white : const Color(0xFF0F172A), size: 20),
+                            Icon(Icons.login_rounded,
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF0F172A),
+                                size: 24),
                             const SizedBox(width: 8),
                             Text('Sign In', style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A), fontWeight: FontWeight.w600, fontSize: isMobile ? 14 : 16)),
                           ],
@@ -522,7 +535,7 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
           ),
         ),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         // Disclaimer
         Center(
           child: ConstrainedBox(
@@ -534,7 +547,7 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
               decoration: BoxDecoration(
                 color:
                     isDark ? Colors.red.withOpacity(0.1) : Colors.red.shade50,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: isDark
                       ? Colors.red.withOpacity(0.3)
@@ -612,7 +625,7 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
   Widget _buildFeatureCards(bool isDark, bool isMobile, bool isTablet) {
     final features = [
       (
-        Icons.upload_file_rounded,
+        Icons.document_scanner_rounded,
         'Upload & Analyze',
         'Get a complete breakdown from your PDF report.',
         const Color(0xFF6366F1),

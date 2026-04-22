@@ -49,12 +49,27 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
       _performSilentBackup();
+    } else if (state == AppLifecycleState.resumed) {
+      _performSilentSync();
     }
   }
 
   Future<void> _performSilentBackup() async {
     await CloudSyncService().backupDataToCloud();
     debugPrint('☁️ Silent Auto-Backup Completed on App Close!');
+  }
+
+  Future<void> _performSilentSync() async {
+    debugPrint('☁️ App Resumed: Checking for cloud updates...');
+    final result = await CloudSyncService().syncBidirectional();
+    if (result == 'restored') {
+      debugPrint('☁️ Data updated from cloud! Refreshing UI...');
+      if (mounted) {
+        setState(() {
+          _pageRebuildKey++;
+        });
+      }
+    }
   }
 
   /// Build the page for the given index. Uses _pageRebuildKey as a ValueKey

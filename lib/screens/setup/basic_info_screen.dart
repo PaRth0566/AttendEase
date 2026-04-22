@@ -10,6 +10,7 @@ import '../../models/subject.dart';
 import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import '../setup/attendance_criteria_screen.dart';
+import '../../services/cloud_sync_service.dart';
 
 class BasicInfoScreen extends StatefulWidget {
   final bool isEditMode;
@@ -301,6 +302,9 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     }
 
     if (!mounted) return;
+
+    // Auto-sync after saving basic info
+    CloudSyncService().backupDataToCloud();
 
     if (widget.isEditMode) {
       Navigator.pop(context);

@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../database/subject_dao.dart';
 import '../../models/subject.dart';
 import 'add_subjects_screen.dart';
+import '../../database/db_helper.dart';
+import '../../services/cloud_sync_service.dart';
 
 class AttendanceCriteriaScreen extends StatefulWidget {
   final bool isEditMode;
@@ -69,6 +71,9 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
     if (!mounted) return;
 
     if (widget.isEditMode) {
+      // Auto-sync after editing criteria
+      CloudSyncService().backupDataToCloud();
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Attendance criteria saved')),
       );

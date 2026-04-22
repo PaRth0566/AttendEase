@@ -146,6 +146,9 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
     if (!mounted) return;
 
     if (widget.isEditMode) {
+      // Auto-sync after editing timetable
+      CloudSyncService().backupDataToCloud();
+
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Timetable updated!')));

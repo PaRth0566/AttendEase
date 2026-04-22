@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -14,12 +15,18 @@ class CloudSyncService {
   Future<bool> backupDataToCloud() async {
     try {
       final user = _auth.currentUser;
-      if (user == null) return false;
+      if (user == null) {
+        debugPrint('☁️ [Sync] Backup skipped: No user logged in.');
+        return false;
+      }
 
       // Check network
       final List<ConnectivityResult> connectivityResult = await (Connectivity()
           .checkConnectivity());
-      if (connectivityResult.contains(ConnectivityResult.none)) return false;
+      if (connectivityResult.contains(ConnectivityResult.none)) {
+        debugPrint('☁️ [Sync] Backup skipped: No internet connection.');
+        return false;
+      }
 
       final db = await DBHelper.instance.database;
       final prefs = await SharedPreferences.getInstance();
@@ -29,11 +36,15 @@ class CloudSyncService {
       final timetable = await db.query('timetable');
       final attendanceRecords = await db.query('attendance_records');
 
+      debugPrint('☁️ [Sync] Backing up: ${subjects.length} subjects, ${attendanceRecords.length} records.');
+
       // Grab all SharedPreferences Data (Name, Course, Semester Dates, etc.)
       final Map<String, dynamic> userPrefs = {};
       for (String key in prefs.getKeys()) {
         userPrefs[key] = prefs.get(key);
       }
+
+      final syncTime = DateTime.now().toUtc();
 
       // Package it all together
       final backupData = {
@@ -41,17 +52,22 @@ class CloudSyncService {
         'subjects': subjects,
         'timetable': timetable,
         'attendance_records': attendanceRecords,
-        'last_backed_up': FieldValue.serverTimestamp(),
+        'last_backed_up': Timestamp.fromDate(syncTime),
+        'app_version': '1.1.0', // Track version for migration safety
       };
 
       // Upload to Firestore
-      await _firestore.collection('users').doc(user.uid).set(backupData);
+      final userDoc = _firestore.collection('users').doc(user.uid);
+      await userDoc.set(backupData);
 
-      // Update local last sync time
-      await prefs.setString('last_sync_time', DateTime.now().toString());
+      // Update local last sync time ONLY after successful upload
+      final nowStr = syncTime.toIso8601String();
+      await prefs.setString('last_sync_time', nowStr);
+      
+      debugPrint('☁️ [Sync] Backup Successful! Timestamp: $nowStr');
       return true;
     } catch (e) {
-      print("Backup Error: $e");
+      debugPrint("☁️ [Sync] Backup Error: $e");
       return false;
     }
   }
@@ -69,6 +85,7 @@ class CloudSyncService {
 
       // If no document exists, they are a brand new user
       if (!docSnapshot.exists || docSnapshot.data() == null) {
+        debugPrint('☁️ [Sync] Restore skipped: No cloud document found.');
         return false;
       }
 
@@ -76,120 +93,123 @@ class CloudSyncService {
       final db = await DBHelper.instance.database;
       final prefs = await SharedPreferences.getInstance();
 
+      debugPrint('☁️ [Sync] Starting Cloud Restoration...');
+
       // 1. Restore SharedPreferences (Name, Course, Dates)
       final Map<String, dynamic> prefsData = data['preferences'] ?? {};
-      for (var entry in prefsData.entries) {
-        final value = entry.value;
-        if (value is String) {
-          await prefs.setString(entry.key, value);
-        } else if (value is bool) {
-          // Check bool BEFORE int/num since Dart's bool is not a num
-          await prefs.setBool(entry.key, value);
-        } else if (value is int) {
-          await prefs.setInt(entry.key, value);
-        } else if (value is double) {
-          await prefs.setDouble(entry.key, value);
-        } else if (value is num) {
-          // Firestore can return numbers as 'num' in nested maps.
-          // Decide if it's an int or double based on its actual value.
-          if (value == value.toInt()) {
-            await prefs.setInt(entry.key, value.toInt());
-          } else {
-            await prefs.setDouble(entry.key, value.toDouble());
+      if (prefsData.isNotEmpty) {
+        for (var entry in prefsData.entries) {
+          final value = entry.value;
+          if (value == null) continue;
+
+          if (value is String) {
+            await prefs.setString(entry.key, value);
+          } else if (value is bool) {
+            await prefs.setBool(entry.key, value);
+          } else if (value is int) {
+            await prefs.setInt(entry.key, value);
+          } else if (value is double) {
+            await prefs.setDouble(entry.key, value);
+          } else if (value is num) {
+            if (value == value.toInt()) {
+              await prefs.setInt(entry.key, value.toInt());
+            } else {
+              await prefs.setDouble(entry.key, value.toDouble());
+            }
           }
         }
+        debugPrint('☁️ [Sync] Restored ${prefsData.length} preferences.');
       }
 
       // 2. Wipe current local SQLite data to avoid duplicates
-      await db.delete('subjects');
-      await db.delete('timetable');
-      await db.delete('attendance_records');
+      // We do this AFTER preferences to ensure we don't wipe local if preference restore fails
+      await db.transaction((txn) async {
+        await txn.delete('attendance_records');
+        await txn.delete('timetable');
+        await txn.delete('subjects');
+      });
 
       // 3. Restore SQLite Data
       final List<dynamic> subjects = data['subjects'] ?? [];
       final List<dynamic> timetable = data['timetable'] ?? [];
       final List<dynamic> attendanceRecords = data['attendance_records'] ?? [];
 
+      debugPrint('☁️ [Sync] Restoring DB: ${subjects.length} subjects, ${attendanceRecords.length} records.');
+
       for (var subject in subjects) {
         final sanitized = _sanitizeRow(Map<String, dynamic>.from(subject));
-        await db.insert(
-          'subjects',
-          sanitized,
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        await db.insert('subjects', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
       }
       for (var session in timetable) {
         final sanitized = _sanitizeRow(Map<String, dynamic>.from(session));
-        await db.insert(
-          'timetable',
-          sanitized,
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        await db.insert('timetable', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
       }
       for (var record in attendanceRecords) {
         final sanitized = _sanitizeRow(Map<String, dynamic>.from(record));
-        await db.insert(
-          'attendance_records',
-          sanitized,
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        await db.insert('attendance_records', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
       }
 
-      // 4. Auto-detect semester if preferences didn't include it
-      //    (handles old backups that didn't save preferences)
+      // 4. Robust Semester Restoration
+      // If the cloud didn't have a 'semester' key, try to detect it from restored subjects.
+      // Do NOT force it to 1 if we have other subjects!
       if (!prefsData.containsKey('semester') || prefs.getInt('semester') == null) {
         final semResult = await db.rawQuery(
           'SELECT DISTINCT semester FROM subjects ORDER BY semester DESC LIMIT 1',
         );
         if (semResult.isNotEmpty) {
           final detectedSem = semResult.first['semester'];
-          if (detectedSem is int) {
-            await prefs.setInt('semester', detectedSem);
-          } else if (detectedSem is num) {
-            await prefs.setInt('semester', detectedSem.toInt());
+          int? target;
+          if (detectedSem is int) target = detectedSem;
+          else if (detectedSem is num) target = detectedSem.toInt();
+          
+          if (target != null) {
+            await prefs.setInt('semester', target);
+            debugPrint('☁️ [Sync] Auto-detected semester: $target');
           }
+        } else {
+           // Only default to 1 if we literally have NO subjects in ANY semester
+           await prefs.setInt('semester', 1);
+           debugPrint('☁️ [Sync] No subjects found, defaulting to Semester 1');
         }
       }
 
       // Update local sync time after successful restore
-      await prefs.setString('last_sync_time', DateTime.now().toString());
+      if (data.containsKey('last_backed_up') && data['last_backed_up'] is Timestamp) {
+        final cloudTs = data['last_backed_up'] as Timestamp;
+        await prefs.setString('last_sync_time', cloudTs.toDate().toIso8601String());
+      } else {
+        await prefs.setString('last_sync_time', DateTime.now().toUtc().toIso8601String());
+      }
+      debugPrint('☁️ [Sync] Restoration Complete!');
 
-      return true; // Successfully restored data for a returning user!
+      return true; 
     } catch (e) {
-      print("Restore Error: $e");
+      debugPrint("☁️ [Sync] Restore Error: $e");
       return false;
     }
   }
 
-  // 3. BIDIRECTIONAL SYNC — Pull from cloud first, then push local changes
-  // Used by the "Sync Now" button to ensure both platforms stay in sync.
-  // Returns 'restored' if cloud was newer (data pulled), 'backed_up' if
-  // local was pushed, or 'error' / 'no_user' on failure.
+  // 3. BIDIRECTIONAL SYNC
   Future<String> syncBidirectional() async {
     try {
       final user = _auth.currentUser;
       if (user == null) return 'no_user';
 
-      // Check network
-      final List<ConnectivityResult> connectivityResult =
-          await Connectivity().checkConnectivity();
-      if (connectivityResult.contains(ConnectivityResult.none)) {
-        return 'no_network';
-      }
+      final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
+      if (connectivityResult.contains(ConnectivityResult.none)) return 'no_network';
 
-      final docSnapshot =
-          await _firestore.collection('users').doc(user.uid).get();
+      final userDoc = _firestore.collection('users').doc(user.uid);
+      final docSnapshot = await userDoc.get();
 
       if (!docSnapshot.exists || docSnapshot.data() == null) {
-        // No cloud data — just backup local
-        await backupDataToCloud();
-        return 'backed_up';
+        bool success = await backupDataToCloud();
+        return success ? 'backed_up' : 'error';
       }
 
       final data = docSnapshot.data()!;
       final prefs = await SharedPreferences.getInstance();
 
-      // Compare timestamps to decide direction
+      // Compare timestamps
       DateTime? cloudTime;
       final cloudTimestamp = data['last_backed_up'];
       if (cloudTimestamp is Timestamp) {
@@ -204,26 +224,25 @@ class CloudSyncService {
         } catch (_) {}
       }
 
-      // If cloud is newer than local, restore from cloud first
-      if (cloudTime != null &&
-          (localTime == null || cloudTime.isAfter(localTime))) {
-        await restoreDataFromCloud();
-        return 'restored';
+      debugPrint('☁️ [Sync] Comparing: Cloud($cloudTime) vs Local($localTime)');
+
+      // If cloud is newer than local (by at least 1 second to avoid clock jitter), restore
+      if (cloudTime != null && (localTime == null || cloudTime.difference(localTime).inSeconds > 1)) {
+        debugPrint('☁️ [Sync] Cloud is newer. Restoring...');
+        bool success = await restoreDataFromCloud();
+        return success ? 'restored' : 'error';
       } else {
-        // Local is newer or same — push to cloud
-        await backupDataToCloud();
-        return 'backed_up';
+        debugPrint('☁️ [Sync] Local is newer or same. Backing up...');
+        bool success = await backupDataToCloud();
+        return success ? 'backed_up' : 'error';
       }
     } catch (e) {
-      print("Bidirectional Sync Error: $e");
+      debugPrint("☁️ [Sync] Bidirectional Sync Error: $e");
       return 'error';
     }
   }
 
   /// Sanitizes a row from Firestore for safe SQLite insertion.
-  /// Firestore stores all numbers as `num` (or sometimes `int` where `double`
-  /// is expected). SQLite's sqflite driver is strict about types. This method
-  /// ensures integer columns stay int and real columns stay double.
   Map<String, dynamic> _sanitizeRow(Map<String, dynamic> row) {
     final sanitized = <String, dynamic>{};
     for (final entry in row.entries) {
@@ -231,15 +250,12 @@ class CloudSyncService {
       var value = entry.value;
 
       if (value is num) {
-        // These columns are REAL in SQLite
         if (key == 'required_percent') {
           value = value.toDouble();
         } else {
-          // All other numeric columns are INTEGER
           value = value.toInt();
         }
       }
-
       sanitized[key] = value;
     }
     return sanitized;

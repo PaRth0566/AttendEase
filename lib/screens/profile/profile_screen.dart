@@ -83,6 +83,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _loading = true);
     await _loadProfileData();
 
+    // Auto-sync after switching semester
+    CloudSyncService().backupDataToCloud();
+
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Switched to Semester $newSemester')),

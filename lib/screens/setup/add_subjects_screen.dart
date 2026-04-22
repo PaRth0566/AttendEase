@@ -5,6 +5,7 @@ import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
 import '../setup/timetable_setup_screen.dart';
+import '../../services/cloud_sync_service.dart';
 
 class AddSubjectsScreen extends StatefulWidget {
   final bool isEditMode;
@@ -160,6 +161,9 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
     }
 
     if (!mounted) return;
+
+    // Auto-sync after saving subjects
+    CloudSyncService().backupDataToCloud();
 
     if (widget.isEditMode) {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -54,23 +54,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       } else {
         _subjects = await _subjectDao.getSubjectsBySemester(_activeSemester);
 
-        // If no subjects found for the current semester, auto-detect the
-        // correct semester from the DB. This handles cases where the
-        // semester preference is stale or wasn't restored from cloud.
-        if (_subjects.isEmpty) {
-          final allSubjects = await _subjectDao.getAllSubjects();
-          if (allSubjects.isNotEmpty) {
-            // Find the semester with subjects (prefer highest/most recent)
-            final semesters = allSubjects.map((s) => s.semester).toSet().toList()
-              ..sort((a, b) => b.compareTo(a));
-            final correctSem = semesters.first;
-            if (correctSem != _activeSemester) {
-              _activeSemester = correctSem;
-              await prefs.setInt('semester', correctSem);
-              _subjects = await _subjectDao.getSubjectsBySemester(_activeSemester);
-            }
-          }
-        }
 
         _attendanceStats = await _attendanceDao.getAttendanceStats(_activeSemester);
         _currentStreak = await _attendanceDao.getCurrentStreak(_activeSemester);
