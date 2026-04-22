@@ -715,25 +715,6 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                                     ),
                                   ),
                           ),
-                          const SizedBox(height: 8),
-
-                          // Status label
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 300),
-                            child: Text(
-                              _isHolding
-                                  ? 'Waiting for server response…'
-                                  : 'Step ${_progressStep + 1} of ${_progressSteps.length}',
-                              key: ValueKey(_isHolding),
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: isDark
-                                    ? const Color(0xFFA5B4FC).withOpacity(0.6)
-                                    : const Color(0xFF94A3B8),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
                         ],
                       );
                     },
