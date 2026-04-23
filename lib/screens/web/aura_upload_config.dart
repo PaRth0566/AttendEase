@@ -217,6 +217,10 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
               idCounter++;
             }
 
+            if (extractedSubjects.isEmpty || meta['reportStartDate']!.isEmpty || meta['reportEndDate']!.isEmpty) {
+              throw Exception('Invalid document type: upload valid attendance report.');
+            }
+
             setState(() {
               _parsedSubjects = extractedSubjects;
               _parsedStats = extractedStats;
@@ -231,7 +235,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
           } catch (parseError) {
             _stopProgressAnimation();
             setState(() {
-              _errorMessage = 'Unable to read your attendance report. Please ensure you uploaded the correct PDF file from the SAP Portal.';
+              _errorMessage = 'Unable to read your attendance report. Please ensure you uploaded the correct PDF file.';
               _isLoading = false;
             });
           }

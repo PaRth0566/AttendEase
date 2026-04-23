@@ -428,7 +428,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: ListTile(
         leading: Icon(
-          isDark ? Icons.nightlight_round : Icons.wb_sunny_rounded,
+          isDark ? Icons.dark_mode_rounded : Icons.wb_sunny_rounded,
           color: theme.colorScheme.primary,
         ),
         title: const Text(

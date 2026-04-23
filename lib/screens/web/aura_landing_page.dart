@@ -345,7 +345,7 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                       onPressed: _toggleTheme,
                       icon: Icon(
                         themeProvider.isDarkMode
-                            ? Icons.nightlight_round
+                            ? Icons.dark_mode_rounded
                             : Icons.light_mode_rounded,
                         color: isDark
                             ? const Color(0xFFC7D2FE)
