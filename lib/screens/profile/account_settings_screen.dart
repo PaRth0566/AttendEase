@@ -46,8 +46,90 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  /// Re-authenticates the current user before a sensitive operation.
+  /// Returns true if re-auth succeeded, false if the user cancelled or it failed.
+  Future<bool> _reAuthenticate() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+
+    final bool isGoogleUser = user.providerData.any((p) => p.providerId == 'google.com');
+    final bool hasPassword  = user.providerData.any((p) => p.providerId == 'password');
+
+    if (isGoogleUser && !hasPassword) {
+      // Re-auth via Google
+      try {
+        final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+        if (googleUser == null) return false;
+        final googleAuth = await googleUser.authentication;
+        final credential = GoogleAuthProvider.credential(
+          accessToken: googleAuth.accessToken,
+          idToken:     googleAuth.idToken,
+        );
+        await user.reauthenticateWithCredential(credential);
+        return true;
+      } catch (_) {
+        _showSnackBar('Re-authentication failed. Please try again.');
+        return false;
+      }
+    }
+
+    // Re-auth via email + password
+    final passCtrl = TextEditingController();
+    bool success = false;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm Your Identity'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Please enter your current password for ${user.email} to continue.',
+              style: const TextStyle(fontSize: 13, height: 1.5),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: passCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Current Password',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                final credential = EmailAuthProvider.credential(
+                  email:    user.email!,
+                  password: passCtrl.text,
+                );
+                await user.reauthenticateWithCredential(credential);
+                success = true;
+                if (ctx.mounted) Navigator.pop(ctx);
+              } on FirebaseAuthException {
+                _showSnackBar('Incorrect password. Please try again.');
+              }
+            },
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    return success;
+  }
+
   Future<void> _changeEmail() async {
     final TextEditingController emailController = TextEditingController();
+    String? chosenEmail;
+
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -75,85 +157,91 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () async {
+            onPressed: () {
+              chosenEmail = emailController.text.trim().toLowerCase();
               Navigator.pop(ctx);
-              final newEmail = emailController.text.trim().toLowerCase();
-              if (newEmail.isEmpty) return;
-              setState(() => _isLoading = true);
-              try {
-                final user = _auth.currentUser;
-                if (user == null) throw Exception('Not logged in.');
-
-                // Step 1: Backup all data to a transfer document keyed by the NEW email
-                final db = kIsWeb ? null : await DBHelper.instance.database;
-                final prefs = await SharedPreferences.getInstance();
-
-                final Map<String, dynamic> transferData = {
-                  'transferred_at': FieldValue.serverTimestamp(),
-                };
-
-                if (!kIsWeb && db != null) {
-                  transferData['subjects'] = await db.query('subjects');
-                  transferData['timetable'] = await db.query('timetable');
-                  transferData['attendance_records'] = await db.query('attendance_records');
-                }
-
-                final Map<String, dynamic> userPrefs = {};
-                for (String key in prefs.getKeys()) {
-                  userPrefs[key] = prefs.get(key);
-                }
-                transferData['preferences'] = userPrefs;
-
-                // Save to a transfer collection indexed by the new email
-                await FirebaseFirestore.instance
-                    .collection('data_transfers')
-                    .doc(newEmail)
-                    .set(transferData);
-
-                // Step 2: Delete old user's Firestore document
-                await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
-
-                // Step 3: Delete the Firebase Auth account entirely
-                await user.delete();
-
-                // Step 4: Wipe all local data
-                if (!kIsWeb && db != null) {
-                  await db.delete('attendance_records');
-                  await db.delete('timetable');
-                  await db.delete('subjects');
-                }
-                await prefs.clear();
-
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Account deleted. Sign up with $newEmail to restore your data.'),
-                      duration: const Duration(seconds: 6),
-                    ),
-                  );
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (_) => const LoginScreen()),
-                    (route) => false,
-                  );
-                }
-              } on FirebaseAuthException catch (e) {
-                if (e.code == 'requires-recent-login') {
-                  _showSnackBar('For security, please log out, log back in, and try again.');
-                } else {
-                  _showSnackBar('Something went wrong. Please try again.');
-                }
-                setState(() => _isLoading = false);
-              } catch (e) {
-                _showSnackBar('Something went wrong. Please try again.');
-                setState(() => _isLoading = false);
-              }
             },
             child: const Text('Transfer & Delete'),
           ),
         ],
       ),
     );
+
+    if (chosenEmail == null || chosenEmail!.isEmpty) return;
+    final newEmail = chosenEmail!;
+
+    // ── Re-authenticate before the destructive operation ──
+    final didAuth = await _reAuthenticate();
+    if (!didAuth) {
+      _showSnackBar('Could not verify your identity. Email change cancelled.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final user = _auth.currentUser;
+      if (user == null) throw Exception('Not logged in.');
+
+      final db    = kIsWeb ? null : await DBHelper.instance.database;
+      final prefs = await SharedPreferences.getInstance();
+
+      // Build transfer payload
+      final Map<String, dynamic> transferData = {
+        'transferred_at': FieldValue.serverTimestamp(),
+      };
+      if (!kIsWeb && db != null) {
+        transferData['subjects']           = await db.query('subjects');
+        transferData['timetable']          = await db.query('timetable');
+        transferData['attendance_records'] = await db.query('attendance_records');
+      }
+      final Map<String, dynamic> userPrefs = {};
+      for (final key in prefs.getKeys()) {
+        userPrefs[key] = prefs.get(key);
+      }
+      transferData['preferences'] = userPrefs;
+
+      // Upload transfer document keyed by new email
+      await FirebaseFirestore.instance
+          .collection('data_transfers')
+          .doc(newEmail)
+          .set(transferData);
+
+      // Delete old Firestore doc & Auth account
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+      await user.delete();
+
+      // Wipe local data
+      if (!kIsWeb && db != null) {
+        await db.delete('attendance_records');
+        await db.delete('timetable');
+        await db.delete('subjects');
+      }
+      await prefs.clear();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Done! Sign up with $newEmail to restore your data.'),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      setState(() => _isLoading = false);
+      if (e.code == 'requires-recent-login') {
+        _showSnackBar('Session expired. Please log out, log back in, and try again.');
+      } else {
+        _showSnackBar('Something went wrong. Please try again.');
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showSnackBar('Something went wrong. Please try again.');
+    }
   }
 
   Future<void> _changePassword() async {

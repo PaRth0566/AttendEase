@@ -117,7 +117,15 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
-        // If there's internal history, go back. Otherwise, jump to the landing page.
+        // Check if any sub-screen (e.g. AccountSettings, BugReport) is on
+        // the local Navigator stack — if so, pop that first so the system
+        // back button behaves correctly within profile sub-pages.
+        final nav = Navigator.of(context);
+        if (nav.canPop()) {
+          nav.pop();
+          return;
+        }
+        // Nothing on the local stack — handle go_router back logic.
         if (context.canPop()) {
           context.pop();
         } else {

@@ -28,8 +28,16 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
   String _formatTime(String rawTime) {
     if (rawTime == "Never") return rawTime;
     try {
-      DateTime parsedDate = DateTime.parse(rawTime);
-      return DateFormat('MMM d, h:mm a').format(parsedDate);
+      // Parse UTC time from storage and convert to device local time
+      final DateTime parsedUtc = DateTime.parse(rawTime);
+      final DateTime local = parsedUtc.toLocal();
+      final DateTime now = DateTime.now();
+      // If it was today, show just the time; otherwise show date + time
+      if (local.year == now.year && local.month == now.month && local.day == now.day) {
+        return 'Today at ${DateFormat('h:mm a').format(local)}';
+      } else {
+        return DateFormat('MMM d, h:mm a').format(local);
+      }
     } catch (e) {
       return rawTime;
     }
