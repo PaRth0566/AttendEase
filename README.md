@@ -9,6 +9,9 @@
 ---
 ### 📖 Description
 
+<img src="assets/cover.png" alt="Attend Ease Cover" width="100%" />
+
+
 **Attend Ease** is an attendance management system designed to streamline how students track and analyze their academic presence. By leveraging the power of Google's Gemini, Attend Ease automates the tedious task of manual entry by extracting structured data directly from PDF attendance reports. It provides a premium, intuitive dashboard that offers deep insights, trend analysis, and predictive metrics to help users stay ahead of their attendance requirements.
 
 > [!IMPORTANT]
@@ -21,7 +24,7 @@
 
 ### 📸 Screenshots
 <div align="center">
-  <img src="assets/icon/app_icon.jpg" alt="App Preview" width="100%" />
+  <img src="assets/screenshots.png" alt="App Screenshots" width="100%" />
 </div>
   
 ---
