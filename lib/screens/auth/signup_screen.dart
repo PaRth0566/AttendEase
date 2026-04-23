@@ -2,9 +2,8 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import 'package:go_router/go_router.dart';
 import '../../services/auth_service.dart';
-import '../setup/setup_choice_screen.dart';
-import 'login_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -90,13 +89,8 @@ class _SignupScreenState extends State<SignupScreen> {
                   backgroundColor: Theme.of(context).colorScheme.primary,
                 ),
                 onPressed: () {
-                  Navigator.pop(context);
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SetupChoiceScreen(),
-                    ),
-                  );
+                  context.pop(); // Close dialog
+                  context.go('/setup');
                 },
                 child: const Text(
                   'I Understand',
@@ -372,7 +366,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           ),
                         ),
                         TextButton(
-                          onPressed: () => Navigator.pop(context),
+                          onPressed: () => context.pop(),
                           child: Text(
                             'Log In',
                             style: TextStyle(

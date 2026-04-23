@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/local_pdf_parser.dart';
@@ -45,15 +46,7 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
       setState(() => _isUploading = false);
 
       if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => BasicInfoScreen(
-              isEditMode: false,
-              prefilledData: parsedData,
-            ),
-          ),
-        );
+        context.pushReplacement('/setup/basic', extra: parsedData);
       }
     } catch (e) {
       if (mounted) {

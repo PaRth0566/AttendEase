@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/subject_dao.dart';
@@ -86,10 +87,7 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
       );
       Navigator.pop(context);
     } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const AddSubjectsScreen()),
-      );
+      context.push('/setup/subjects');
     }
   }
 

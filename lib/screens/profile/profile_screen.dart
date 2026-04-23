@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/attendance_dao.dart';
@@ -144,15 +145,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               } catch (_) {}
 
               if (!mounted) return;
-              Navigator.pushAndRemoveUntil(
-                rootContext,
-                MaterialPageRoute(
-                  builder: (context) => kIsWeb
-                      ? const AuraLandingPage()
-                      : const LoginScreen(),
-                ),
-                (route) => false,
-              );
+              rootContext.go(kIsWeb ? '/web/home' : '/login');
             },
             child: const Text('Log Out', style: TextStyle(color: Colors.white)),
           ),

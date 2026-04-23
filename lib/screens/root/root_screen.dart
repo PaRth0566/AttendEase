@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../services/cloud_sync_service.dart';
 import '../calendar/calender_screen.dart';
@@ -7,7 +9,8 @@ import '../dashboard/dashboard_screen.dart';
 import '../profile/profile_screen.dart';
 
 class RootScreen extends StatefulWidget {
-  const RootScreen({super.key});
+  final StatefulNavigationShell? navigationShell;
+  const RootScreen({super.key, this.navigationShell});
 
   @override
   State<RootScreen> createState() => _RootScreenState();
@@ -23,8 +26,17 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    _currentIndex = widget.navigationShell?.currentIndex ?? 0;
     WidgetsBinding.instance.addObserver(this);
     _initialSync();
+  }
+
+  @override
+  void didUpdateWidget(RootScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.navigationShell != null) {
+      _currentIndex = widget.navigationShell!.currentIndex;
+    }
   }
 
   Future<void> _initialSync() async {
@@ -101,36 +113,52 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
       );
     }
 
-    return Scaffold(
-      body: _buildPage(_currentIndex),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) {
-          setState(() {
-            _currentIndex = index;
-            // Force rebuild on every tab switch to pick up latest data
-            _pageRebuildKey++;
-          });
-        },
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: theme.scaffoldBackgroundColor,
-        selectedItemColor: theme.colorScheme.primary,
-        unselectedItemColor: theme.textTheme.bodyMedium?.color?.withAlpha(153),
-        showUnselectedLabels: true,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard_rounded),
-            label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month_rounded),
-            label: 'Calendar',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_rounded),
-            label: 'Profile',
-          ),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        // If there's internal history, go back. Otherwise, jump to the landing page.
+        if (context.canPop()) {
+          context.pop();
+        } else {
+          context.go('/web/home');
+        }
+      },
+      child: Scaffold(
+        body: _buildPage(_currentIndex),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: (index) {
+            if (widget.navigationShell != null) {
+              widget.navigationShell!.goBranch(index);
+            } else {
+              setState(() {
+                _currentIndex = index;
+                // Force rebuild on every tab switch to pick up latest data
+                _pageRebuildKey++;
+              });
+            }
+          },
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: theme.scaffoldBackgroundColor,
+          selectedItemColor: theme.colorScheme.primary,
+          unselectedItemColor: theme.textTheme.bodyMedium?.color?.withAlpha(153),
+          showUnselectedLabels: true,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.dashboard_rounded),
+              label: 'Dashboard',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_month_rounded),
+              label: 'Calendar',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_rounded),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }

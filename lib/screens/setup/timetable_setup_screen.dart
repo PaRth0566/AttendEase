@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/db_helper.dart';
@@ -173,11 +174,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
     await CloudSyncService().backupDataToCloud();
 
     if (!mounted) return;
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const RootScreen()),
-      (route) => false,
-    );
+    context.go('/app/dashboard');
   }
 
   @override

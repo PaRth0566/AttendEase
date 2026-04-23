@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -309,10 +310,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     if (widget.isEditMode) {
       Navigator.pop(context);
     } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const AttendanceCriteriaScreen()),
-      );
+      context.push('/setup/criteria');
     }
   }
 
@@ -428,11 +426,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                         } else {
                           await AuthService().signOut();
                           if (!mounted) return;
-                          Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(builder: (_) => const LoginScreen()),
-                            (route) => false,
-                          );
+                          context.go('/login');
                         }
                       },
                       style: OutlinedButton.styleFrom(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
 
 import '../auth/login_screen.dart';
 import 'basic_info_screen.dart';
@@ -26,11 +27,7 @@ class SetupChoiceScreen extends StatelessWidget {
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
               if (context.mounted) {
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                  (route) => false,
-                );
+                context.go('/login');
               }
             },
           ),
@@ -76,12 +73,7 @@ class SetupChoiceScreen extends StatelessWidget {
                 color: theme.colorScheme.primary,
                 isDark: isDark,
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const UploadPdfScreen(),
-                    ),
-                  );
+                  context.push('/setup/upload');
                 },
               ),
 
@@ -96,12 +88,7 @@ class SetupChoiceScreen extends StatelessWidget {
                 color: Colors.orange.shade600,
                 isDark: isDark,
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const BasicInfoScreen(isEditMode: false),
-                    ),
-                  );
+                  context.push('/setup/basic');
                 },
               ),
             ],

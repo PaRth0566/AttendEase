@@ -6,14 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
-import 'screens/auth/login_screen.dart';
-import 'screens/root/root_screen.dart';
-import 'screens/setup/setup_choice_screen.dart';
-import 'screens/web/aura_landing_page.dart';
+import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
-import 'database/db_helper.dart';
-import 'services/cloud_sync_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,13 +52,10 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 
 class _AttendEaseAppState extends State<AttendEaseApp>
     with WidgetsBindingObserver {
-  // CACHE THE FUTURE: This stops the app from redirecting when the theme changes!
-  late Future<Widget> _initialScreen;
 
   @override
   void initState() {
     super.initState();
-    _initialScreen = _getInitialScreen();
     // Listen for OS-level brightness changes so ThemeMode.system reacts live
     WidgetsBinding.instance.addObserver(this);
   }
@@ -83,48 +75,12 @@ class _AttendEaseAppState extends State<AttendEaseApp>
     themeProvider.onPlatformBrightnessChanged();
   }
 
-  Future<Widget> _getInitialScreen() async {
-    if (kIsWeb) {
-      // Web: Always start on the Home tab (index 0) — the landing page.
-      // This ensures a page refresh never redirects the user to a different tab.
-      // The AuraLandingPage handles its own in-app navigation from there.
-      return const AuraLandingPage(initialIndex: 0);
-    }
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      // Check if user has ANY data before allowing them to bypass setup
-      bool hasData = false;
-      try {
-        final db = await DBHelper.instance.database;
-        final subjects = await db.query('subjects', limit: 1);
-        if (subjects.isNotEmpty) {
-          hasData = true;
-        } else {
-          // No local data, check cloud
-          hasData = await CloudSyncService().restoreDataFromCloud();
-        }
-      } catch (e) {
-        debugPrint('Init data check error: $e');
-      }
-
-      if (!hasData) {
-        return const SetupChoiceScreen();
-      }
-
-      return const RootScreen();
-    }
-
-    // Android: Always start on the Auth screen
-    return const LoginScreen();
-  }
-
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: themeProvider,
       builder: (context, child) {
-        return MaterialApp(
+        return MaterialApp.router(
           debugShowCheckedModeBanner: false,
           title: 'AttendEase',
           scrollBehavior: AppScrollBehavior(),
@@ -134,32 +90,7 @@ class _AttendEaseAppState extends State<AttendEaseApp>
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
 
-          home: FutureBuilder<Widget>(
-            future: _initialScreen, // Uses the cached future
-            builder: (context, snapshot) {
-              // Show a clean loading spinner while checking auth state
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Scaffold(
-                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-                  body: Center(
-                    child: CircularProgressIndicator(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                );
-              }
-
-              // Return the correct screen based on the logic above
-              if (snapshot.hasData) {
-                return snapshot.data!;
-              }
-
-              // Safe fallback
-              return const LoginScreen();
-            },
-          ),
-          // No named routes — all navigation is push-based.
-          // This prevents web URL refresh from hitting stale route paths.
+          routerConfig: AppRouter.router,
         );
       },
     );

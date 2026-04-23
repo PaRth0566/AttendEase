@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/subject_dao.dart';
@@ -171,10 +172,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
       );
       Navigator.pop(context);
     } else {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const TimetableSetupScreen()),
-      );
+      context.push('/setup/timetable');
     }
   }
 

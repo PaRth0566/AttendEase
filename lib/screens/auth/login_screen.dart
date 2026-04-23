@@ -9,8 +9,7 @@ import 'package:sqflite/sqflite.dart';
 import '../../database/db_helper.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
-import '../root/root_screen.dart';
-import '../setup/setup_choice_screen.dart';
+import 'package:go_router/go_router.dart';
 import 'forgot_password_screen.dart';
 import 'signup_screen.dart';
 
@@ -80,13 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (isBrandNewUser) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const SetupChoiceScreen(),
-        ),
-            (route) => false,
-      );
+      context.go('/setup');
       return;
     }
 
@@ -177,19 +170,9 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = false);
 
     if (hasRestored || hasLocalData) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const RootScreen()),
-            (route) => false,
-      );
+      context.go('/app/dashboard');
     } else {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (_) => const SetupChoiceScreen(),
-        ),
-            (route) => false,
-      );
+      context.go('/setup');
     }
   }
 
@@ -585,14 +568,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const SignupScreen(),
-                              ),
-                            );
-                          },
+                          onPressed: () => context.push('/signup'),
                           child: Text(
                             'Sign up',
                             style: TextStyle(

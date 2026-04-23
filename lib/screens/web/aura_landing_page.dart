@@ -10,14 +10,16 @@ import '../auth/login_screen.dart';
 import '../profile/profile_screen.dart';
 import 'aura_upload_config.dart';
 import 'aura_ai_dashboard.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class AuraLandingPage extends StatefulWidget {
   /// Which tab to show on first load.
   /// 0 = Home (default), 1 = Upload, 2 = Dashboard
   final int initialIndex;
+  final StatefulNavigationShell? navigationShell;
 
-  const AuraLandingPage({super.key, this.initialIndex = 0});
+  const AuraLandingPage({super.key, this.initialIndex = 0, this.navigationShell});
 
   @override
   State<AuraLandingPage> createState() => _AuraLandingPageState();
@@ -38,13 +40,25 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
+    _currentIndex = widget.navigationShell?.currentIndex ?? widget.initialIndex;
     _bgAnimController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 15),
     )..repeat(reverse: true);
-    // Restore the last-viewed tab after a browser refresh
-    _restoreTabIndex();
+    // Restore the last-viewed tab after a browser refresh (if not using router)
+    if (widget.navigationShell == null) {
+      _restoreTabIndex();
+    }
+  }
+
+  @override
+  void didUpdateWidget(AuraLandingPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.navigationShell != null) {
+      setState(() {
+        _currentIndex = widget.navigationShell!.currentIndex;
+      });
+    }
   }
 
   /// Reads the saved tab index from storage and jumps to it.
@@ -72,10 +86,14 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
   }
 
   void _onNavTap(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
-    _saveTabIndex(index); // persist so browser refresh restores this tab
+    if (widget.navigationShell != null) {
+      widget.navigationShell!.goBranch(index);
+    } else {
+      setState(() {
+        _currentIndex = index;
+      });
+      _saveTabIndex(index); // persist so browser refresh restores this tab
+    }
   }
 
   /// Pull-to-refresh handler: syncs cloud data and rebuilds current tab.
@@ -569,7 +587,11 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                     ),
                     InkWell(
                       onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+                        if (FirebaseAuth.instance.currentUser != null) {
+                          context.push('/app/dashboard');
+                        } else {
+                          context.push('/login');
+                        }
                       },
                       child: Container(
                         padding: EdgeInsets.symmetric(
@@ -585,13 +607,25 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.login_rounded,
+                            Icon(
+                                FirebaseAuth.instance.currentUser != null
+                                    ? Icons.dashboard_rounded
+                                    : Icons.login_rounded,
                                 color: isDark
                                     ? Colors.white
                                     : const Color(0xFF0F172A),
                                 size: 24),
                             const SizedBox(width: 8),
-                            Text('Sign In', style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A), fontWeight: FontWeight.w600, fontSize: isMobile ? 14 : 16)),
+                            Text(
+                                FirebaseAuth.instance.currentUser != null
+                                    ? 'Go to Dashboard'
+                                    : 'Sign In',
+                                style: TextStyle(
+                                    color: isDark
+                                        ? Colors.white
+                                        : const Color(0xFF0F172A),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: isMobile ? 14 : 16)),
                           ],
                         ),
                       ),
