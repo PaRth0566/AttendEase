@@ -41,16 +41,16 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
       setState(() {
         _isUploading = true;
         _isDone = false;
-        _statusMessage = 'Analyzing PDF locally...';
+        _statusMessage = 'Reading your attendance report...';
       });
 
       final Map<String, dynamic> data =
           await LocalPdfParser.extractAttendanceFromPdf(fileBytes);
 
-      setState(() => _statusMessage = 'Syncing records to database...');
+      setState(() => _statusMessage = 'Updating your records...');
       await _applyData(data);
 
-      setState(() => _statusMessage = 'Backing up to cloud...');
+      setState(() => _statusMessage = 'Saving to cloud...');
       await CloudSyncService().backupDataToCloud();
 
       setState(() {
@@ -64,10 +64,20 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
           _isUploading = false;
           _statusMessage = 'Select your latest attendance PDF to sync new records.';
         });
-        final displayErr = e.toString().replaceAll('FormatException: ', '').replaceAll('Exception: ', '');
+        // Determine a user-friendly message based on the error type
+        String friendlyMsg;
+        final raw = e.toString();
+        if (e is FormatException) {
+          // The parser now throws a user-friendly message — use it directly
+          friendlyMsg = e.message;
+        } else if (raw.contains('No such file') || raw.contains('FileSystemException')) {
+          friendlyMsg = 'The selected file could not be accessed. Please try selecting it again.';
+        } else {
+          friendlyMsg = 'Something went wrong. Please try again with a valid attendance PDF.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $displayErr'),
+            content: Text(friendlyMsg),
             backgroundColor: Colors.red.shade600,
             duration: const Duration(seconds: 5),
           ),

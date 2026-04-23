@@ -49,7 +49,7 @@ class _BugReportScreenState extends State<BugReportScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to submit bug report: $e')),
+        const SnackBar(content: Text('Failed to submit bug report. Please check your connection and try again.')),
       );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

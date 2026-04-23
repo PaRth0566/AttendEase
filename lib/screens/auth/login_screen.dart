@@ -237,7 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Login failed: ${e.toString()}')),
+          const SnackBar(content: Text('Login failed. Please try again.')),
         );
       }
     }
@@ -267,9 +267,9 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Google Sign-In Error: $e\n(Make sure SHA-1 is added in Firebase)'),
-            duration: const Duration(seconds: 5),
+          const SnackBar(
+            content: Text('Google Sign-In failed. Please try again.'),
+            duration: Duration(seconds: 4),
           ),
         );
       }

@@ -128,7 +128,7 @@ class _SignupScreenState extends State<SignupScreen> {
       if (!mounted) return;
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sign up failed: ${e.toString()}')),
+        const SnackBar(content: Text('Sign up failed. Please try again.')),
       );
     }
   }

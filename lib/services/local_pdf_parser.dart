@@ -198,11 +198,9 @@ class LocalPdfParser {
     }
 
     if (records.isEmpty) {
-      final sample = text;
-      final preview = sample.length > 300 ? sample.substring(0, 300) : sample;
-      throw FormatException(
-        'Could not parse attendance records. '
-        'Text preview: "$preview..."',
+      throw const FormatException(
+        'No attendance records found in this PDF. '
+        'Please make sure you are uploading the correct attendance report from the SAP Portal.',
       );
     }
 

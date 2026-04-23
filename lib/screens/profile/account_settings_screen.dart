@@ -141,11 +141,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 if (e.code == 'requires-recent-login') {
                   _showSnackBar('For security, please log out, log back in, and try again.');
                 } else {
-                  _showSnackBar(e.message ?? 'An error occurred.');
+                  _showSnackBar('Something went wrong. Please try again.');
                 }
                 setState(() => _isLoading = false);
               } catch (e) {
-                _showSnackBar('Error: $e');
+                _showSnackBar('Something went wrong. Please try again.');
                 setState(() => _isLoading = false);
               }
             },
@@ -174,11 +174,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       setState(() => _isLoading = true);
       try {
         await _auth.sendPasswordResetEmail(email: user.email!);
-        _showSnackBar('Password reset link sent to ${user.email}!');
+        _showSnackBar('Password reset link sent to ${user.email}. Check your inbox.');
       } on FirebaseAuthException catch (e) {
-        _showSnackBar(e.message ?? 'An error occurred.');
+        _showSnackBar('Could not send reset email. Please try again.');
       } catch (e) {
-        _showSnackBar('Error: $e');
+        _showSnackBar('Something went wrong. Please try again.');
       } finally {
         setState(() => _isLoading = false);
       }
@@ -251,13 +251,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                       await user.updatePassword(newPass);
                       _showSnackBar('Password updated successfully!');
                     } catch (updateErr) {
-                      _showSnackBar('Error updating password: $updateErr');
+                      _showSnackBar('Could not update password. Please try again.');
                     }
                   } else {
-                    _showSnackBar('Error: ${e.message}');
+                    _showSnackBar('Could not set password. Please try again.');
                   }
                 } catch (e) {
-                  _showSnackBar('Error setting password: $e');
+                  _showSnackBar('Something went wrong. Please try again.');
                 } finally {
                   setState(() => _isLoading = false);
                 }
@@ -291,12 +291,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       setState(() {}); 
     } on FirebaseAuthException catch (e) {
       if (e.code == 'credential-already-in-use') {
-        _showSnackBar('This Google account is already registered. Please sign in normally, or select a different Google account to link.');
+        _showSnackBar('This Google account is already linked to another AttendEase account. Please choose a different Google account.');
       } else {
-        _showSnackBar('Failed to link account: ${e.message}');
+        _showSnackBar('Could not link your Google account. Please try again.');
       }
     } catch (e) {
-      _showSnackBar('Error linking account: $e');
+      _showSnackBar('Something went wrong. Please try again.');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -379,11 +379,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       if (e.code == 'requires-recent-login') {
         _showSnackBar('Security requirement: Please log out, log back in, and try deleting your account again.');
       } else {
-        _showSnackBar(e.message ?? 'An error occurred.');
+        _showSnackBar('Could not delete account. Please try again.');
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      _showSnackBar('Error deleting account: $e');
+      _showSnackBar('Something went wrong. Please try again.');
     }
   }
 

@@ -109,16 +109,13 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
     }
   }
 
-  /// Cycles the theme: system → light → dark → system.
-  void _cycleTheme() {
-    final current = themeProvider.themeMode;
-    if (current == ThemeMode.system) {
-      themeProvider.setThemeMode(ThemeMode.light);
-    } else if (current == ThemeMode.light) {
-      themeProvider.setThemeMode(ThemeMode.dark);
-    } else {
-      themeProvider.setThemeMode(ThemeMode.system);
-    }
+  /// Toggles between light and dark mode (2-click).
+  /// Respects the OS default when first toggling from system mode.
+  void _toggleTheme() {
+    final effectivelyDark = themeProvider.isDarkMode;
+    themeProvider.setThemeMode(
+      effectivelyDark ? ThemeMode.light : ThemeMode.dark,
+    );
   }
 
   @override
@@ -337,23 +334,19 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                 ],
               ),
 
-              // Trailing — 3-way theme toggle: system → light → dark → system
+              // Trailing — 2-click theme toggle: light ↔ dark
               Row(
                 children: [
                   Tooltip(
-                    message: themeProvider.themeMode == ThemeMode.system
-                        ? 'Theme: System (auto)'
-                        : themeProvider.themeMode == ThemeMode.light
-                            ? 'Theme: Light'
-                            : 'Theme: Dark',
+                    message: themeProvider.isDarkMode
+                        ? 'Switch to Light Mode'
+                        : 'Switch to Dark Mode',
                     child: IconButton(
-                      onPressed: _cycleTheme,
+                      onPressed: _toggleTheme,
                       icon: Icon(
-                        themeProvider.themeMode == ThemeMode.system
-                            ? Icons.brightness_auto_rounded
-                            : themeProvider.themeMode == ThemeMode.light
-                                ? Icons.light_mode_rounded
-                                : Icons.dark_mode_rounded,
+                        themeProvider.isDarkMode
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
                         color: isDark
                             ? const Color(0xFFC7D2FE)
                             : const Color(0xFF6366F1),

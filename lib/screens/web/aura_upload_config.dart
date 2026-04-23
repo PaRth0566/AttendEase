@@ -143,13 +143,13 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
       final bytes = file.bytes;
       if (bytes == null) {
         setState(() {
-           _errorMessage = 'Failed to load file bytes.';
+           _errorMessage = 'Could not read the selected file. Please try again.';
         });
         return;
       }
       await _processFile(file.name, bytes);
     } catch (e) {
-      setState(() => _errorMessage = e.toString());
+      setState(() => _errorMessage = 'Something went wrong while selecting the file. Please try again.');
     }
   }
 
@@ -231,21 +231,23 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
           } catch (parseError) {
             _stopProgressAnimation();
             setState(() {
-              _errorMessage = 'Failed to parse AI output: $parseError';
+              _errorMessage = 'Unable to read your attendance report. Please ensure you uploaded the correct PDF file from the SAP Portal.';
               _isLoading = false;
             });
           }
         } else {
           _stopProgressAnimation();
           setState(() {
-            _errorMessage = data['error'] as String? ?? 'Unknown backend error.';
+            _errorMessage = data['error'] as String? ?? 'Something went wrong while processing your report. Please try again.';
             _isLoading = false;
           });
         }
       } else {
         _stopProgressAnimation();
         setState(() {
-          _errorMessage = 'Server returned ${response.statusCode}: ${response.body}';
+          _errorMessage = response.statusCode >= 500
+              ? 'The service is temporarily unavailable. Please try again in a few minutes.'
+              : 'Could not process your report. Please try again.';
           _isLoading = false;
         });
       }
@@ -253,13 +255,13 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
       _stopProgressAnimation();
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Network error: ${e.message}';
+        _errorMessage = 'Network error. Please check your internet connection and try again.';
       });
     } catch (e) {
       _stopProgressAnimation();
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Unexpected error: $e';
+        _errorMessage = 'Something went wrong. Please try again.';
       });
     }
   }
@@ -565,7 +567,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
             final bytes = await file.readAsBytes();
             await _processFile(file.name, bytes);
           } else {
-            setState(() => _errorMessage = 'Please drop a valid .pdf file');
+        setState(() => _errorMessage = 'Please drop a valid .pdf file. Only PDF files are supported.');
           }
         }
       },

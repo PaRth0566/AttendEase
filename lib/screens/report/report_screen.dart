@@ -585,9 +585,12 @@ class _ReportScreenState extends State<ReportScreen> {
     } catch (e) {
       if (!mounted) return;
       Navigator.pop(context);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not export the report. Please check storage permissions and try again.'),
+          duration: Duration(seconds: 4),
+        ),
+      );
     }
   }
 

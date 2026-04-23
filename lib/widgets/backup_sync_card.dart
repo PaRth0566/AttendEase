@@ -89,7 +89,7 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Sync failed: $e")),
+          const SnackBar(content: Text('Sync failed. Please check your connection and try again.')),
         );
       }
     } finally {

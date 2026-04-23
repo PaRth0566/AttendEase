@@ -51,10 +51,14 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isUploading = false);
-        final displayErr = e.toString().replaceAll('FormatException: ', '').replaceAll('Exception: ', '');
+        // Use the parser's own clean message for FormatException,
+        // generic fallback for any other unexpected error.
+        final msg = e is FormatException
+            ? e.message
+            : 'Something went wrong. Please try again with a valid attendance PDF.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $displayErr'),
+            content: Text(msg),
             backgroundColor: Colors.red.shade600,
             duration: const Duration(seconds: 4),
           ),
