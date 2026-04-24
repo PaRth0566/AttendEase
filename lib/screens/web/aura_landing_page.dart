@@ -1,17 +1,17 @@
 import 'dart:ui';
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../models/subject.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../theme/theme_provider.dart';
-import '../../models/subject.dart';
-import '../auth/login_screen.dart';
 import '../profile/profile_screen.dart';
-import 'aura_upload_config.dart';
 import 'aura_ai_dashboard.dart';
-import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'aura_upload_config.dart';
 
 class AuraLandingPage extends StatefulWidget {
   /// Which tab to show on first load.
@@ -19,14 +19,20 @@ class AuraLandingPage extends StatefulWidget {
   final int initialIndex;
   final StatefulNavigationShell? navigationShell;
 
-  const AuraLandingPage({super.key, this.initialIndex = 0, this.navigationShell});
+  const AuraLandingPage({
+    super.key,
+    this.initialIndex = 0,
+    this.navigationShell,
+  });
 
   @override
   State<AuraLandingPage> createState() => _AuraLandingPageState();
 }
 
-class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProviderStateMixin {
-  late int _currentIndex; // 0 = Home, 1 = Upload, 2 = Dashboard, 3 = Alerts (mobile only text)
+class _AuraLandingPageState extends State<AuraLandingPage>
+    with SingleTickerProviderStateMixin {
+  late int
+  _currentIndex; // 0 = Home, 1 = Upload, 2 = Dashboard, 3 = Alerts (mobile only text)
   int _refreshKey = 0; // forces tab content rebuild on refresh
 
   List<Subject>? _parsedSubjects;
@@ -123,7 +129,9 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF020617) : const Color(0xFFF1F5F9),
+      backgroundColor: isDark
+          ? const Color(0xFF020617)
+          : const Color(0xFFF1F5F9),
       body: Stack(
         children: [
           // Ambient Background Shapes
@@ -144,7 +152,9 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                           shape: BoxShape.circle,
                           gradient: RadialGradient(
                             colors: [
-                              isDark ? const Color(0xFF6366F1).withOpacity(0.15) : const Color(0xFF6366F1).withOpacity(0.08),
+                              isDark
+                                  ? const Color(0xFF6366F1).withOpacity(0.15)
+                                  : const Color(0xFF6366F1).withOpacity(0.08),
                               Colors.transparent,
                             ],
                             stops: const [0.0, 1.0],
@@ -153,7 +163,9 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                       ),
                     ),
                     Positioned(
-                      top: MediaQuery.of(context).size.height * 0.4 - (animValue * 60),
+                      top:
+                          MediaQuery.of(context).size.height * 0.4 -
+                          (animValue * 60),
                       left: -200 + (animValue * 80),
                       child: Container(
                         width: 600,
@@ -162,7 +174,9 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                           shape: BoxShape.circle,
                           gradient: RadialGradient(
                             colors: [
-                              isDark ? const Color(0xFF8B5CF6).withOpacity(0.1) : const Color(0xFF8B5CF6).withOpacity(0.05),
+                              isDark
+                                  ? const Color(0xFF8B5CF6).withOpacity(0.1)
+                                  : const Color(0xFF8B5CF6).withOpacity(0.05),
                               Colors.transparent,
                             ],
                             stops: const [0.0, 1.0],
@@ -175,13 +189,13 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
               },
             ),
           ),
-          
+
           // Main Canvas
           Column(
             children: [
               // TopNavBar
               _buildTopNavBar(isDark),
-              
+
               // Scrollable Content Region
               Expanded(
                 child: RefreshIndicator(
@@ -189,7 +203,9 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                   color: const Color(0xFF6366F1),
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: 100), // padding for mobile nav
+                    padding: const EdgeInsets.only(
+                      bottom: 100,
+                    ), // padding for mobile nav
                     child: _buildCurrentTab(isDark),
                   ),
                 ),
@@ -199,12 +215,12 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
 
           // BottomNavBar (Mobile Only)
           if (MediaQuery.of(context).size.width < 768)
-             Positioned(
-               bottom: 0,
-               left: 0,
-               right: 0,
-               child: _buildBottomNavBar(isDark),
-             ),
+            Positioned(
+              bottom: 0,
+              left: 0,
+              right: 0,
+              child: _buildBottomNavBar(isDark),
+            ),
         ],
       ),
     );
@@ -222,7 +238,7 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
               _reportMeta = meta;
               _overallTarget = overall;
               _subjectTarget = subject;
-              _currentIndex = 2; 
+              _currentIndex = 2;
             });
             _onNavTap(2); // Ensure URL updates to /web/dashboard
           },
@@ -258,23 +274,29 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
           height: 64, // Reduced height
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF0F172A).withOpacity(0.3) : Colors.white.withOpacity(0.95),
+            color: isDark
+                ? const Color(0xFF0F172A).withOpacity(0.3)
+                : Colors.white.withOpacity(0.95),
             border: Border(
               bottom: BorderSide(
-                color: isDark ? const Color(0xFF6366F1).withOpacity(0.2) : const Color(0xFFE2E8F0),
+                color: isDark
+                    ? const Color(0xFF6366F1).withOpacity(0.2)
+                    : const Color(0xFFE2E8F0),
               ),
             ),
             boxShadow: [
-               if (isDark) BoxShadow(
-                 color: Colors.black.withOpacity(0.5),
-                 blurRadius: 30,
-                 offset: const Offset(0, 4),
-               ),
-               if (!isDark) BoxShadow(
-                 color: Colors.black.withOpacity(0.02),
-                 blurRadius: 10,
-                 offset: const Offset(0, 4),
-               ),
+              if (isDark)
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.5),
+                  blurRadius: 30,
+                  offset: const Offset(0, 4),
+                ),
+              if (!isDark)
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
             ],
           ),
           child: Row(
@@ -290,13 +312,17 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                       cursor: SystemMouseCursors.click,
                       child: Row(
                         children: [
-                          Image.asset('assets/icon/app_icon2.png',
-                              width: 32,
-                              height: 32,
-                              errorBuilder: (c, e, s) => Icon(Icons.school,
-                                  color: isDark
-                                      ? const Color(0xFFA5B4FC)
-                                      : const Color(0xFF4F46E5))),
+                          Image.asset(
+                            'assets/icon/app_icon2.png',
+                            width: 32,
+                            height: 32,
+                            errorBuilder: (c, e, s) => Icon(
+                              Icons.school,
+                              color: isDark
+                                  ? const Color(0xFFA5B4FC)
+                                  : const Color(0xFF4F46E5),
+                            ),
+                          ),
                           const SizedBox(width: 12),
                           Text(
                             'AttendEase',
@@ -305,11 +331,20 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                               fontWeight: FontWeight.w800,
                               letterSpacing: -0.5,
                               foreground: Paint()
-                                ..shader = LinearGradient(
-                                  colors: isDark
-                                      ? [const Color(0xFFA5B4FC), const Color(0xFFC7D2FE)]
-                                      : [const Color(0xFF4F46E5), const Color(0xFF7C3AED)],
-                                ).createShader(const Rect.fromLTWH(0, 0, 150, 40)),
+                                ..shader =
+                                    LinearGradient(
+                                      colors: isDark
+                                          ? [
+                                              const Color(0xFFA5B4FC),
+                                              const Color(0xFFC7D2FE),
+                                            ]
+                                          : [
+                                              const Color(0xFF4F46E5),
+                                              const Color(0xFF7C3AED),
+                                            ],
+                                    ).createShader(
+                                      const Rect.fromLTWH(0, 0, 150, 40),
+                                    ),
                             ),
                           ),
                         ],
@@ -346,7 +381,7 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                       onPressed: _toggleTheme,
                       icon: Icon(
                         themeProvider.isDarkMode
-                            ? Icons.dark_mode_rounded
+                            ? Icons.nightlight_round
                             : Icons.light_mode_rounded,
                         color: isDark
                             ? const Color(0xFFC7D2FE)
@@ -372,9 +407,11 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
         style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w600,
-          color: isSelected 
+          color: isSelected
               ? (isDark ? Colors.white : const Color(0xFF111319))
-              : (isDark ? const Color(0xFFC7D2FE).withOpacity(0.8) : const Color(0xFF64748B)),
+              : (isDark
+                    ? const Color(0xFFC7D2FE).withOpacity(0.8)
+                    : const Color(0xFF64748B)),
         ),
       ),
     );
@@ -389,12 +426,16 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-             color: isDark ? const Color(0xFF0F172A).withOpacity(0.4) : Colors.white.withOpacity(0.8),
-             border: Border(
-               top: BorderSide(
-                 color: isDark ? const Color(0xFF6366F1).withOpacity(0.3) : Colors.black.withOpacity(0.05),
-               ),
-             ),
+            color: isDark
+                ? const Color(0xFF0F172A).withOpacity(0.4)
+                : Colors.white.withOpacity(0.8),
+            border: Border(
+              top: BorderSide(
+                color: isDark
+                    ? const Color(0xFF6366F1).withOpacity(0.3)
+                    : Colors.black.withOpacity(0.05),
+              ),
+            ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -412,23 +453,29 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
 
   Widget _bottomNavItem(IconData icon, String label, int index, bool isDark) {
     final isSelected = _currentIndex == index;
-    final color = isSelected 
+    final color = isSelected
         ? (isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5))
-        : (isDark ? const Color(0xFFC7D2FE).withOpacity(0.6) : const Color(0xFF94A3B8));
+        : (isDark
+              ? const Color(0xFFC7D2FE).withOpacity(0.6)
+              : const Color(0xFF94A3B8));
 
     return InkWell(
       onTap: () => _onNavTap(index),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: isSelected
-          ? BoxDecoration(
-              color: isDark ? const Color(0xFF6366F1).withOpacity(0.2) : const Color(0xFF6366F1).withOpacity(0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isDark ? const Color(0xFF6366F1).withOpacity(0.3) : Colors.transparent,
-              ),
-            )
-          : null,
+            ? BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF6366F1).withOpacity(0.2)
+                    : const Color(0xFF6366F1).withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF6366F1).withOpacity(0.3)
+                      : Colors.transparent,
+                ),
+              )
+            : null,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -459,14 +506,21 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
       children: [
         // Hero
         Padding(
-          padding: EdgeInsets.only(top: 20, bottom: 5, left: isMobile ? 16 : 24, right: isMobile ? 16 : 24),
+          padding: EdgeInsets.only(
+            top: 20,
+            bottom: 5,
+            left: isMobile ? 16 : 24,
+            right: isMobile ? 16 : 24,
+          ),
           child: Column(
             children: [
               _buildVerfiedBadge(isDark),
               const SizedBox(height: 16),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: isDark
                       ? const Color(0xFF6366F1).withOpacity(0.1)
@@ -481,8 +535,11 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.auto_awesome,
-                        size: 13, color: Color(0xFF818CF8)),
+                    const Icon(
+                      Icons.auto_awesome,
+                      size: 13,
+                      color: Color(0xFF818CF8),
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       'Smart Attendance Insights',
@@ -510,12 +567,12 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                           ? [
                               const Color(0xFFA5B4FC),
                               const Color(0xFFC4B5FD),
-                              const Color(0xFFD8B4FE)
+                              const Color(0xFFD8B4FE),
                             ]
                           : [
                               const Color(0xFF4F46E5),
                               const Color(0xFF6366F1),
-                              const Color(0xFF818CF8)
+                              const Color(0xFF818CF8),
                             ],
                     ).createShader(const Rect.fromLTWH(0, 0, 400, 100)),
                 ),
@@ -546,84 +603,99 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                 runSpacing: 16,
                 alignment: WrapAlignment.center,
                 children: [
-                    InkWell(
-                      onTap: () => _onNavTap(1), // Go to upload
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: isMobile ? 22 : 30,
-                            vertical: isMobile ? 10 : 14),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                  InkWell(
+                    onTap: () => _onNavTap(1), // Go to upload
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? 22 : 30,
+                        vertical: isMobile ? 10 : 14,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF6366F1).withOpacity(0.4),
+                            blurRadius: 20,
                           ),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF6366F1).withOpacity(0.4),
-                              blurRadius: 20,
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.plagiarism_rounded,
+                            color: Colors.white,
+                            size: 26,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Analyze PDF Report',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: isMobile ? 14 : 16,
                             ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.plagiarism_rounded,
-                                color: Colors.white, size: 26),
-                            const SizedBox(width: 6),
-                            Text('Analyze PDF Report',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: isMobile ? 14 : 16)),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
-                    InkWell(
-                      onTap: () {
-                        if (FirebaseAuth.instance.currentUser != null) {
-                          context.push('/app/dashboard');
-                        } else {
-                          context.push('/login');
-                        }
-                      },
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                            horizontal: isMobile ? 22 : 30,
-                            vertical: isMobile ? 10 : 14),
-                        decoration: BoxDecoration(
-                           color: isDark ? const Color(0xFF0F172A).withOpacity(0.5) : Colors.white,
-                           borderRadius: BorderRadius.circular(12),
-                           border: Border.all(
-                             color: isDark ? Colors.white.withOpacity(0.2) : const Color(0xFF94A3B8),
-                           ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                                FirebaseAuth.instance.currentUser != null
-                                    ? Icons.dashboard_rounded
-                                    : Icons.login_rounded,
-                                color: isDark
-                                    ? Colors.white
-                                    : const Color(0xFF0F172A),
-                                size: 24),
-                            const SizedBox(width: 8),
-                            Text(
-                                FirebaseAuth.instance.currentUser != null
-                                    ? 'Go to Dashboard'
-                                    : 'Sign In',
-                                style: TextStyle(
-                                    color: isDark
-                                        ? Colors.white
-                                        : const Color(0xFF0F172A),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: isMobile ? 14 : 16)),
-                          ],
+                  ),
+                  InkWell(
+                    onTap: () {
+                      if (FirebaseAuth.instance.currentUser != null) {
+                        context.push('/app/dashboard');
+                      } else {
+                        context.push('/login');
+                      }
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: isMobile ? 22 : 30,
+                        vertical: isMobile ? 10 : 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? const Color(0xFF0F172A).withOpacity(0.5)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withOpacity(0.2)
+                              : const Color(0xFF94A3B8),
                         ),
                       ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            FirebaseAuth.instance.currentUser != null
+                                ? Icons.dashboard_rounded
+                                : Icons.login_rounded,
+                            color: isDark
+                                ? Colors.white
+                                : const Color(0xFF0F172A),
+                            size: 24,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            FirebaseAuth.instance.currentUser != null
+                                ? 'Go to Dashboard'
+                                : 'Sign In',
+                            style: TextStyle(
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF0F172A),
+                              fontWeight: FontWeight.w600,
+                              fontSize: isMobile ? 14 : 16,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
@@ -633,7 +705,10 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
         ),
 
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 24, vertical: 16),
+          padding: EdgeInsets.symmetric(
+            horizontal: isMobile ? 16 : 24,
+            vertical: 16,
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 1024),
             child: _buildFeatureCards(isDark, isMobile, isTablet),
@@ -647,11 +722,11 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
             constraints: const BoxConstraints(maxWidth: 640),
             child: Container(
               margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color:
-                    isDark ? Colors.red.withOpacity(0.1) : Colors.red.shade50,
+                color: isDark
+                    ? Colors.red.withOpacity(0.1)
+                    : Colors.red.shade50,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: isDark
@@ -675,7 +750,9 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                         fontSize: isMobile ? 12 : 13,
                         height: 1.4,
                         fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.red.shade200 : Colors.red.shade900,
+                        color: isDark
+                            ? Colors.red.shade200
+                            : Colors.red.shade900,
                       ),
                     ),
                   ),
@@ -692,18 +769,24 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
   Widget _buildVerfiedBadge(bool isDark) {
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFF6366F1).withOpacity(0.05),
+        color: isDark
+            ? Colors.white.withOpacity(0.05)
+            : const Color(0xFF6366F1).withOpacity(0.05),
         borderRadius: BorderRadius.circular(24),
-         border: Border.all(
-            color: isDark ? const Color(0xFF818CF8).withOpacity(0.3) : const Color(0xFF6366F1).withOpacity(0.2),
-         ),
-         boxShadow: [
-           BoxShadow(
-             color: isDark ? Colors.black.withOpacity(0.5) : const Color(0xFF6366F1).withOpacity(0.05),
-             blurRadius: isDark ? 32 : 10,
-             offset: const Offset(0, 8),
-           ),
-         ],
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF818CF8).withOpacity(0.3)
+              : const Color(0xFF6366F1).withOpacity(0.2),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.5)
+                : const Color(0xFF6366F1).withOpacity(0.05),
+            blurRadius: isDark ? 32 : 10,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
@@ -770,10 +853,16 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
   }
 
   Widget _featureCard(
-      bool isDark, IconData icon, String title, String desc, Color accent, bool isMobile) {
+    bool isDark,
+    IconData icon,
+    String title,
+    String desc,
+    Color accent,
+    bool isMobile,
+  ) {
     final w = MediaQuery.of(context).size.width;
     double cardW = double.infinity;
-    
+
     if (w >= 1024) {
       cardW = ((w > 1024 ? 1024 : w) - 120) / 4;
     } else if (w >= 768) {
@@ -792,19 +881,21 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
           height: isMobile ? 180 : 200,
           padding: EdgeInsets.all(isMobile ? 16 : 24),
           decoration: BoxDecoration(
-             color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
-             borderRadius: BorderRadius.circular(20),
-             border: Border.all(
-               color: isDark ? Colors.white.withOpacity(0.1) : const Color(0xFFE2E8F0),
-               width: 1.5,
-             ),
-             boxShadow: [
-               BoxShadow(
-                 color: Colors.black.withOpacity(isDark ? 0.4 : 0.05),
-                 blurRadius: isDark ? 25 : 10,
-                 offset: const Offset(0, 8),
-               )
-             ]
+            color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isDark
+                  ? Colors.white.withOpacity(0.1)
+                  : const Color(0xFFE2E8F0),
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.4 : 0.05),
+                blurRadius: isDark ? 25 : 10,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -836,7 +927,9 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                   style: TextStyle(
                     fontSize: isMobile ? 11 : 13,
                     height: 1.4,
-                    color: isDark ? Colors.white.withOpacity(0.5) : const Color(0xFF64748B),
+                    color: isDark
+                        ? Colors.white.withOpacity(0.5)
+                        : const Color(0xFF64748B),
                   ),
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
@@ -850,8 +943,7 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
   }
 
   Future<void> _launchSAPPortal() async {
-    final Uri url =
-        Uri.parse('https://sdc-sppap1.svkm.ac.in:50001/irj/portal');
+    final Uri url = Uri.parse('https://sdc-sppap1.svkm.ac.in:50001/irj/portal');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       debugPrint('Could not launch $url');
     }
@@ -865,8 +957,9 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
         vertical: isMobile ? 8 : 10,
       ),
       decoration: BoxDecoration(
-        color:
-            isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFFFF7ED),
+        color: isDark
+            ? Colors.white.withOpacity(0.04)
+            : const Color(0xFFFFF7ED),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isDark
@@ -881,11 +974,13 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.school_rounded,
-                        size: 15,
-                        color: isDark
-                            ? const Color(0xFFFBBF24)
-                            : const Color(0xFFD97706)),
+                    Icon(
+                      Icons.school_rounded,
+                      size: 15,
+                      color: isDark
+                          ? const Color(0xFFFBBF24)
+                          : const Color(0xFFD97706),
+                    ),
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
@@ -908,11 +1003,13 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.school_rounded,
-                    size: 16,
-                    color: isDark
-                        ? const Color(0xFFFBBF24)
-                        : const Color(0xFFD97706)),
+                Icon(
+                  Icons.school_rounded,
+                  size: 16,
+                  color: isDark
+                      ? const Color(0xFFFBBF24)
+                      : const Color(0xFFD97706),
+                ),
                 const SizedBox(width: 8),
                 Flexible(
                   child: Text.rich(
@@ -967,11 +1064,11 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.open_in_new_rounded,
-                size: 12,
-                color: isDark
-                    ? const Color(0xFFFBBF24)
-                    : const Color(0xFFD97706)),
+            Icon(
+              Icons.open_in_new_rounded,
+              size: 12,
+              color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
+            ),
             const SizedBox(width: 4),
             Text(
               'SAP Portal',

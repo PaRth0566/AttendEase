@@ -1,9 +1,8 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart'port 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/db_helper.dart';
 import '../../services/auth_service.dart';
@@ -170,15 +169,17 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     if (chosenEmail == null || chosenEmail!.isEmpty) return;
     final newEmail = chosenEmail!;
 
-    // ── Re-authenticate before the destructive operation ──
-    final didAuth = await _reAuthenticate();
-    if (!didAuth) {
-      _showSnackBar('Could not verify your identity. Email change cancelled.');
-      return;
-    }
-
     setState(() => _isLoading = true);
     try {
+      // ── Step 1: Re-authenticate before the destructive operation ──
+      setState(() => _isLoading = false); // Hide loader for re-auth dialog
+      final didAuth = await _reAuthenticate();
+      if (!didAuth) {
+        _showSnackBar('Identity verification failed. Email change cancelled.');
+        return;
+      }
+
+      setState(() => _isLoading = true);
       final user = _auth.currentUser;
       if (user == null) throw Exception('Not logged in.');
 
@@ -201,14 +202,32 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       transferData['preferences'] = userPrefs;
 
       // Upload transfer document keyed by new email
-      await FirebaseFirestore.instance
-          .collection('data_transfers')
-          .doc(newEmail)
-          .set(transferData);
+      // This allows the NEW account to pull this data upon its first login.
+      try {
+        await FirebaseFirestore.instance
+            .collection('data_transfers')
+            .doc(newEmail)
+            .set(transferData);
+      } catch (e) {
+        debugPrint('Firestore Transfer Write Error: $e');
+        throw Exception('Could not prepare data for transfer. Please try again.');
+      }
 
-      // Delete old Firestore doc & Auth account
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
-      await user.delete();
+      // Delete old Firestore doc
+      try {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+      } catch (e) {
+        debugPrint('Firestore User Delete Error: $e');
+        // We continue even if Firestore delete fails, as account deletion is priority
+      }
+
+      // ── Final Step: Delete the Firebase Auth account ──
+      try {
+        await user.delete();
+      } catch (e) {
+        debugPrint('Auth Delete Error: $e');
+        throw Exception('Could not finalize account change. Please log out and try again.');
+      }
 
       // Wipe local data
       if (!kIsWeb && db != null) {
@@ -221,7 +240,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Done! Sign up with $newEmail to restore your data.'),
+            content: Text('Success! Now sign up with $newEmail to get your data.'),
             duration: const Duration(seconds: 6),
           ),
         );
@@ -234,13 +253,15 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     } on FirebaseAuthException catch (e) {
       setState(() => _isLoading = false);
       if (e.code == 'requires-recent-login') {
-        _showSnackBar('Session expired. Please log out, log back in, and try again.');
+        _showSnackBar('Security session expired. Please log out, log back in, and try again.');
       } else {
-        _showSnackBar('Something went wrong. Please try again.');
+        _showSnackBar('Authentication error. Please try again.');
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      _showSnackBar('Something went wrong. Please try again.');
+      _showSnackBar(e.toString().contains('Exception:') 
+          ? e.toString().split('Exception:').last 
+          : 'Something went wrong. Please check your connection.');
     }
   }
 

@@ -115,17 +115,14 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
 
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
+      onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        // Check if any sub-screen (e.g. AccountSettings, BugReport) is on
-        // the local Navigator stack — if so, pop that first so the system
-        // back button behaves correctly within profile sub-pages.
-        final nav = Navigator.of(context);
-        if (nav.canPop()) {
-          nav.pop();
-          return;
-        }
-        // Nothing on the local stack — handle go_router back logic.
+        
+        // 1. Try to pop any sub-screens pushed via Navigator.push (e.g., from Profile)
+        final bool handledLocally = await Navigator.maybePop(context);
+        if (handledLocally) return;
+
+        // 2. If no sub-screens, handle internal GoRouter history or home redirect
         if (context.canPop()) {
           context.pop();
         } else {
