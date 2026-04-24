@@ -222,8 +222,9 @@ class _AuraLandingPageState extends State<AuraLandingPage> with SingleTickerProv
               _reportMeta = meta;
               _overallTarget = overall;
               _subjectTarget = subject;
-              _currentIndex = 2; // Jump to dashboard
+              _currentIndex = 2; 
             });
+            _onNavTap(2); // Ensure URL updates to /web/dashboard
           },
         );
       case 2:
