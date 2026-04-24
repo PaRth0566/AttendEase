@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>Attend Ease</h1>
+  <h1>AttendEase</h1>
   <img src="assets/icon/app_icon2.png" alt="Attend Ease Logo" width="120" height="120" /><br /><br />
 <a href="https://github.com/PaRth0566/AttendEase/releases"><img src="https://img.shields.io/badge/Download-APK-2D80EC?logo=android" width="226" ></a> &nbsp&nbsp&nbsp&nbsp
 <a href="https://attendease-cbc6f.web.app"><img src="https://img.shields.io/badge/Open_Web-APP-ff9a00?logo=firebase&logoColor=FFCA28" width="230"></a><br><br>
@@ -12,12 +12,12 @@
 <img src="assets/cover.png" alt="Attend Ease Cover" width="100%" />
 
 
-**Attend Ease** is an attendance management system designed to streamline how students track and analyze their academic presence. By leveraging the power of Google's Gemini, Attend Ease automates the tedious task of manual entry by extracting structured data directly from PDF attendance reports. It provides a premium, intuitive dashboard that offers deep insights, trend analysis, and predictive metrics to help users stay ahead of their attendance requirements.
+**AttendEase** is an attendance management system designed to streamline how students track and analyze their academic presence. By leveraging the power of Google's Gemini, Attend Ease automates the tedious task of manual entry by extracting structured data directly from PDF attendance reports. It provides a premium, intuitive dashboard that offers deep insights, trend analysis, and predictive metrics to help users stay ahead of their attendance requirements.
 
 > [!IMPORTANT]
 > **Disclaimer**: AttendEase is an automated tool. We are not liable for any calculation inaccuracies or resulting consequences. Please verify your attendance with official college records.
 >
-> **Privacy Note**: Attend Ease handles sensitive PDF data securely. The Node.js backend acts as a secure bridge, ensuring your AI processing remains private.
+> **Privacy Note**: AttendEase handles sensitive PDF data securely. The Node.js backend acts as a secure bridge, ensuring your AI processing remains private.
 
 
 ---
