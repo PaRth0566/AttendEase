@@ -2,7 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart'port 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/db_helper.dart';
 import '../../services/auth_service.dart';
@@ -51,8 +52,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     final user = _auth.currentUser;
     if (user == null) return false;
 
-    final bool isGoogleUser = user.providerData.any((p) => p.providerId == 'google.com');
-    final bool hasPassword  = user.providerData.any((p) => p.providerId == 'password');
+    final bool isGoogleUser = user.providerData.any(
+      (p) => p.providerId == 'google.com',
+    );
+    final bool hasPassword = user.providerData.any(
+      (p) => p.providerId == 'password',
+    );
 
     if (isGoogleUser && !hasPassword) {
       // Re-auth via Google
@@ -62,7 +67,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         final googleAuth = await googleUser.authentication;
         final credential = GoogleAuthProvider.credential(
           accessToken: googleAuth.accessToken,
-          idToken:     googleAuth.idToken,
+          idToken: googleAuth.idToken,
         );
         await user.reauthenticateWithCredential(credential);
         return true;
@@ -107,7 +112,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             onPressed: () async {
               try {
                 final credential = EmailAuthProvider.credential(
-                  email:    user.email!,
+                  email: user.email!,
                   password: passCtrl.text,
                 );
                 await user.reauthenticateWithCredential(credential);
@@ -154,7 +159,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () {
               chosenEmail = emailController.text.trim().toLowerCase();
@@ -169,21 +177,19 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     if (chosenEmail == null || chosenEmail!.isEmpty) return;
     final newEmail = chosenEmail!;
 
+    // ── Re-authenticate before the destructive operation ──
+    final didAuth = await _reAuthenticate();
+    if (!didAuth) {
+      _showSnackBar('Could not verify your identity. Email change cancelled.');
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
-      // ── Step 1: Re-authenticate before the destructive operation ──
-      setState(() => _isLoading = false); // Hide loader for re-auth dialog
-      final didAuth = await _reAuthenticate();
-      if (!didAuth) {
-        _showSnackBar('Identity verification failed. Email change cancelled.');
-        return;
-      }
-
-      setState(() => _isLoading = true);
       final user = _auth.currentUser;
       if (user == null) throw Exception('Not logged in.');
 
-      final db    = kIsWeb ? null : await DBHelper.instance.database;
+      final db = kIsWeb ? null : await DBHelper.instance.database;
       final prefs = await SharedPreferences.getInstance();
 
       // Build transfer payload
@@ -191,9 +197,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         'transferred_at': FieldValue.serverTimestamp(),
       };
       if (!kIsWeb && db != null) {
-        transferData['subjects']           = await db.query('subjects');
-        transferData['timetable']          = await db.query('timetable');
-        transferData['attendance_records'] = await db.query('attendance_records');
+        transferData['subjects'] = await db.query('subjects');
+        transferData['timetable'] = await db.query('timetable');
+        transferData['attendance_records'] = await db.query(
+          'attendance_records',
+        );
       }
       final Map<String, dynamic> userPrefs = {};
       for (final key in prefs.getKeys()) {
@@ -202,32 +210,17 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       transferData['preferences'] = userPrefs;
 
       // Upload transfer document keyed by new email
-      // This allows the NEW account to pull this data upon its first login.
-      try {
-        await FirebaseFirestore.instance
-            .collection('data_transfers')
-            .doc(newEmail)
-            .set(transferData);
-      } catch (e) {
-        debugPrint('Firestore Transfer Write Error: $e');
-        throw Exception('Could not prepare data for transfer. Please try again.');
-      }
+      await FirebaseFirestore.instance
+          .collection('data_transfers')
+          .doc(newEmail)
+          .set(transferData);
 
-      // Delete old Firestore doc
-      try {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
-      } catch (e) {
-        debugPrint('Firestore User Delete Error: $e');
-        // We continue even if Firestore delete fails, as account deletion is priority
-      }
-
-      // ── Final Step: Delete the Firebase Auth account ──
-      try {
-        await user.delete();
-      } catch (e) {
-        debugPrint('Auth Delete Error: $e');
-        throw Exception('Could not finalize account change. Please log out and try again.');
-      }
+      // Delete old Firestore doc & Auth account
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .delete();
+      await user.delete();
 
       // Wipe local data
       if (!kIsWeb && db != null) {
@@ -240,7 +233,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Success! Now sign up with $newEmail to get your data.'),
+            content: Text('Done! Sign up with $newEmail to restore your data.'),
             duration: const Duration(seconds: 6),
           ),
         );
@@ -253,15 +246,15 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     } on FirebaseAuthException catch (e) {
       setState(() => _isLoading = false);
       if (e.code == 'requires-recent-login') {
-        _showSnackBar('Security session expired. Please log out, log back in, and try again.');
+        _showSnackBar(
+          'Session expired. Please log out, log back in, and try again.',
+        );
       } else {
-        _showSnackBar('Authentication error. Please try again.');
+        _showSnackBar('Something went wrong. Please try again.');
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      _showSnackBar(e.toString().contains('Exception:') 
-          ? e.toString().split('Exception:').last 
-          : 'Something went wrong. Please check your connection.');
+      _showSnackBar('Something went wrong. Please try again.');
     }
   }
 
@@ -275,15 +268,18 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     // Backup data to cloud first so it survives any re-login
     await _syncService.backupDataToCloud();
 
-    final bool hasPasswordProvider =
-        user.providerData.any((p) => p.providerId == 'password');
+    final bool hasPasswordProvider = user.providerData.any(
+      (p) => p.providerId == 'password',
+    );
 
     if (hasPasswordProvider) {
       // User already has email/password provider — send reset email
       setState(() => _isLoading = true);
       try {
         await _auth.sendPasswordResetEmail(email: user.email!);
-        _showSnackBar('Password reset link sent to ${user.email}. Check your inbox.');
+        _showSnackBar(
+          'Password reset link sent to ${user.email}. Check your inbox.',
+        );
       } on FirebaseAuthException catch (e) {
         _showSnackBar('Could not send reset email. Please try again.');
       } catch (e) {
@@ -353,14 +349,18 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                     password: newPass,
                   );
                   await user.linkWithCredential(credential);
-                  _showSnackBar('Password set! You can now sign in with email & password.');
+                  _showSnackBar(
+                    'Password set! You can now sign in with email & password.',
+                  );
                 } on FirebaseAuthException catch (e) {
                   if (e.code == 'provider-already-linked') {
                     try {
                       await user.updatePassword(newPass);
                       _showSnackBar('Password updated successfully!');
                     } catch (updateErr) {
-                      _showSnackBar('Could not update password. Please try again.');
+                      _showSnackBar(
+                        'Could not update password. Please try again.',
+                      );
                     }
                   } else {
                     _showSnackBar('Could not set password. Please try again.');
@@ -387,7 +387,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         setState(() => _isLoading = false);
         return; // aborted
       }
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
       final AuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
@@ -397,10 +398,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       await _syncService.backupDataToCloud();
 
       _showSnackBar('Successfully linked to Google and synced your data!');
-      setState(() {}); 
+      setState(() {});
     } on FirebaseAuthException catch (e) {
       if (e.code == 'credential-already-in-use') {
-        _showSnackBar('This Google account is already linked to another AttendEase account. Please choose a different Google account.');
+        _showSnackBar(
+          'This Google account is already linked to another AttendEase account. Please choose a different Google account.',
+        );
       } else {
         _showSnackBar('Could not link your Google account. Please try again.');
       }
@@ -436,7 +439,10 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
@@ -445,11 +451,16 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 await _performDeletion();
               } else {
                 ScaffoldMessenger.of(ctx).showSnackBar(
-                  const SnackBar(content: Text('Verification failed. Account not deleted.')),
+                  const SnackBar(
+                    content: Text('Verification failed. Account not deleted.'),
+                  ),
                 );
               }
             },
-            child: const Text('Delete Permanently', style: TextStyle(color: Colors.white)),
+            child: const Text(
+              'Delete Permanently',
+              style: TextStyle(color: Colors.white),
+            ),
           ),
         ],
       ),
@@ -461,10 +472,13 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     try {
       final user = _auth.currentUser;
       if (user != null) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .delete();
         await user.delete();
       }
-      
+
       await _authService.signOut();
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
@@ -486,7 +500,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     } on FirebaseAuthException catch (e) {
       setState(() => _isLoading = false);
       if (e.code == 'requires-recent-login') {
-        _showSnackBar('Security requirement: Please log out, log back in, and try deleting your account again.');
+        _showSnackBar(
+          'Security requirement: Please log out, log back in, and try deleting your account again.',
+        );
       } else {
         _showSnackBar('Could not delete account. Please try again.');
       }
@@ -511,88 +527,102 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 600),
                 child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(
-                horizontal: MediaQuery.of(context).size.width > 600 ? 32 : 16,
-                vertical: 16,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Profile Information',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                    ),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: MediaQuery.of(context).size.width > 600
+                        ? 32
+                        : 16,
+                    vertical: 16,
                   ),
-                  const SizedBox(height: 16),
-                  ListTile(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: theme.dividerColor),
-                    ),
-                    leading: Icon(isGuest ? Icons.person_outline : Icons.email, color: theme.colorScheme.primary),
-                    title: Text(isGuest ? 'Guest Account' : (user?.email ?? 'Unknown Email')),
-                    subtitle: isGuest ? const Text('Temporary session') : const Text('Verified user'),
-                  ),
-                  const SizedBox(height: 32),
-                  Text(
-                    'Settings',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  if (isGuest) ...[
-                    _actionTile(
-                      icon: Icons.link,
-                      title: 'Link with Google Account',
-                      subtitle: 'Save your guest data permanently to a secure Google account.',
-                      onTap: _linkWithGoogle,
-                      theme: theme,
-                    ),
-                  ] else ...[
-                    _actionTile(
-                      icon: Icons.edit_note,
-                      title: 'Change Email Address',
-                      subtitle: 'Migrate your account data to a new email address.',
-                      onTap: _changeEmail,
-                      theme: theme,
-                    ),
-                    _actionTile(
-                      icon: Icons.password,
-                      title: 'Change Password',
-                      subtitle: 'Set or reset your account password.',
-                      onTap: _changePassword,
-                      theme: theme,
-                    ),
-                  ],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Profile Information',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ListTile(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: theme.dividerColor),
+                        ),
+                        leading: Icon(
+                          isGuest ? Icons.person_outline : Icons.email,
+                          color: theme.colorScheme.primary,
+                        ),
+                        title: Text(
+                          isGuest
+                              ? 'Guest Account'
+                              : (user?.email ?? 'Unknown Email'),
+                        ),
+                        subtitle: isGuest
+                            ? const Text('Temporary session')
+                            : const Text('Verified user'),
+                      ),
+                      const SizedBox(height: 32),
+                      Text(
+                        'Settings',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
 
-                  const SizedBox(height: 48),
-                  Text(
-                    'Danger Zone',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.red.shade700,
-                    ),
+                      if (isGuest) ...[
+                        _actionTile(
+                          icon: Icons.link,
+                          title: 'Link with Google Account',
+                          subtitle:
+                              'Save your guest data permanently to a secure Google account.',
+                          onTap: _linkWithGoogle,
+                          theme: theme,
+                        ),
+                      ] else ...[
+                        _actionTile(
+                          icon: Icons.edit_note,
+                          title: 'Change Email Address',
+                          subtitle:
+                              'Migrate your account data to a new email address.',
+                          onTap: _changeEmail,
+                          theme: theme,
+                        ),
+                        _actionTile(
+                          icon: Icons.password,
+                          title: 'Change Password',
+                          subtitle: 'Set or reset your account password.',
+                          onTap: _changePassword,
+                          theme: theme,
+                        ),
+                      ],
+
+                      const SizedBox(height: 48),
+                      Text(
+                        'Danger Zone',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _actionTile(
+                        icon: Icons.delete_forever,
+                        title: 'Delete Account',
+                        subtitle:
+                            'Permanently remove your account and all data.',
+                        onTap: _deleteAccount,
+                        theme: theme,
+                        isDestructive: true,
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  _actionTile(
-                    icon: Icons.delete_forever,
-                    title: 'Delete Account',
-                    subtitle: 'Permanently remove your account and all data.',
-                    onTap: _deleteAccount,
-                    theme: theme,
-                    isDestructive: true,
-                  ),
-                ],
-              ),
-            ),
+                ),
               ),
             ),
     );
@@ -614,13 +644,29 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: isDestructive ? Colors.red.withOpacity(0.3) : theme.dividerColor,
+          color: isDestructive
+              ? Colors.red.withOpacity(0.3)
+              : theme.dividerColor,
         ),
       ),
       child: ListTile(
-        leading: Icon(icon, color: isDestructive ? Colors.red : theme.colorScheme.primary),
-        title: Text(title, style: TextStyle(fontWeight: FontWeight.w600, color: color)),
-        subtitle: Text(subtitle, style: TextStyle(fontSize: 12, color: isDestructive ? Colors.red.withOpacity(0.8) : theme.textTheme.bodySmall?.color)),
+        leading: Icon(
+          icon,
+          color: isDestructive ? Colors.red : theme.colorScheme.primary,
+        ),
+        title: Text(
+          title,
+          style: TextStyle(fontWeight: FontWeight.w600, color: color),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            fontSize: 12,
+            color: isDestructive
+                ? Colors.red.withOpacity(0.8)
+                : theme.textTheme.bodySmall?.color,
+          ),
+        ),
         trailing: const Icon(Icons.arrow_forward_ios, size: 14),
         onTap: onTap,
       ),
