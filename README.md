@@ -2,7 +2,7 @@
   <h1>AttendEase</h1>
   <img src="assets/icon/app_icon2.png" alt="Attend Ease Logo" width="120" height="120" /><br /><br />
 <a href="https://github.com/PaRth0566/AttendEase/releases/download/v1.0.0/app-release.apk"><img src="https://img.shields.io/badge/Download-APK-2D80EC?logo=android" width="226" ></a> &nbsp&nbsp&nbsp&nbsp
-<a href="https://attendease-cbc6f.web.app" target="_blank"><img src="https://img.shields.io/badge/Open_Web-APP-ff9a00?logo=firebase&logoColor=FFCA28" width="230"></a><br><br>
+<a href="https://attendease-cbc6f.web.app"><img src="https://img.shields.io/badge/Open_Web-APP-ff9a00?logo=firebase&logoColor=FFCA28" width="230"></a><br><br>
 <a href="https://github.com/neo999in/AttendEase-backend"><img src="https://img.shields.io/badge/Backend-Repository-339933?logo=nodedotjs" width="180" ></a><br>
 </div>
 
