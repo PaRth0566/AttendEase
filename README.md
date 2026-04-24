@@ -77,10 +77,10 @@ AttendEase/
 ├── lib/               # Core Flutter application source files
 │   ├── screens/       # Feature-specific UI components
 │   ├── database/      # SQLite & Local DB management
-│   └── services/      # Firebase & API integration logic
+│   ├── services/      # Firebase & API integration logic
+│   └── router/        # GoRouter navigation configuration
 ├── backend/           # Node.js Express server for Gemini AI
-├── assets/            # App icons, colors, and static resources
-└── test/              # Unit and widget testing suite
+└── assets/            # App icons, images, and static resources
 ```
 ---
 ### 📄 License
