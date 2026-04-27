@@ -1,6 +1,8 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../database/db_helper.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -15,12 +17,16 @@ class AuthService {
   Future<User?> signInWithGoogle() async {
     try {
       if (kIsWeb) {
-        // Use Firebase native web popup flow (Bypasses the need for People API)
+        // Use Firebase native web popup flow
         final GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        // Force account selection every time
+        googleProvider.setCustomParameters({'prompt': 'select_account'});
         final UserCredential userCredential = await _auth.signInWithPopup(googleProvider);
         return userCredential.user;
       } else {
         // Mobile Flow
+        // Force logout first so it doesn't auto-login to the previous account
+        await _googleSignIn.signOut();
         final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
         if (googleUser == null) return null;
 
@@ -88,6 +94,20 @@ class AuthService {
 
   // 5. SIGN OUT
   Future<void> signOut() async {
+    // ── WIPE LOCAL DATA TO PREVENT LEAKING BETWEEN ACCOUNTS ──
+    try {
+      if (!kIsWeb) {
+        final db = await DBHelper.instance.database;
+        await db.delete('attendance_records');
+        await db.delete('timetable');
+        await db.delete('subjects');
+      }
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+    } catch (e) {
+      print('Failed to wipe local data on logout: $e');
+    }
+
     await _googleSignIn.signOut();
     await _auth.signOut();
   }

@@ -310,7 +310,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     if (widget.isEditMode) {
       Navigator.pop(context);
     } else {
-      context.push('/setup/criteria');
+      context.go('/setup/basic/criteria');
     }
   }
 

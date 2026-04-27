@@ -294,13 +294,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     icon: Icons.person_rounded,
                     title: 'Edit Profile & Dates',
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              const BasicInfoScreen(isEditMode: true),
-                        ),
-                      ).then((_) => _loadProfileData());
+                      context.go('/app/profile/basic');
                     },
                   ),
 
@@ -308,13 +302,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     icon: Icons.book_rounded,
                     title: 'Edit Subjects (Sem $semester)',
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              const AddSubjectsScreen(isEditMode: true),
-                        ),
-                      ).then((_) => _loadProfileData());
+                      context.go('/app/profile/subjects');
                     },
                   ),
 
@@ -322,13 +310,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     icon: Icons.schedule_rounded,
                     title: 'Edit Timetable (Sem $semester)',
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              const TimetableSetupScreen(isEditMode: true),
-                        ),
-                      );
+                      context.go('/app/profile/timetable');
                     },
                   ),
 
@@ -336,13 +318,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     icon: Icons.rule_rounded,
                     title: 'Attendance Preferences',
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              const AttendanceCriteriaScreen(isEditMode: true),
-                        ),
-                      );
+                      context.go('/app/profile/criteria');
                     },
                   ),
 
@@ -350,10 +326,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     icon: Icons.bar_chart_rounded,
                     title: 'Reports & Analytics',
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const ReportScreen()),
-                      );
+                      context.go('/app/profile/report');
                     },
                   ),
 
@@ -361,12 +334,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     icon: Icons.cloud_sync_rounded,
                     title: 'Sync New Attendance Report',
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const RefreshPdfScreen(),
-                        ),
-                      ).then((_) => _loadProfileData());
+                      context.go('/app/profile/refresh-pdf');
                     },
                   ),
 
@@ -378,10 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     icon: Icons.manage_accounts_rounded,
                     title: 'Account Settings',
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const AccountSettingsScreen()),
-                      );
+                      context.go('/app/profile/account');
                     },
                   ),
 
@@ -389,10 +354,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     icon: Icons.bug_report_rounded,
                     title: 'Report a Bug',
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const BugReportScreen()),
-                      );
+                      context.go('/app/profile/bug-report');
                     },
                   ),
 
@@ -416,7 +378,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _themeToggleTile() {
     final theme = Theme.of(context);
-    final isDark = themeProvider.themeMode == ThemeMode.dark;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Card(
       elevation: 0,
@@ -440,7 +402,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           activeColor: theme.colorScheme.primary,
           onChanged: (bool value) {
             themeProvider.setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
-            setState(() {});
           },
         ),
       ),

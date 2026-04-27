@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
@@ -480,12 +481,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       child: InkWell(
         onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => SubjectDetailScreen(subject: subject),
-            ),
-          ).then((_) {
+          context.push('/app/dashboard/subject-detail', extra: subject).then((_) {
             setState(() => _loading = true);
             _loadDashboardData();
           });

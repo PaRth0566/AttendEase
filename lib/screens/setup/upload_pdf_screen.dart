@@ -46,7 +46,7 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
       setState(() => _isUploading = false);
 
       if (mounted) {
-        context.pushReplacement('/setup/basic', extra: parsedData);
+        context.go('/setup/basic', extra: parsedData);
       }
     } catch (e) {
       if (mounted) {

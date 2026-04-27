@@ -172,7 +172,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
       );
       Navigator.pop(context);
     } else {
-      context.push('/setup/timetable');
+      context.go('/setup/basic/criteria/subjects/timetable');
     }
   }
 

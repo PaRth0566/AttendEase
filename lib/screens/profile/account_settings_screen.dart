@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../database/db_helper.dart';
 import '../../services/auth_service.dart';
@@ -62,6 +63,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     if (isGoogleUser && !hasPassword) {
       // Re-auth via Google
       try {
+        await GoogleSignIn().signOut(); // Force prompt for recent login
         final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
         if (googleUser == null) return false;
         final googleAuth = await googleUser.authentication;
@@ -131,21 +133,28 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   }
 
   Future<void> _changeEmail() async {
+    final user = _auth.currentUser;
+    if (user == null) {
+      _showSnackBar('You must be logged in to change your email.');
+      return;
+    }
+
     final TextEditingController emailController = TextEditingController();
     String? chosenEmail;
 
     await showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Change Email'),
+        title: const Text('Change Email Address'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Your data will be transferred to the new email. '
-              'The current account will be deleted so the old email starts completely fresh. '
-              'Sign up or sign in with the new email to get your data back.',
-              style: TextStyle(fontSize: 13, height: 1.5),
+              'Enter your new email address.\n\n'
+              'A verification link will be sent to it. Until you click the link, your current email remains active. '
+              'Once verified, your email is instantly updated and all your data is perfectly preserved exactly where you left off. '
+              'You can then sign in with your new email and password.',
+              style: TextStyle(fontSize: 14, height: 1.5),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -168,7 +177,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               chosenEmail = emailController.text.trim().toLowerCase();
               Navigator.pop(ctx);
             },
-            child: const Text('Transfer & Delete'),
+            child: const Text('Send Verification Link'),
           ),
         ],
       ),
@@ -177,84 +186,41 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     if (chosenEmail == null || chosenEmail!.isEmpty) return;
     final newEmail = chosenEmail!;
 
-    // ── Re-authenticate before the destructive operation ──
-    final didAuth = await _reAuthenticate();
-    if (!didAuth) {
-      _showSnackBar('Could not verify your identity. Email change cancelled.');
-      return;
-    }
-
     setState(() => _isLoading = true);
+
     try {
-      final user = _auth.currentUser;
-      if (user == null) throw Exception('Not logged in.');
-
-      final db = kIsWeb ? null : await DBHelper.instance.database;
-      final prefs = await SharedPreferences.getInstance();
-
-      // Build transfer payload
-      final Map<String, dynamic> transferData = {
-        'transferred_at': FieldValue.serverTimestamp(),
-      };
-      if (!kIsWeb && db != null) {
-        transferData['subjects'] = await db.query('subjects');
-        transferData['timetable'] = await db.query('timetable');
-        transferData['attendance_records'] = await db.query(
-          'attendance_records',
-        );
-      }
-      final Map<String, dynamic> userPrefs = {};
-      for (final key in prefs.getKeys()) {
-        userPrefs[key] = prefs.get(key);
-      }
-      transferData['preferences'] = userPrefs;
-
-      // Upload transfer document keyed by new email
-      await FirebaseFirestore.instance
-          .collection('data_transfers')
-          .doc(newEmail)
-          .set(transferData);
-
-      // Delete old Firestore doc & Auth account
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .delete();
-      await user.delete();
-
-      // Wipe local data
-      if (!kIsWeb && db != null) {
-        await db.delete('attendance_records');
-        await db.delete('timetable');
-        await db.delete('subjects');
-      }
-      await prefs.clear();
-
+      // Sync cloud data to be extra safe before email change
+      await _syncService.backupDataToCloud();
+      
+      await user.verifyBeforeUpdateEmail(newEmail);
+      
+      // Immediately log out so they must log in with the new email once verified
+      await AuthService().signOut();
+      
+      setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Done! Sign up with $newEmail to restore your data.'),
-            duration: const Duration(seconds: 6),
+            content: Text('Verification link sent to $newEmail! Please verify it, then log in.'),
+            duration: const Duration(seconds: 8),
           ),
         );
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
-        );
+        context.go('/login');
       }
     } on FirebaseAuthException catch (e) {
       setState(() => _isLoading = false);
       if (e.code == 'requires-recent-login') {
-        _showSnackBar(
-          'Session expired. Please log out, log back in, and try again.',
-        );
+        _showSnackBar('Session expired. Please log out, log back in, and try again.');
+      } else if (e.code == 'email-already-in-use') {
+         _showSnackBar('This email is already in use by another account.');
+      } else if (e.code == 'invalid-email') {
+         _showSnackBar('The email address is invalid.');
       } else {
-        _showSnackBar('Something went wrong. Please try again.');
+        _showSnackBar('Error: ${e.message}');
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      _showSnackBar('Something went wrong. Please try again.');
+      _showSnackBar('Error: ${e.toString()}');
     }
   }
 
@@ -491,11 +457,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       }
 
       if (mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
-        );
+        context.go('/login');
       }
     } on FirebaseAuthException catch (e) {
       setState(() => _isLoading = false);

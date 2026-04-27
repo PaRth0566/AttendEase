@@ -87,7 +87,7 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
       );
       Navigator.pop(context);
     } else {
-      context.push('/setup/subjects');
+      context.go('/setup/basic/criteria/subjects');
     }
   }
 

@@ -73,7 +73,7 @@ class SetupChoiceScreen extends StatelessWidget {
                 color: theme.colorScheme.primary,
                 isDark: isDark,
                 onTap: () {
-                  context.push('/setup/upload');
+                  context.go('/setup/upload');
                 },
               ),
 
@@ -88,7 +88,7 @@ class SetupChoiceScreen extends StatelessWidget {
                 color: Colors.orange.shade600,
                 isDark: isDark,
                 onTap: () {
-                  context.push('/setup/basic');
+                  context.go('/setup/basic');
                 },
               ),
             ],
