@@ -1,7 +1,7 @@
 <div align="center">
   <h1>AttendEase</h1>
   <img src="assets/icon/app_icon2.png" alt="Attend Ease Logo" width="120" height="120" /><br /><br />
-<a href="https://github.com/PaRth0566/AttendEase/releases"><img src="https://img.shields.io/badge/Download-APK-2D80EC?logo=android" width="226" ></a> &nbsp&nbsp&nbsp&nbsp
+<a href="https://github.com/PaRth0566/AttendEase/releases/download/v1.0.0/app-release.apk"><img src="https://img.shields.io/badge/Download-APK-2D80EC?logo=android" width="226" ></a> &nbsp&nbsp&nbsp&nbsp
 <a href="https://attendease-cbc6f.web.app"><img src="https://img.shields.io/badge/Open_Web-APP-ff9a00?logo=firebase&logoColor=FFCA28" width="230"></a><br><br>
 <a href="https://github.com/neo999in/AttendEase-backend"><img src="https://img.shields.io/badge/Backend-Repository-339933?logo=nodedotjs" width="180" ></a><br>
 </div>
@@ -77,10 +77,10 @@ AttendEase/
 ├── lib/               # Core Flutter application source files
 │   ├── screens/       # Feature-specific UI components
 │   ├── database/      # SQLite & Local DB management
-│   └── services/      # Firebase & API integration logic
+│   ├── services/      # Firebase & API integration logic
+│   └── router/        # GoRouter navigation configuration
 ├── backend/           # Node.js Express server for Gemini AI
-├── assets/            # App icons, colors, and static resources
-└── test/              # Unit and widget testing suite
+└── assets/            # App icons, images, and static resources
 ```
 ---
 ### 📄 License
