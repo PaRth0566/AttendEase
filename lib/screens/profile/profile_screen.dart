@@ -402,6 +402,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           activeColor: theme.colorScheme.primary,
           onChanged: (bool value) {
             themeProvider.setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
+            setState(() {});
           },
         ),
       ),

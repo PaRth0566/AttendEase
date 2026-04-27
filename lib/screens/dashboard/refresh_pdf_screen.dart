@@ -284,36 +284,43 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Icon with gradient glow
               Center(
                 child: Container(
-                  width: 100,
-                  height: 100,
+                  width: 120,
+                  height: 120,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _isDone 
-                        ? Colors.green.withOpacity(isDark ? 0.15 : 0.1)
-                        : theme.colorScheme.primary.withOpacity(isDark ? 0.15 : 0.1),
-                    border: Border.all(
-                      color: _isDone 
-                          ? Colors.green.withOpacity(0.5)
-                          : theme.colorScheme.primary.withOpacity(0.5),
-                      width: 2,
+                    gradient: LinearGradient(
+                      colors: _isDone
+                          ? [Colors.green.shade400, Colors.teal.shade400]
+                          : [const Color(0xFF6366F1), const Color(0xFF3B82F6)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: (_isDone ? Colors.green : const Color(0xFF6366F1))
+                            .withOpacity(0.35),
+                        blurRadius: 32,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
                   ),
                   child: Icon(
-                    _isDone ? Icons.check_rounded : Icons.cloud_sync_rounded,
-                    size: 48,
-                    color: _isDone ? Colors.green : theme.colorScheme.primary,
+                    _isDone ? Icons.check_circle_rounded : Icons.cloud_sync_rounded,
+                    size: 56,
+                    color: Colors.white,
                   ),
                 ),
               ),
               const SizedBox(height: 36),
 
               Text(
-                _isDone ? 'Sync Complete' : 'Sync Attendance',
+                _isDone ? 'Sync Complete! ✓' : 'Sync Attendance',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 26,
                   fontWeight: FontWeight.bold,
                   color: theme.textTheme.bodyLarge?.color,
                 ),
@@ -331,14 +338,14 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(isDark ? 0.15 : 0.1),
+                      color: Colors.blue.withOpacity(isDark ? 0.15 : 0.1),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: theme.colorScheme.primary.withOpacity(0.4)),
+                      border: Border.all(color: Colors.blue.withOpacity(0.4)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.info_outline_rounded, size: 14, color: theme.colorScheme.primary),
+                        const Icon(Icons.info_outline_rounded, size: 14, color: Colors.blue),
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
@@ -346,7 +353,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? theme.colorScheme.primary.withAlpha(200) : theme.colorScheme.primary,
+                              color: isDark ? Colors.blue.shade300 : Colors.blue.shade800,
                             ),
                           ),
                         ),
@@ -370,28 +377,44 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                   ],
                 )
               else if (_isDone)
-                OutlinedButton.icon(
+                ElevatedButton.icon(
                   onPressed: () => Navigator.pop(context, true),
                   icon: const Icon(Icons.arrow_back_rounded),
                   label: const Text('Back to Dashboard', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: theme.colorScheme.primary,
-                    side: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade600,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 18),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 0,
                   ),
                 )
               else
-                ElevatedButton.icon(
-                  onPressed: _pickAndRefresh,
-                  icon: const Icon(Icons.upload_file_rounded, size: 20),
-                  label: const Text('Select PDF Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF6366F1), Color(0xFF3B82F6)],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF6366F1).withOpacity(0.4),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton.icon(
+                    onPressed: _pickAndRefresh,
+                    icon: const Icon(Icons.upload_file_rounded, size: 20),
+                    label: const Text('Select PDF Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    ),
                   ),
                 ),
             ],
