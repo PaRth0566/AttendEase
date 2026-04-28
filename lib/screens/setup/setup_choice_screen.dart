@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:ui';
 
 class SetupChoiceScreen extends StatelessWidget {
   const SetupChoiceScreen({super.key});
@@ -30,31 +31,33 @@ class SetupChoiceScreen extends StatelessWidget {
         ],
       ),
       body: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 540),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.only(left: 24, right: 24, top: 48, bottom: 24),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.settings_suggest_rounded,
-                      size: 48,
-                      color: theme.colorScheme.primary,
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.settings_suggest_rounded,
+                        size: 64,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 32),
                   Text(
                     "Let's configure your profile",
-                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -65,7 +68,6 @@ class SetupChoiceScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   Text(
                     "Choose how you want to import your subjects and attendance data into AttendEase.",
-                    textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 16,
                       height: 1.5,
@@ -75,24 +77,22 @@ class SetupChoiceScreen extends StatelessWidget {
                   const SizedBox(height: 48),
 
                   // Smart Extraction Option
-                  _buildPremiumCard(
+                  _buildGlassCard(
                     context: context,
                     title: "Smart PDF Extraction",
                     subtitle: "Upload your SAP attendance PDF to automatically detect subjects and current attendance.",
                     icon: Icons.auto_awesome_rounded,
-                    isPrimary: true,
                     onTap: () => context.go('/setup/upload'),
                   ),
 
                   const SizedBox(height: 20),
 
                   // Manual Entry Option
-                  _buildPremiumCard(
+                  _buildGlassCard(
                     context: context,
                     title: "Manual Configuration",
                     subtitle: "Manually input your subjects, criteria, and timetable step-by-step.",
                     icon: Icons.draw_rounded,
-                    isPrimary: false,
                     onTap: () => context.go('/setup/basic'),
                   ),
                 ],
@@ -104,86 +104,91 @@ class SetupChoiceScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildPremiumCard({
+  Widget _buildGlassCard({
     required BuildContext context,
     required String title,
     required String subtitle,
     required IconData icon,
-    required bool isPrimary,
     required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    final backgroundColor = isPrimary
-        ? (isDark ? theme.colorScheme.primary.withOpacity(0.15) : theme.colorScheme.primary.withOpacity(0.05))
-        : theme.cardColor;
+    final backgroundColor = isDark
+        ? Colors.white.withOpacity(0.05)
+        : Colors.black.withOpacity(0.03);
 
-    final borderColor = isPrimary
-        ? theme.colorScheme.primary.withOpacity(0.5)
-        : theme.dividerColor;
+    final borderColor = isDark
+        ? Colors.white.withOpacity(0.1)
+        : Colors.black.withOpacity(0.08);
 
-    final iconColor = isPrimary ? theme.colorScheme.primary : theme.iconTheme.color ?? Colors.grey;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: backgroundColor,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: borderColor, width: 1.5),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isPrimary ? theme.colorScheme.primary : theme.dividerColor.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  icon,
-                  color: isPrimary ? Colors.white : theme.textTheme.bodyLarge?.color,
-                  size: 24,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: Ink(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: borderColor,
+                  width: 1.5,
                 ),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: theme.textTheme.bodyLarge?.color,
-                      ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.15),
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      subtitle,
-                      style: TextStyle(
-                        fontSize: 14,
-                        height: 1.4,
-                        color: theme.textTheme.bodyMedium?.color,
-                      ),
+                    child: Icon(
+                      icon,
+                      color: theme.colorScheme.primary,
+                      size: 28,
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: theme.textTheme.bodyLarge?.color,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.4,
+                            color: theme.textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 16,
+                    color: theme.iconTheme.color?.withOpacity(0.5),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                size: 16,
-                color: theme.dividerColor,
-              ),
-            ],
+            ),
           ),
         ),
       ),

@@ -381,7 +381,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                       onPressed: _toggleTheme,
                       icon: Icon(
                         themeProvider.isDarkMode
-                            ? Icons.nightlight_round
+                            ? Icons.dark_mode
                             : Icons.light_mode_rounded,
                         color: isDark
                             ? const Color(0xFFC7D2FE)

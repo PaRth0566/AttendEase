@@ -364,8 +364,15 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
               file.name.toLowerCase().endsWith('.pdf') ||
               file.mimeType == 'application/pdf';
           if (isPdf) {
-            final bytes = await file.readAsBytes();
-            await _processFile(file.name, bytes);
+            try {
+              final bytes = await file.readAsBytes();
+              await _processFile(file.name, bytes);
+            } catch (e) {
+              setState(
+                () => _errorMessage =
+                    'Could not read the dropped file. Try using the click to upload option instead.',
+              );
+            }
           } else {
             setState(
               () => _errorMessage =
