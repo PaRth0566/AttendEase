@@ -8,8 +8,6 @@ import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../database/attendance_dao.dart';
 import '../../models/subject.dart';
-import '../../services/auth_service.dart';
-import '../auth/login_screen.dart';
 import '../setup/attendance_criteria_screen.dart';
 import '../../services/cloud_sync_service.dart';
 
@@ -420,13 +418,11 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () async {
+                      onPressed: () {
                         if (widget.isEditMode) {
                           Navigator.pop(context);
                         } else {
-                          await AuthService().signOut();
-                          if (!mounted) return;
-                          context.go('/login');
+                          context.go('/setup');
                         }
                       },
                       style: OutlinedButton.styleFrom(
