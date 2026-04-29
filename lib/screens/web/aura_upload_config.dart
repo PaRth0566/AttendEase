@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 
+import 'package:flutter_dropzone/flutter_dropzone.dart';
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -33,6 +35,8 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
   String? _fileName;
 
   // ── Progress animation state ──────────────────────────────
+  DropzoneViewController? _dropzoneController;
+
   int _progressStep = 0;
   double _progressValue = 0.0;
   bool _isHolding = false; // true when animation has caught up to API
@@ -357,31 +361,44 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
       onDragEntered: (_) => setState(() => _isDragging = true),
       onDragExited: (_) => setState(() => _isDragging = false),
       onDragDone: (details) async {
+        if (kIsWeb) return; // DropzoneView handles web
         setState(() => _isDragging = false);
         if (details.files.isNotEmpty) {
           final file = details.files.first;
-          final isPdf =
-              file.name.toLowerCase().endsWith('.pdf') ||
-              file.mimeType == 'application/pdf';
-          if (isPdf) {
-            try {
-              final bytes = await file.readAsBytes();
-              await _processFile(file.name, bytes);
-            } catch (e) {
-              setState(
-                () => _errorMessage =
-                    'Could not read the dropped file. Try using the click to upload option instead.',
-              );
-            }
-          } else {
-            setState(
-              () => _errorMessage =
-                  'Please drop a valid .pdf file. Only PDF files are supported.',
-            );
+          if (file.name.toLowerCase().endsWith('.pdf')) {
+            final bytes = await file.readAsBytes();
+            await _processFile(file.name, bytes);
           }
         }
       },
-      child: Padding(
+      child: Stack(
+        children: [
+          if (kIsWeb)
+            Positioned.fill(
+              child: DropzoneView(
+                operation: DragOperation.copy,
+                onCreated: (ctrl) => _dropzoneController = ctrl,
+                onHover: () => setState(() => _isDragging = true),
+                onLeave: () => setState(() => _isDragging = false),
+                onDrop: (dynamic ev) async {
+                  setState(() => _isDragging = false);
+                  try {
+                    final name = await _dropzoneController!.getFilename(ev);
+                    final mime = await _dropzoneController!.getFileMIME(ev);
+                    final isPdf = name.toLowerCase().endsWith('.pdf') || mime == 'application/pdf';
+                    if (isPdf) {
+                      final bytes = await _dropzoneController!.getFileData(ev);
+                      await _processFile(name, bytes);
+                    } else {
+                      setState(() => _errorMessage = 'Please drop a valid .pdf file. Only PDF files are supported.');
+                    }
+                  } catch (e) {
+                    setState(() => _errorMessage = 'Could not read the dropped file. Try using the click to upload option instead.');
+                  }
+                },
+              ),
+            ),
+          Padding(
         padding: EdgeInsets.only(
           left: isMobile ? 16 : 24,
           right: isMobile ? 16 : 24,
@@ -583,9 +600,11 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
             ),
           ),
         ),
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildBanner(
     bool isDark,

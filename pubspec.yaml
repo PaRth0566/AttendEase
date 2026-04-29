@@ -34,6 +34,7 @@ dependencies:
   syncfusion_flutter_pdf: ^33.1.49
   desktop_drop: ^0.7.1
   go_router: ^17.2.2
+  flutter_dropzone: ^4.2.1
 
 dev_dependencies:
   flutter_test:
