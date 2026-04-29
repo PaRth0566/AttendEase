@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui';
 
-import 'package:desktop_drop/desktop_drop.dart';
+import 'dart:js_interop';
+import 'package:web/web.dart' as web;
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,13 @@ import 'package:http_parser/http_parser.dart';
 
 import '../../models/subject.dart';
 import 'aura_ai_dashboard.dart';
+
+// ── JS interop: reads globals set by index.html drop handler ────────────────
+@JS('_flutterDropFileName')
+external String? get _jsDropFileName;
+
+@JS('_flutterDropFileBase64')
+external String? get _jsDropFileBase64;
 
 class AuraUploadConfig extends StatefulWidget {
   final Function(
@@ -32,6 +40,12 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
   bool _isLoading = false;
   String? _errorMessage;
   String? _fileName;
+  bool _isDragging = false;
+
+  // ── Web drag-and-drop JS bridge listeners ─────────────────
+  web.EventListener? _onFileDropped;
+  web.EventListener? _onDragEnter;
+  web.EventListener? _onDragLeave;
 
   // ── Progress animation state ──────────────────────────────
 
@@ -156,7 +170,55 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
   );
 
   @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      _onFileDropped = ((web.Event _) => _handleWebDrop()).toJS;
+      _onDragEnter = ((web.Event _) {
+        if (mounted) setState(() => _isDragging = true);
+      }).toJS;
+      _onDragLeave = ((web.Event _) {
+        if (mounted) setState(() => _isDragging = false);
+      }).toJS;
+      web.window.addEventListener('flutter_file_dropped', _onFileDropped!);
+      web.window.addEventListener('flutter_drag_enter', _onDragEnter!);
+      web.window.addEventListener('flutter_drag_leave', _onDragLeave!);
+    }
+  }
+
+  void _handleWebDrop() {
+    final name = _jsDropFileName;
+    final base64 = _jsDropFileBase64;
+    if (name == null || base64 == null || base64.isEmpty) return;
+    if (!name.toLowerCase().endsWith('.pdf')) {
+      setState(() {
+        _isDragging = false;
+        _errorMessage = 'Please drop a valid .pdf file. Only PDF files are supported.';
+      });
+      return;
+    }
+    setState(() => _isDragging = false);
+    try {
+      final bytes = base64Decode(base64);
+      _processFile(name, bytes);
+    } catch (e) {
+      setState(() => _errorMessage = 'Could not read the dropped file. Try the click to upload option instead.');
+    }
+  }
+
+  @override
   void dispose() {
+    if (kIsWeb) {
+      if (_onFileDropped != null) {
+        web.window.removeEventListener('flutter_file_dropped', _onFileDropped!);
+      }
+      if (_onDragEnter != null) {
+        web.window.removeEventListener('flutter_drag_enter', _onDragEnter!);
+      }
+      if (_onDragLeave != null) {
+        web.window.removeEventListener('flutter_drag_leave', _onDragLeave!);
+      }
+    }
     _isStopped = true;
     _holdingHintTimer?.cancel();
     _overallTargetCtrl.dispose();
@@ -355,26 +417,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
     final w = MediaQuery.of(context).size.width;
     final isMobile = w < 600;
 
-    return DropTarget(
-      onDragEntered: (_) => setState(() => _isDragging = true),
-      onDragExited: (_) => setState(() => _isDragging = false),
-      onDragDone: (details) async {
-        setState(() => _isDragging = false);
-        if (details.files.isNotEmpty) {
-          final file = details.files.first;
-          if (file.name.toLowerCase().endsWith('.pdf')) {
-            try {
-              final bytes = await file.readAsBytes();
-              await _processFile(file.name, bytes);
-            } catch (e) {
-              setState(() => _errorMessage = 'Could not read the dropped file. Try using the click to upload option instead.');
-            }
-          } else {
-            setState(() => _errorMessage = 'Please drop a valid .pdf file. Only PDF files are supported.');
-          }
-        }
-      },
-      child: Padding(
+    return Padding(
         padding: EdgeInsets.only(
           left: isMobile ? 16 : 24,
           right: isMobile ? 16 : 24,
@@ -576,8 +619,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildBanner(
@@ -842,8 +884,6 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
       ],
     );
   }
-
-  bool _isDragging = false;
 
   Widget _buildUploadCard(bool isDark, bool isMobile) {
     return GestureDetector(

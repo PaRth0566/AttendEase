@@ -35,11 +35,51 @@
 </head>
 <body>
   <script>
-    window.addEventListener('dragover', function(e) {
+    // Drag-and-drop bridge for Flutter web (works with CanvasKit & SkWasm)
+    // Runs outside Flutter's shadow root so events are always captured.
+    var _dragCounter = 0;
+
+    document.addEventListener('dragenter', function(e) {
+      e.preventDefault();
+      _dragCounter++;
+      window.dispatchEvent(new CustomEvent('flutter_drag_enter'));
+    }, false);
+
+    document.addEventListener('dragleave', function(e) {
+      e.preventDefault();
+      _dragCounter--;
+      if (_dragCounter <= 0) {
+        _dragCounter = 0;
+        window.dispatchEvent(new CustomEvent('flutter_drag_leave'));
+      }
+    }, false);
+
+    document.addEventListener('dragover', function(e) {
       e.preventDefault();
     }, false);
-    window.addEventListener('drop', function(e) {
+
+    document.addEventListener('drop', function(e) {
       e.preventDefault();
+      _dragCounter = 0;
+      window.dispatchEvent(new CustomEvent('flutter_drag_leave'));
+
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if (!files || files.length === 0) return;
+
+      var file = files[0];
+      var reader = new FileReader();
+      reader.onload = function(evt) {
+        // Store as base64 so Dart can read it via js_interop
+        var base64 = btoa(
+          new Uint8Array(evt.target.result).reduce(
+            function(data, byte) { return data + String.fromCharCode(byte); }, ''
+          )
+        );
+        window._flutterDropFileName = file.name;
+        window._flutterDropFileBase64 = base64;
+        window.dispatchEvent(new CustomEvent('flutter_file_dropped'));
+      };
+      reader.readAsArrayBuffer(file);
     }, false);
   </script>
   <script src="flutter_bootstrap.js" async></script>
