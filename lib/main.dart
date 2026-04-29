@@ -1,11 +1,9 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
 import 'router/app_router.dart';
@@ -14,7 +12,7 @@ import 'theme/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Enable Path URL strategy to remove '#' from web routing
   usePathUrlStrategy();
 
@@ -49,7 +47,11 @@ class AttendEaseApp extends StatefulWidget {
 
 class AppScrollBehavior extends MaterialScrollBehavior {
   @override
-  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
     // Hide scrollbars globally, especially useful for Web aesthetics
     return child;
   }
@@ -57,7 +59,6 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 
 class _AttendEaseAppState extends State<AttendEaseApp>
     with WidgetsBindingObserver {
-
   @override
   void initState() {
     super.initState();
@@ -101,5 +102,3 @@ class _AttendEaseAppState extends State<AttendEaseApp>
     );
   }
 }
-
-
