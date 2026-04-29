@@ -1,4 +1,5 @@
 import 'package:connectivity_plus/connectivity_plus.dart'; // ✅ NEW IMPORT
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/auth_service.dart';
@@ -56,8 +57,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
+      String errorMessage = 'Could not send reset link. Please check your email and try again.';
+      if (e is FirebaseAuthException && e.code == 'user-not-found') {
+        errorMessage = 'User not found';
+      } else if (e.toString().contains('user-not-found')) {
+        errorMessage = 'User not found';
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not send reset link. Please check your email and try again.')),
+        SnackBar(content: Text(errorMessage)),
       );
     }
   }

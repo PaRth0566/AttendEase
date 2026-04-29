@@ -36,7 +36,7 @@ class AppRouter {
     initialLocation: kIsWeb ? '/web/home' : '/',
     redirect: (context, state) async {
       final user = FirebaseAuth.instance.currentUser;
-      final bool isLoggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/signup';
+      final bool isLoggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/signup' || state.matchedLocation == '/forgot-password';
       final bool isWebRoute = state.matchedLocation.startsWith('/web');
 
       // 1. If not logged in...

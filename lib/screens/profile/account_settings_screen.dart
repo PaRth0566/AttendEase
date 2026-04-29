@@ -132,97 +132,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     return success;
   }
 
-  Future<void> _changeEmail() async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      _showSnackBar('You must be logged in to change your email.');
-      return;
-    }
 
-    final TextEditingController emailController = TextEditingController();
-    String? chosenEmail;
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Change Email Address'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Enter your new email address.\n\n'
-              'A verification link will be sent to it. Until you click the link, your current email remains active. '
-              'Once verified, your email is instantly updated and all your data is perfectly preserved exactly where you left off. '
-              'You can then sign in with your new email and password.',
-              style: TextStyle(fontSize: 14, height: 1.5),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: emailController,
-              decoration: const InputDecoration(
-                labelText: 'New Email Address',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.emailAddress,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              chosenEmail = emailController.text.trim().toLowerCase();
-              Navigator.pop(ctx);
-            },
-            child: const Text('Send Verification Link'),
-          ),
-        ],
-      ),
-    );
-
-    if (chosenEmail == null || chosenEmail!.isEmpty) return;
-    final newEmail = chosenEmail!;
-
-    setState(() => _isLoading = true);
-
-    try {
-      // Sync cloud data to be extra safe before email change
-      await _syncService.backupDataToCloud();
-      
-      await user.verifyBeforeUpdateEmail(newEmail);
-      
-      // Immediately log out so they must log in with the new email once verified
-      await AuthService().signOut();
-      
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Verification link sent to $newEmail! Please verify it, then log in.'),
-            duration: const Duration(seconds: 8),
-          ),
-        );
-        context.go('/login');
-      }
-    } on FirebaseAuthException catch (e) {
-      setState(() => _isLoading = false);
-      if (e.code == 'requires-recent-login') {
-        _showSnackBar('Session expired. Please log out, log back in, and try again.');
-      } else if (e.code == 'email-already-in-use') {
-         _showSnackBar('This email is already in use by another account.');
-      } else if (e.code == 'invalid-email') {
-         _showSnackBar('The email address is invalid.');
-      } else {
-        _showSnackBar('Error: ${e.message}');
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      _showSnackBar('Error: ${e.toString()}');
-    }
-  }
 
   Future<void> _changePassword() async {
     final user = _auth.currentUser;
@@ -546,14 +456,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                           theme: theme,
                         ),
                       ] else ...[
-                        _actionTile(
-                          icon: Icons.edit_note,
-                          title: 'Change Email Address',
-                          subtitle:
-                              'Migrate your account data to a new email address.',
-                          onTap: _changeEmail,
-                          theme: theme,
-                        ),
+
                         _actionTile(
                           icon: Icons.password,
                           title: 'Change Password',
