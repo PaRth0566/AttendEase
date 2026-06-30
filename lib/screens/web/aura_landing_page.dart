@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -370,25 +371,134 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                 ],
               ),
 
-              // Trailing — 2-click theme toggle: light ↔ dark
+              // Trailing — Desktop: GitHub icon+text, then theme toggle
+              //            Mobile:  GitHub icon + Android icon + theme toggle
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Tooltip(
-                    message: themeProvider.isDarkMode
-                        ? 'Switch to Light Mode'
-                        : 'Switch to Dark Mode',
-                    child: IconButton(
-                      onPressed: _toggleTheme,
-                      icon: Icon(
-                        themeProvider.isDarkMode
-                            ? Icons.dark_mode
-                            : Icons.light_mode_rounded,
-                        color: isDark
-                            ? const Color(0xFFC7D2FE)
-                            : const Color(0xFF6366F1),
+                  // ── Desktop layout ──
+                  if (isDesktop) ...[
+                    // GitHub icon + "GitHub" text
+                    Tooltip(
+                      message: 'View on GitHub',
+                      child: InkWell(
+                        onTap: () => launchUrl(
+                          Uri.parse('https://github.com/PaRth0566/AttendEase'),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10.0,
+                            vertical: 6.0,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SvgPicture.asset(
+                                'assets/github.svg',
+                                width: 22,
+                                height: 22,
+                                colorFilter: ColorFilter.mode(
+                                  isDark
+                                      ? Colors.white
+                                      : const Color(0xFF0F172A),
+                                  BlendMode.srcIn,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'GitHub',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? Colors.white
+                                      : const Color(0xFF0F172A),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    // Theme toggle (right of GitHub on desktop)
+                    Tooltip(
+                      message: themeProvider.isDarkMode
+                          ? 'Switch to Light Mode'
+                          : 'Switch to Dark Mode',
+                      child: IconButton(
+                        onPressed: _toggleTheme,
+                        icon: Icon(
+                          themeProvider.isDarkMode
+                              ? Icons.dark_mode
+                              : Icons.light_mode_rounded,
+                          color: isDark
+                              ? const Color(0xFFC7D2FE)
+                              : const Color(0xFF6366F1),
+                        ),
+                      ),
+                    ),
+                  ],
+
+                  // ── Mobile layout ──
+                  if (!isDesktop) ...[
+                    // GitHub icon (no text)
+                    Tooltip(
+                      message: 'View on GitHub',
+                      child: IconButton(
+                        onPressed: () => launchUrl(
+                          Uri.parse('https://github.com/PaRth0566/AttendEase'),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                        icon: SvgPicture.asset(
+                          'assets/github.svg',
+                          width: 22,
+                          height: 22,
+                          colorFilter: ColorFilter.mode(
+                            isDark
+                                ? Colors.white
+                                : const Color(0xFF0F172A),
+                            BlendMode.srcIn,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Android icon
+                    Tooltip(
+                      message: 'Download Android App',
+                      child: IconButton(
+                        onPressed: () {
+                          // Release link placeholder — will be updated later
+                        },
+                        icon: Icon(
+                          Icons.android_rounded,
+                          size: 24,
+                          color: isDark
+                              ? const Color(0xFF86EFAC)
+                              : const Color(0xFF3DDC84),
+                        ),
+                      ),
+                    ),
+                    // Theme toggle
+                    Tooltip(
+                      message: themeProvider.isDarkMode
+                          ? 'Switch to Light Mode'
+                          : 'Switch to Dark Mode',
+                      child: IconButton(
+                        onPressed: _toggleTheme,
+                        icon: Icon(
+                          themeProvider.isDarkMode
+                              ? Icons.dark_mode
+                              : Icons.light_mode_rounded,
+                          color: isDark
+                              ? const Color(0xFFC7D2FE)
+                              : const Color(0xFF6366F1),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ],
@@ -583,9 +693,9 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                 child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: isMobile ? 4 : 20),
                   child: Text(
-                    'Upload your detailed attendance report and get instant insights '
-                    'into your college attendance — track progress, spot trends, and '
-                    'stay on top of every subject.',
+                    'Upload your attendance report and get instant insights into your '
+                    'college attendance\u00A0\u2014\u00A0track progress, spot trends, '
+                    'and stay on top of\u00A0every\u00A0subject.',
                     style: TextStyle(
                       fontSize: isMobile ? 18 : 22,
                       color: isDark
@@ -717,46 +827,75 @@ class _AuraLandingPageState extends State<AuraLandingPage>
 
         const SizedBox(height: 12),
         // Disclaimer
-        Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 640),
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.red.withOpacity(0.1)
-                    : Colors.red.shade50,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 24),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1024),
+              child: Container(
+                padding: EdgeInsets.all(isMobile ? 14 : 18),
+                decoration: BoxDecoration(
                   color: isDark
-                      ? Colors.red.withOpacity(0.3)
-                      : Colors.red.shade200,
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.info_outline_rounded,
-                    size: 22,
-                    color: isDark ? Colors.red.shade400 : Colors.red.shade700,
+                      ? Colors.red.withOpacity(0.08)
+                      : Colors.red.shade50,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.red.withOpacity(0.25)
+                        : Colors.red.shade200,
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Disclaimer: AttendEase is an automated tool. We are not liable for any calculation inaccuracies or resulting consequences. Please verify your attendance with official college records.',
-                      style: TextStyle(
-                        fontSize: isMobile ? 12 : 13,
-                        height: 1.4,
-                        fontWeight: FontWeight.w500,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.red.shade200
-                            : Colors.red.shade900,
+                            ? Colors.red.withOpacity(0.15)
+                            : Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.info_outline_rounded,
+                        size: 18,
+                        color: isDark ? Colors.red.shade400 : Colors.red.shade700,
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Disclaimer',
+                            style: TextStyle(
+                              fontSize: isMobile ? 13 : 14,
+                              fontWeight: FontWeight.w700,
+                              color: isDark
+                                  ? Colors.red.shade300
+                                  : Colors.red.shade800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'AttendEase is an automated tool. We are not liable for any '
+                            'calculation inaccuracies or resulting consequences. '
+                            'Please verify your attendance with official\u00A0college\u00A0records.',
+                            style: TextStyle(
+                              fontSize: isMobile ? 12 : 13,
+                              height: 1.5,
+                              fontWeight: FontWeight.w400,
+                              color: isDark
+                                  ? Colors.red.shade200
+                                  : Colors.red.shade900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -815,25 +954,25 @@ class _AuraLandingPageState extends State<AuraLandingPage>
       (
         Icons.document_scanner_rounded,
         'Upload & Analyze',
-        'Get a complete breakdown from your PDF report.',
+        'Get a complete breakdown from your\u00A0PDF\u00A0report.',
         const Color(0xFF6366F1),
       ),
       (
         Icons.bar_chart_rounded,
         'Track Progress',
-        'See percentages, lectures attended, and targets.',
+        'See percentages, lectures attended, and\u00A0your\u00A0targets.',
         const Color(0xFF3B82F6),
       ),
       (
         Icons.calendar_month_rounded,
         'Calendar View',
-        'Visualize attendance day by day on a calendar.',
+        'Visualize attendance day by day on a\u00A0heatmap\u00A0calendar.',
         const Color(0xFF8B5CF6),
       ),
       (
         Icons.notifications_active_rounded,
         'Stay Informed',
-        'Know how many lectures you can skip or must attend.',
+        'Know how many lectures you can skip or\u00A0must\u00A0attend.',
         const Color(0xFF06B6D4),
       ),
     ];
@@ -951,109 +1090,124 @@ class _AuraLandingPageState extends State<AuraLandingPage>
 
   // ── SAP PORTAL NOTE ───────────────────────────────────────
   Widget _buildSAPPortalNote(bool isDark, bool isMobile) {
-    return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: isMobile ? 12 : 16,
-        vertical: isMobile ? 8 : 10,
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: isMobile ? double.infinity : 420,
       ),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.white.withOpacity(0.04)
-            : const Color(0xFFFFF7ED),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.08)
-              : const Color(0xFFFDBA74).withOpacity(0.5),
+      child: Container(
+        width: double.infinity,
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 14 : 16,
+          vertical: isMobile ? 10 : 14,
         ),
-      ),
-      child: isMobile
-          ? Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.school_rounded,
-                      size: 15,
-                      color: isDark
-                          ? const Color(0xFFFBBF24)
-                          : const Color(0xFFD97706),
-                    ),
-                    const SizedBox(width: 6),
-                    Flexible(
-                      child: Text(
-                        'SVKM / Mithibai students? Get your report from',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: isDark
-                              ? Colors.white.withOpacity(0.55)
-                              : const Color(0xFF92400E),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                _sapPortalChip(isDark),
-              ],
-            )
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.school_rounded,
-                  size: 16,
-                  color: isDark
-                      ? const Color(0xFFFBBF24)
-                      : const Color(0xFFD97706),
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text.rich(
-                    TextSpan(
-                      text: 'SVKM / Mithibai students? ',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withOpacity(0.04)
+              : const Color(0xFFFFF7ED),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withOpacity(0.08)
+                : const Color(0xFFFDBA74).withOpacity(0.5),
+          ),
+        ),
+        child: isMobile
+            ? Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.school_rounded,
+                        size: 16,
                         color: isDark
                             ? const Color(0xFFFBBF24)
                             : const Color(0xFFD97706),
                       ),
-                      children: [
-                        TextSpan(
-                          text: 'Get your report from ',
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'SVKM / Mithibai students? Get your report from',
                           style: TextStyle(
-                            fontWeight: FontWeight.w400,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            height: 1.4,
                             color: isDark
-                                ? Colors.white.withOpacity(0.5)
+                                ? Colors.white.withOpacity(0.6)
                                 : const Color(0xFF92400E),
                           ),
+                          textAlign: TextAlign.center,
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  _sapPortalChip(isDark, isMobile: true),
+                ],
+              )
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.school_rounded,
+                    size: 16,
+                    color: isDark
+                        ? const Color(0xFFFBBF24)
+                        : const Color(0xFFD97706),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text.rich(
+                      TextSpan(
+                        text: 'SVKM / Mithibai students? ',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: isDark
+                              ? const Color(0xFFFBBF24)
+                              : const Color(0xFFD97706),
+                        ),
+                        children: [
+                          TextSpan(
+                            text: 'Get your report from ',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w400,
+                              color: isDark
+                                  ? Colors.white.withOpacity(0.5)
+                                  : const Color(0xFF92400E),
+                            ),
+                          ),
+                        ],
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                _sapPortalChip(isDark),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  _sapPortalChip(isDark),
+                ],
+              ),
+      ),
     );
   }
 
-  Widget _sapPortalChip(bool isDark) {
+  Widget _sapPortalChip(bool isDark, {bool isMobile = false}) {
     return InkWell(
       onTap: _launchSAPPortal,
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(10),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 14 : 12,
+          vertical: isMobile ? 8 : 6,
+        ),
         decoration: BoxDecoration(
           color: isDark
               ? const Color(0xFFFBBF24).withOpacity(0.15)
               : const Color(0xFFFBBF24).withOpacity(0.2),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isDark
                 ? const Color(0xFFFBBF24).withOpacity(0.3)
@@ -1066,14 +1220,14 @@ class _AuraLandingPageState extends State<AuraLandingPage>
           children: [
             Icon(
               Icons.open_in_new_rounded,
-              size: 12,
+              size: isMobile ? 14 : 13,
               color: isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 6),
             Text(
               'SAP Portal',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: isMobile ? 13 : 12,
                 fontWeight: FontWeight.w700,
                 color: isDark
                     ? const Color(0xFFFBBF24)

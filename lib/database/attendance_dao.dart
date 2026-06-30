@@ -17,6 +17,7 @@ class AttendanceDao {
       JOIN timetable t ON a.timetable_entry_id = t.id
       JOIN subjects s ON t.subject_id = s.id
       WHERE s.semester = ?
+        AND a.date NOT LIKE 'pad_%'
       GROUP BY t.subject_id
     ''', [semester]);
 

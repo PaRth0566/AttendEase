@@ -202,17 +202,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
   // Opens bottom sheet to add a new attendance record for the selected date
   void _showAddRecordSheet(String? dateKey) {
     if (dateKey == null) return;
-    // Subjects that don't already have a record for this date
-    final recordedSubjectIds = _dayRecords
-        .map((r) => r['subject_id'] as int)
-        .toSet();
-    final available = _allSubjects
-        .where((s) => !recordedSubjectIds.contains(s.id))
-        .toList();
+
+    // All subjects are always available — multiple lectures on the same day are allowed
+    final available = List<Subject>.from(_allSubjects);
 
     if (available.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All subjects already have a record for this date')),
+        const SnackBar(content: Text('No subjects found. Please add subjects first.')),
       );
       return;
     }
@@ -340,7 +336,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         : () async {
                             final sub = selectedSubject!;
                             final seedId = await _timetableDao.ensureSeedEntry(sub.id!);
-                            await _saveRecord(seedId, dateKey, selectedStatus);
+
+                            // Count how many records already exist for this subject+date
+                            // to generate a unique date key (e.g., 2026-06-23_0, _1, _2...)
+                            final existingCount = _dayRecords
+                                .where((r) => r['subject_id'] == sub.id)
+                                .length;
+                            final uniqueDateKey = existingCount == 0
+                                ? dateKey
+                                : '${dateKey}_$existingCount';
+
+                            await _saveRecord(seedId, uniqueDateKey, selectedStatus);
                             if (!mounted) return;
                             Navigator.pop(ctx);
                             await _loadForDate(_selectedDay!);

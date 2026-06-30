@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/local_pdf_parser.dart';
 import '../../services/cloud_sync_service.dart';
@@ -98,6 +99,20 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
     if (RegExp(r'\bii\b').hasMatch(s))   return 2;
     if (RegExp(r'\bi\b').hasMatch(s))    return 1;
     return fallback;
+  }
+
+  Future<void> _launchSAPPortal() async {
+    final Uri url = Uri.parse('https://sdc-sppap1.svkm.ac.in:50001/irj/portal');
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Could not launch SAP Portal.'),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _applyData(Map<String, dynamic> data) async {
@@ -404,32 +419,86 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                   ),
                 )
               else
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF6366F1), Color(0xFF3B82F6)],
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF6366F1).withOpacity(0.4),
-                        blurRadius: 24,
-                        offset: const Offset(0, 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Primary CTA — Select PDF
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF6366F1), Color(0xFF3B82F6)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF6366F1).withOpacity(0.4),
+                            blurRadius: 24,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: ElevatedButton.icon(
-                    onPressed: _pickAndRefresh,
-                    icon: const Icon(Icons.upload_file_rounded, size: 20),
-                    label: const Text('Select PDF Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      shadowColor: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      child: ElevatedButton.icon(
+                        onPressed: _pickAndRefresh,
+                        icon: const Icon(Icons.upload_file_rounded, size: 20),
+                        label: const Text(
+                          'Select PDF Report',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          foregroundColor: Colors.white,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    // Secondary CTA — SAP Portal (outlined amber style)
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: isDark
+                            ? const Color(0xFFFBBF24).withOpacity(0.08)
+                            : const Color(0xFFFFF7ED),
+                        border: Border.all(
+                          color: isDark
+                              ? const Color(0xFFFBBF24).withOpacity(0.35)
+                              : const Color(0xFFD97706).withOpacity(0.4),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: ElevatedButton.icon(
+                        onPressed: _launchSAPPortal,
+                        icon: Icon(
+                          Icons.open_in_browser_rounded,
+                          size: 20,
+                          color: isDark
+                              ? const Color(0xFFFBBF24)
+                              : const Color(0xFFD97706),
+                        ),
+                        label: Text(
+                          'Download PDF from SAP',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: isDark
+                                ? const Color(0xFFFBBF24)
+                                : const Color(0xFFD97706),
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          foregroundColor: isDark
+                              ? const Color(0xFFFBBF24)
+                              : const Color(0xFFD97706),
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
             ],
           ),

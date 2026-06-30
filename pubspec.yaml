@@ -2,7 +2,7 @@ name: attend_ease
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.0+1
+version: 1.0.2+2
 
 environment:
   sdk: ^3.10.7
@@ -33,6 +33,7 @@ dependencies:
   url_launcher: ^6.3.2
   syncfusion_flutter_pdf: ^33.1.49
   go_router: ^17.2.2
+  flutter_svg: ^2.1.0
 
 dev_dependencies:
   flutter_test:
@@ -49,6 +50,8 @@ flutter:
     - assets/icon/app_icon2.png
     - assets/icon/app_icon.jpg
     - assets/icon/google_logo.png
+    - assets/github.svg
+    - assets/android.svg
 
 flutter_launcher_icons:
   android: true
