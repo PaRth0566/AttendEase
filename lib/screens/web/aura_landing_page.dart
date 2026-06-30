@@ -469,9 +469,10 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                     Tooltip(
                       message: 'Download Android App',
                       child: IconButton(
-                        onPressed: () {
-                          // Release link placeholder — will be updated later
-                        },
+                        onPressed: () => launchUrl(
+                          Uri.parse('https://github.com/PaRth0566/AttendEase/releases/download/v1.0.2/app-release.apk'),
+                          mode: LaunchMode.externalApplication,
+                        ),
                         icon: Icon(
                           Icons.android_rounded,
                           size: 24,
