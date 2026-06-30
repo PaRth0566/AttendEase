@@ -642,12 +642,13 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                 : Colors.white.withOpacity(0.8),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
+              width: 1.5,
               color: isInfo
                   ? (isDark
-                        ? const Color(0xFFF43F5E).withOpacity(0.2)
+                        ? const Color(0xFFF43F5E).withOpacity(0.4)
                         : const Color(0xFFFDA4AF))
                   : (isDark
-                        ? const Color(0xFFF59E0B).withOpacity(0.2)
+                        ? const Color(0xFFF59E0B).withOpacity(0.4)
                         : const Color(0xFFFDE68A)),
             ),
             boxShadow: [

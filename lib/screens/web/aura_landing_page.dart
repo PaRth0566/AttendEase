@@ -273,7 +273,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
         child: Container(
           width: double.infinity,
           height: 64, // Reduced height
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: EdgeInsets.symmetric(horizontal: isDesktop ? 64 : 24),
           decoration: BoxDecoration(
             color: isDark
                 ? const Color(0xFF0F172A).withOpacity(0.3)
@@ -389,8 +389,8 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                         borderRadius: BorderRadius.circular(8),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 10.0,
-                            vertical: 6.0,
+                            horizontal: 12.0,
+                            vertical: 8.0,
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -401,8 +401,8 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                                 height: 22,
                                 colorFilter: ColorFilter.mode(
                                   isDark
-                                      ? Colors.white
-                                      : const Color(0xFF0F172A),
+                                      ? const Color(0xFFC7D2FE)
+                                      : const Color(0xFF6366F1),
                                   BlendMode.srcIn,
                                 ),
                               ),
@@ -411,10 +411,11 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                                 'GitHub',
                                 style: TextStyle(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w600,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.8,
                                   color: isDark
-                                      ? Colors.white
-                                      : const Color(0xFF0F172A),
+                                      ? const Color(0xFFC7D2FE)
+                                      : const Color(0xFF6366F1),
                                 ),
                               ),
                             ],
@@ -422,7 +423,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 16),
                     // Theme toggle (right of GitHub on desktop)
                     Tooltip(
                       message: themeProvider.isDarkMode
@@ -612,6 +613,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
     final w = MediaQuery.of(context).size.width;
     final isMobile = w < 768;
     final isTablet = w >= 768 && w < 1024;
+    final isDesktop = w >= 1024;
 
     return Column(
       children: [
@@ -832,7 +834,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
           padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 24),
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1024),
+              constraints: BoxConstraints(maxWidth: isDesktop ? 976 : 1024),
               child: Container(
                 padding: EdgeInsets.all(isMobile ? 14 : 18),
                 decoration: BoxDecoration(
@@ -1091,13 +1093,9 @@ class _AuraLandingPageState extends State<AuraLandingPage>
 
   // ── SAP PORTAL NOTE ───────────────────────────────────────
   Widget _buildSAPPortalNote(bool isDark, bool isMobile) {
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxWidth: isMobile ? double.infinity : 420,
-      ),
-      child: Container(
-        width: double.infinity,
-        padding: EdgeInsets.symmetric(
+    return Container(
+      width: isMobile ? double.infinity : null,
+      padding: EdgeInsets.symmetric(
           horizontal: isMobile ? 14 : 16,
           vertical: isMobile ? 10 : 14,
         ),
@@ -1191,7 +1189,6 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                   _sapPortalChip(isDark),
                 ],
               ),
-      ),
     );
   }
 
