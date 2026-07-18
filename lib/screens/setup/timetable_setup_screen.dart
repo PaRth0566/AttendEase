@@ -213,9 +213,10 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Add lectures for each day to generate your schedule.',
+                  'Add lectures for each day to generate your schedule.\nNote: Each lecture is assumed to be 1 hour long.',
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 14,
+                    height: 1.4,
                     color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                   ),
                 ),
@@ -392,7 +393,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                               ),
                               const SizedBox(height: 20),
                               Text(
-                                'Free Day!',
+                                'Free Day? 🏖️',
                                 style: TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
@@ -401,9 +402,10 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'No lectures added for this day yet.',
+                                'We couldn\'t find any consistent classes for this day in your PDF report (or you just don\'t have any!).\n\nIf you do have classes today, please add them manually above.',
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                                 ),
                               ),
