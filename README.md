@@ -37,7 +37,8 @@
 - 🔔 **Target Monitoring**: Set attendance goals and receive smart notifications to ensure you never fall below required thresholds.
 - 📱 **Cross-Platform Sync**: Truly unified experience across Android and Web with real-time Firebase Cloud Firestore synchronization.
 - 🔐 **Secure Backend**: Dedicated Node.js proxy to handle AI requests safely, keeping your environment keys protected.
-- 🎨 **Premium UI/UX**: A modern, card-based interface and dynamic progress indicators.
+- 🔄 **Over-The-Air Updates**: Dynamic in-app update engine that verifies against GitHub releases to keep your Android app current.
+- 🎨 **Premium UI/UX & Motion Design**: A modern, glassmorphism-inspired interface featuring Hero transitions, staggered cascade lists, and buttery smooth routing animations.
 
 ---
 
@@ -68,6 +69,7 @@ Before you begin, ensure you have met the following requirements:
   - `firebase_auth` & `google_sign_in` (Authentication)
   - `sqflite` (Local Persistence)
   - `flutter_local_notifications` (Push Notifications)
+  - `package_info_plus` & `http` (Over-The-Air Updates)
 
 ---
 
