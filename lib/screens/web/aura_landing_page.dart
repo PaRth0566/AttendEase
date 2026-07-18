@@ -461,13 +461,23 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                           : 'Switch to Dark Mode',
                       child: IconButton(
                         onPressed: _toggleTheme,
-                        icon: Icon(
-                          themeProvider.isDarkMode
-                              ? Icons.dark_mode
-                              : Icons.light_mode_rounded,
-                          color: isDark
-                              ? const Color(0xFFC7D2FE)
-                              : const Color(0xFF6366F1),
+                        icon: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 400),
+                          transitionBuilder: (child, anim) => RotationTransition(
+                            turns: child.key == const ValueKey('dark') 
+                                ? Tween<double>(begin: 0.5, end: 1).animate(anim)
+                                : Tween<double>(begin: 0.5, end: 1).animate(anim),
+                            child: FadeTransition(opacity: anim, child: child),
+                          ),
+                          child: Icon(
+                            themeProvider.isDarkMode
+                                ? Icons.dark_mode
+                                : Icons.light_mode_rounded,
+                            key: ValueKey(themeProvider.isDarkMode ? 'dark' : 'light'),
+                            color: isDark
+                                ? const Color(0xFFC7D2FE)
+                                : const Color(0xFF6366F1),
+                          ),
                         ),
                       ),
                     ),
@@ -520,13 +530,23 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                           : 'Switch to Dark Mode',
                       child: IconButton(
                         onPressed: _toggleTheme,
-                        icon: Icon(
-                          themeProvider.isDarkMode
-                              ? Icons.dark_mode
-                              : Icons.light_mode_rounded,
-                          color: isDark
-                              ? const Color(0xFFC7D2FE)
-                              : const Color(0xFF6366F1),
+                        icon: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 400),
+                          transitionBuilder: (child, anim) => RotationTransition(
+                            turns: child.key == const ValueKey('dark') 
+                                ? Tween<double>(begin: 0.5, end: 1).animate(anim)
+                                : Tween<double>(begin: 0.5, end: 1).animate(anim),
+                            child: FadeTransition(opacity: anim, child: child),
+                          ),
+                          child: Icon(
+                            themeProvider.isDarkMode
+                                ? Icons.dark_mode
+                                : Icons.light_mode_rounded,
+                            key: ValueKey(themeProvider.isDarkMode ? 'dark' : 'light'),
+                            color: isDark
+                                ? const Color(0xFFC7D2FE)
+                                : const Color(0xFF6366F1),
+                          ),
                         ),
                       ),
                     ),

@@ -389,9 +389,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
         side: BorderSide(color: theme.dividerColor),
       ),
       child: ListTile(
-        leading: Icon(
-          isDark ? Icons.dark_mode_rounded : Icons.wb_sunny_rounded,
-          color: theme.colorScheme.primary,
+        leading: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          transitionBuilder: (child, animation) => RotationTransition(
+            turns: Tween<double>(begin: 0.5, end: 1).animate(animation),
+            child: FadeTransition(opacity: animation, child: child),
+          ),
+          child: Icon(
+            isDark ? Icons.dark_mode_rounded : Icons.wb_sunny_rounded,
+            key: ValueKey(isDark),
+            color: theme.colorScheme.primary,
+          ),
         ),
         title: const Text(
           'Dark Mode',

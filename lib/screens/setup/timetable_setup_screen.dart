@@ -287,6 +287,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                       Expanded(
                         child: DropdownButtonFormField<Subject>(
                           value: _selectedSubject,
+                          isExpanded: true,
                           dropdownColor: theme.cardColor,
                           style: TextStyle(
                             color: theme.textTheme.bodyLarge?.color,
@@ -409,108 +410,69 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                             ],
                           ),
                         )
-                      : ListView.builder(
+                      : ListView.separated(
                           physics: const BouncingScrollPhysics(),
                           itemCount: _daySubjects.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
                           itemBuilder: (_, i) {
-                            final isLast = i == _daySubjects.length - 1;
-                            return IntrinsicHeight(
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  // Timeline Line & Dot
-                                  SizedBox(
-                                    width: 40,
-                                    child: Column(
-                                      children: [
-                                        Container(
-                                          width: 32,
-                                          height: 32,
-                                          decoration: BoxDecoration(
-                                            color: theme.colorScheme.primary,
-                                            shape: BoxShape.circle,
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: theme.colorScheme.primary.withOpacity(0.3),
-                                                blurRadius: 8,
-                                                offset: const Offset(0, 2),
-                                              ),
-                                            ],
-                                          ),
-                                          child: Center(
-                                            child: Text(
-                                              '${i + 1}',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        if (!isLast)
-                                          Expanded(
-                                            child: Container(
-                                              width: 2,
-                                              color: theme.colorScheme.primary.withOpacity(0.2),
-                                              margin: const EdgeInsets.symmetric(vertical: 4),
-                                            ),
-                                          )
-                                        else
-                                          const SizedBox(height: 16), // Padding for the last item
+                            return Container(
+                              decoration: BoxDecoration(
+                                color: isDark ? theme.cardColor : Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: theme.dividerColor.withOpacity(0.5),
+                                ),
+                                boxShadow: isDark
+                                    ? []
+                                    : [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.03),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
+                                        )
                                       ],
-                                    ),
+                              ),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                leading: Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primary.withOpacity(0.15),
+                                    shape: BoxShape.circle,
                                   ),
-                                  const SizedBox(width: 12),
-                                  // Subject Card
-                                  Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(bottom: 16),
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: isDark ? theme.cardColor : Colors.white,
-                                          borderRadius: BorderRadius.circular(16),
-                                          border: Border.all(
-                                            color: theme.dividerColor.withOpacity(0.5),
-                                          ),
-                                          boxShadow: isDark
-                                              ? []
-                                              : [
-                                                  BoxShadow(
-                                                    color: Colors.black.withOpacity(0.03),
-                                                    blurRadius: 10,
-                                                    offset: const Offset(0, 4),
-                                                  )
-                                                ],
-                                        ),
-                                        child: ListTile(
-                                          contentPadding: const EdgeInsets.symmetric(
-                                            horizontal: 20,
-                                            vertical: 8,
-                                          ),
-                                          title: Text(
-                                            _daySubjects[i].name,
-                                            style: TextStyle(
-                                              color: theme.textTheme.bodyLarge?.color,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16,
-                                              height: 1.3,
-                                            ),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          trailing: IconButton(
-                                            icon: Icon(Icons.delete_outline_rounded,
-                                                color: Colors.red.shade400, size: 24),
-                                            onPressed: () =>
-                                                setState(() => _daySubjects.removeAt(i)),
-                                            tooltip: 'Remove Lecture',
-                                          ),
-                                        ),
+                                  child: Center(
+                                    child: Text(
+                                      '${i + 1}',
+                                      style: TextStyle(
+                                        color: theme.colorScheme.primary,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
                                       ),
                                     ),
                                   ),
-                                ],
+                                ),
+                                title: Text(
+                                  _daySubjects[i].name,
+                                  style: TextStyle(
+                                    color: theme.textTheme.bodyLarge?.color,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    height: 1.3,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                trailing: IconButton(
+                                  icon: Icon(Icons.delete_outline_rounded,
+                                      color: Colors.red.shade400, size: 24),
+                                  onPressed: () =>
+                                      setState(() => _daySubjects.removeAt(i)),
+                                  tooltip: 'Remove Lecture',
+                                ),
                               ),
                             );
                           },
@@ -530,7 +492,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                           style: OutlinedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             side: BorderSide(
-                              color: theme.dividerColor,
+                              color: theme.colorScheme.primary,
                               width: 1.5,
                             ),
                             shape: RoundedRectangleBorder(
@@ -542,7 +504,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: theme.textTheme.bodyLarge?.color,
+                              color: theme.colorScheme.primary,
                             ),
                           ),
                         ),

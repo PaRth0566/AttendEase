@@ -289,11 +289,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             SizedBox(
                               height: 70,
                               width: 70,
-                              child: CircularProgressIndicator(
-                                value: _currentOverall / 100,
-                                backgroundColor: theme.dividerColor,
-                                color: statusColor,
-                                strokeWidth: 8,
+                              child: TweenAnimationBuilder<double>(
+                                tween: Tween<double>(begin: 0, end: _currentOverall / 100),
+                                duration: const Duration(milliseconds: 1500),
+                                curve: Curves.easeOutCubic,
+                                builder: (context, value, _) => CircularProgressIndicator(
+                                  value: value,
+                                  backgroundColor: theme.dividerColor,
+                                  color: statusColor,
+                                  strokeWidth: 8,
+                                ),
                               ),
                             ),
                             Icon(statusIcon, color: statusColor, size: 34),
@@ -393,13 +398,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   final double percent = stat['total'] == 0
                       ? 0.0
                       : ((stat['attended']! / stat['total']!) * 100);
-                  return _subjectCard(
-                    subject,
-                    percent,
-                    stat['attended']!,
-                    stat['total']!,
-                    theme,
-                    isDark,
+                  return TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    duration: Duration(milliseconds: 500 + (i * 100)),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, child) {
+                      return Transform.translate(
+                        offset: Offset(0, 30 * (1 - value)),
+                        child: Opacity(
+                          opacity: value,
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: _subjectCard(
+                      subject,
+                      percent,
+                      stat['attended']!,
+                      stat['total']!,
+                      theme,
+                      isDark,
+                    ),
                   );
                 },
               ),
@@ -527,14 +546,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: Row(
                           children: [
                             Flexible(
-                              child: Text(
-                                subject.name,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: theme.textTheme.bodyLarge?.color,
+                              child: Hero(
+                                tag: 'subject_name_${subject.id}',
+                                child: Material(
+                                  type: MaterialType.transparency,
+                                  child: Text(
+                                    subject.name,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: theme.textTheme.bodyLarge?.color,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 4),

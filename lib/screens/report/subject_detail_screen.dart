@@ -103,11 +103,17 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(
-          widget.subject.name,
-          style: TextStyle(
-            color: theme.textTheme.bodyLarge?.color,
-            fontWeight: FontWeight.bold,
+        title: Hero(
+          tag: 'subject_name_${widget.subject.id}',
+          child: Material(
+            type: MaterialType.transparency,
+            child: Text(
+              widget.subject.name,
+              style: TextStyle(
+                color: theme.textTheme.bodyLarge?.color,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ),
         backgroundColor: Colors.transparent,

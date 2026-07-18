@@ -28,6 +28,20 @@ import '../models/subject.dart';
 import '../database/db_helper.dart';
 import '../services/cloud_sync_service.dart';
 
+
+Page<dynamic> _fadeTransition(GoRouterState state, Widget child) {
+  return CustomTransitionPage(
+    key: state.pageKey,
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: CurveTween(curve: Curves.easeInOut).animate(animation),
+        child: child,
+      );
+    },
+  );
+}
+
 class AppRouter {
   static final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -174,10 +188,10 @@ class AppRouter {
                       }
                       return null;
                     },
-                    builder: (context, state) {
-                      final subject = state.extra as Subject;
-                      return SubjectDetailScreen(subject: subject);
-                    },
+                    pageBuilder: (context, state) {
+final subject = state.extra as Subject;
+                      return _fadeTransition(state, SubjectDetailScreen(subject: subject));
+},
                   ),
                 ],
               ),
@@ -269,13 +283,13 @@ class AppRouter {
           ),
           GoRoute(
             path: 'basic',
-            builder: (context, state) {
-              final extra = state.extra as Map<String, dynamic>?;
-              return BasicInfoScreen(
+            pageBuilder: (context, state) {
+final extra = state.extra as Map<String, dynamic>?;
+              return _fadeTransition(state, BasicInfoScreen(
                 isEditMode: false,
                 prefilledData: extra,
-              );
-            },
+              ));
+},
             routes: [
               GoRoute(
                 path: 'criteria',
