@@ -36,39 +36,82 @@ class AppRouter {
     initialLocation: kIsWeb ? '/web/home' : '/',
     redirect: (context, state) async {
       final user = FirebaseAuth.instance.currentUser;
-      final bool isLoggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/signup' || state.matchedLocation == '/forgot-password';
+      final bool isLoggingIn = state.matchedLocation == '/login' ||
+          state.matchedLocation == '/signup' ||
+          state.matchedLocation == '/forgot-password';
       final bool isWebRoute = state.matchedLocation.startsWith('/web');
+      final bool isAppRoute = state.matchedLocation.startsWith('/app');
+      final bool isSetupRoute = state.matchedLocation.startsWith('/setup');
 
-      // 1. If not logged in...
+      // ── 1. NOT LOGGED IN ──────────────────────────────────────
       if (user == null) {
-        if (isLoggingIn || isWebRoute) return null;
+        // Auth pages are always accessible
+        if (isLoggingIn) return null;
+
+        // Web routes are public (/web/home, /web/upload, /web/dashboard).
+        // /web/dashboard is guarded at the widget level — if no PDF data
+        // has been parsed in the current session, AuraLandingPage shows
+        // an "Upload Required" empty state instead of the dashboard.
+        if (isWebRoute) {
+          return null;
+        }
+
+        // /app/* and /setup/* require login
+        if (isAppRoute || isSetupRoute) {
+          return kIsWeb ? '/web/home' : '/login';
+        }
+
+        // Fallback: send to login or web home
         return kIsWeb ? '/web/home' : '/login';
       }
 
-      // 2. If logged in...
-      
+      // ── 2. LOGGED IN ──────────────────────────────────────────
+
       // Force logged-in users away from Login/Signup pages
       if (isLoggingIn) {
         return '/app/dashboard';
       }
 
-      // If they hit the root domain '/', send them to the appropriate start page
-      if (state.matchedLocation == '/') {
-         bool hasData = false;
-         try {
-           final db = await DBHelper.instance.database;
-           final subjects = await db.query('subjects', limit: 1);
-           if (subjects.isNotEmpty) {
-             hasData = true;
-           } else {
-             hasData = await CloudSyncService().restoreDataFromCloud();
-           }
-         } catch (_) {}
-         
-         return hasData ? '/app/dashboard' : '/setup';
+      // /web/dashboard: no router redirect needed for logged-in users.
+      // Widget-level guard in AuraLandingPage handles the fallback
+      // (shows "Upload Required" empty state when no PDF data is parsed).
+
+      // /app/* routes require setup completion (subjects must exist)
+      if (isAppRoute) {
+        bool hasData = false;
+        try {
+          final db = await DBHelper.instance.database;
+          final subjects = await db.query('subjects', limit: 1);
+          if (subjects.isNotEmpty) {
+            hasData = true;
+          } else {
+            hasData = await CloudSyncService().restoreDataFromCloud();
+          }
+        } catch (_) {}
+
+        if (!hasData) {
+          return '/setup';
+        }
+        return null; // allow — user has auth + data
       }
 
-      // Allow everything else (including /web and setup steps)
+      // If they hit the root domain '/', send them to the appropriate start page
+      if (state.matchedLocation == '/') {
+        bool hasData = false;
+        try {
+          final db = await DBHelper.instance.database;
+          final subjects = await db.query('subjects', limit: 1);
+          if (subjects.isNotEmpty) {
+            hasData = true;
+          } else {
+            hasData = await CloudSyncService().restoreDataFromCloud();
+          }
+        } catch (_) {}
+
+        return hasData ? '/app/dashboard' : '/setup';
+      }
+
+      // Allow everything else (/web/home, /web/upload, /setup/*)
       return null;
     },
     routes: [
@@ -123,6 +166,14 @@ class AppRouter {
                   GoRoute(
                     path: 'subject-detail',
                     parentNavigatorKey: _rootNavigatorKey,
+                    redirect: (context, state) {
+                      // Guard: this route requires a Subject passed via state.extra.
+                      // If force-browsed directly without data, redirect to dashboard.
+                      if (state.extra == null || state.extra is! Subject) {
+                        return '/app/dashboard';
+                      }
+                      return null;
+                    },
                     builder: (context, state) {
                       final subject = state.extra as Subject;
                       return SubjectDetailScreen(subject: subject);

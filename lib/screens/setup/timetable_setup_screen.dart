@@ -179,13 +179,13 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Extract Theme
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor, // ✅ Dynamic background
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: Colors.transparent, // ✅ Adheres to theme naturally
+        backgroundColor: Colors.transparent,
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
@@ -193,251 +193,418 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 600),
           child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 24,
-          vertical: 20,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.isEditMode
-                  ? 'Edit Sem $_activeSemester Timetable'
-                  : 'Set Your Weekly Timetable',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-                color: theme.textTheme.bodyLarge?.color, // ✅ Dynamic text
-              ),
+            padding: EdgeInsets.symmetric(
+              horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 24,
+              vertical: 10,
             ),
-            const SizedBox(height: 24),
-
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _days.entries.map((e) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(e.value),
-                      selected: _selectedDay == e.key,
-                      selectedColor:
-                          theme.colorScheme.primary, // ✅ Dynamic primary
-                      backgroundColor:
-                          theme.cardColor, // ✅ Dynamic unselected bg
-                      labelStyle: TextStyle(
-                        color: _selectedDay == e.key
-                            ? Colors.white
-                            : theme
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.color, // ✅ Dynamic unselected text
-                        fontWeight: FontWeight.bold,
-                      ),
-                      onSelected: (_) async {
-                        await _saveDay();
-                        setState(() => _selectedDay = e.key);
-                        _loadDay();
-                      },
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: DropdownButtonFormField<Subject>(
-                    value: _selectedSubject,
-                    dropdownColor: theme
-                        .cardColor, // ✅ Crucial: prevents white dropdown in dark mode
-                    style: TextStyle(
-                      color: theme.textTheme.bodyLarge?.color,
-                    ), // ✅ Dropdown text color
-                    decoration: InputDecoration(
-                      hintText: 'Select subject',
-                      hintStyle: TextStyle(
-                        color: theme.textTheme.bodyMedium?.color,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: theme.dividerColor),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: theme.dividerColor,
-                        ), // ✅ Dynamic border
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: theme.colorScheme.primary,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    items: _allSubjects
-                        .map(
-                          (s) =>
-                              DropdownMenuItem(value: s, child: Text(s.name)),
-                        )
-                        .toList(),
-                    onChanged: (v) => setState(() => _selectedSubject = v),
+                Text(
+                  widget.isEditMode
+                      ? 'Edit Sem $_activeSemester Timetable'
+                      : 'Set Your Weekly Timetable',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                    color: theme.textTheme.bodyLarge?.color,
                   ),
                 ),
-                const SizedBox(width: 12),
-                IconButton.filled(
-                  onPressed: () {
-                    if (_selectedSubject != null) {
-                      setState(() {
-                        _daySubjects.add(_selectedSubject!);
-                        _selectedSubject = null;
-                      });
-                    }
-                  },
-                  icon: const Icon(Icons.add),
-                  style: IconButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(56, 56),
+                const SizedBox(height: 8),
+                Text(
+                  'Add lectures for each day to generate your schedule.',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                   ),
                 ),
-              ],
-            ),
+                const SizedBox(height: 24),
 
-            const SizedBox(height: 24),
-
-            Expanded(
-              child: _daySubjects.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No lectures added for this day',
-                        style: TextStyle(
-                          color: theme.textTheme.bodyMedium?.color,
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: _daySubjects.length,
-                      itemBuilder: (_, i) => ListTile(
-                        leading: CircleAvatar(
-                          radius: 14,
-                          backgroundColor: theme.colorScheme.primary.withAlpha(
-                            38,
+                // Days Selection
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  child: Row(
+                    children: _days.entries.map((e) {
+                      final isSelected = _selectedDay == e.key;
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          child: ChoiceChip(
+                            label: Text(e.value),
+                            selected: isSelected,
+                            selectedColor: theme.colorScheme.primary,
+                            backgroundColor: isDark
+                                ? theme.cardColor
+                                : theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(
+                                color: isSelected
+                                    ? Colors.transparent
+                                    : theme.dividerColor.withOpacity(0.5),
+                              ),
+                            ),
+                            labelStyle: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : theme.textTheme.bodyLarge?.color,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                            onSelected: (_) async {
+                              await _saveDay();
+                              setState(() => _selectedDay = e.key);
+                              _loadDay();
+                            },
                           ),
-                          child: Text(
-                            '${i + 1}',
-                            style: TextStyle(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Subject Picker Card
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? theme.cardColor
+                        : theme.colorScheme.primary.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: isDark
+                          ? theme.dividerColor
+                          : theme.colorScheme.primary.withOpacity(0.1),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<Subject>(
+                          value: _selectedSubject,
+                          dropdownColor: theme.cardColor,
+                          style: TextStyle(
+                            color: theme.textTheme.bodyLarge?.color,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          icon: Icon(Icons.keyboard_arrow_down_rounded, color: theme.colorScheme.primary),
+                          decoration: InputDecoration(
+                            hintText: 'Select subject',
+                            hintStyle: TextStyle(
+                              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                              fontWeight: FontWeight.normal,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            filled: true,
+                            fillColor: isDark
+                                ? theme.scaffoldBackgroundColor
+                                : Colors.white,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: theme.colorScheme.primary.withOpacity(0.5),
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          items: _allSubjects
+                              .map(
+                                (s) => DropdownMenuItem(
+                                  value: s,
+                                  child: Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) => setState(() => _selectedSubject = v),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: theme.colorScheme.primary.withOpacity(0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: IconButton.filled(
+                          onPressed: () {
+                            if (_selectedSubject != null) {
+                              setState(() {
+                                _daySubjects.add(_selectedSubject!);
+                                _selectedSubject = null;
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.add_rounded, size: 28),
+                          style: IconButton.styleFrom(
+                            backgroundColor: theme.colorScheme.primary,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size(54, 54),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
                             ),
                           ),
                         ),
-                        title: Text(
-                          _daySubjects[i].name,
-                          style: TextStyle(
-                            color: theme
-                                .textTheme
-                                .bodyLarge
-                                ?.color, // ✅ Dynamic text
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.close, color: Colors.red),
-                          onPressed: () =>
-                              setState(() => _daySubjects.removeAt(i)),
-                        ),
                       ),
-                    ),
-            ),
-
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: BorderSide(
-                        color: theme.colorScheme.primary,
-                        width: 1.5,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      'Back',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
+                    ],
                   ),
                 ),
-                if (!widget.isEditMode) ...
-                [
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _skipSetup,
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        side: BorderSide(
-                          color: theme.colorScheme.secondary,
-                          width: 1.5,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        'Skip',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.secondary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-                const SizedBox(width: 10),
+                const SizedBox(height: 24),
+
+                // Timetable List
                 Expanded(
-                  child: ElevatedButton(
-                    onPressed: _finishSetup,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                  child: _daySubjects.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.calendar_today_rounded,
+                                  size: 48,
+                                  color: theme.colorScheme.primary.withOpacity(0.6),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              Text(
+                                'Free Day!',
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: theme.textTheme.bodyLarge?.color,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'No lectures added for this day yet.',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          physics: const BouncingScrollPhysics(),
+                          itemCount: _daySubjects.length,
+                          itemBuilder: (_, i) {
+                            final isLast = i == _daySubjects.length - 1;
+                            return IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  // Timeline Line & Dot
+                                  SizedBox(
+                                    width: 40,
+                                    child: Column(
+                                      children: [
+                                        Container(
+                                          width: 32,
+                                          height: 32,
+                                          decoration: BoxDecoration(
+                                            color: theme.colorScheme.primary,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: theme.colorScheme.primary.withOpacity(0.3),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              '${i + 1}',
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        if (!isLast)
+                                          Expanded(
+                                            child: Container(
+                                              width: 2,
+                                              color: theme.colorScheme.primary.withOpacity(0.2),
+                                              margin: const EdgeInsets.symmetric(vertical: 4),
+                                            ),
+                                          )
+                                        else
+                                          const SizedBox(height: 16), // Padding for the last item
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  // Subject Card
+                                  Expanded(
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(bottom: 16),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: isDark ? theme.cardColor : Colors.white,
+                                          borderRadius: BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: theme.dividerColor.withOpacity(0.5),
+                                          ),
+                                          boxShadow: isDark
+                                              ? []
+                                              : [
+                                                  BoxShadow(
+                                                    color: Colors.black.withOpacity(0.03),
+                                                    blurRadius: 10,
+                                                    offset: const Offset(0, 4),
+                                                  )
+                                                ],
+                                        ),
+                                        child: ListTile(
+                                          contentPadding: const EdgeInsets.symmetric(
+                                            horizontal: 20,
+                                            vertical: 8,
+                                          ),
+                                          title: Text(
+                                            _daySubjects[i].name,
+                                            style: TextStyle(
+                                              color: theme.textTheme.bodyLarge?.color,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                              height: 1.3,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          trailing: IconButton(
+                                            icon: Icon(Icons.delete_outline_rounded,
+                                                color: Colors.red.shade400, size: 24),
+                                            onPressed: () =>
+                                                setState(() => _daySubjects.removeAt(i)),
+                                            tooltip: 'Remove Lecture',
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                ),
+                const SizedBox(height: 16),
+
+                // Bottom Actions
+                SafeArea(
+                  top: false,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 1,
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            side: BorderSide(
+                              color: theme.dividerColor,
+                              width: 1.5,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: Text(
+                            'Back',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      widget.isEditMode ? 'Save Changes' : 'Finish',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                      if (!widget.isEditMode) ...[
+                        const SizedBox(width: 12),
+                        Expanded(
+                          flex: 1,
+                          child: OutlinedButton(
+                            onPressed: _skipSetup,
+                            style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              side: BorderSide(
+                                color: theme.colorScheme.secondary.withOpacity(0.5),
+                                width: 1.5,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: Text(
+                              'Skip',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: theme.colorScheme.secondary,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: _finishSetup,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: theme.colorScheme.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            elevation: 4,
+                            shadowColor: theme.colorScheme.primary.withOpacity(0.4),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: Text(
+                            widget.isEditMode ? 'Save Timetable' : 'Finish Setup',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               ],
             ),
-          ],
-        ),
-      ),
+          ),
         ),
       ),
     );

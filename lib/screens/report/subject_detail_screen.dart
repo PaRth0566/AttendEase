@@ -36,8 +36,12 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
     );
 
     int attendedCount = 0;
+    int totalCount = 0;
     for (var record in records) {
-      if (record['status'] == 'P') {
+      final status = record['status'];
+      if (status == 'NU') continue; // NU doesn't count in stats
+      totalCount++;
+      if (status == 'P') {
         attendedCount++;
       }
     }
@@ -45,7 +49,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
     if (!mounted) return;
     setState(() {
       _history = records;
-      _total = records.length;
+      _total = totalCount;
       _attended = attendedCount;
       _isLoading = false;
     });
@@ -63,13 +67,20 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
     ).showSnackBar(const SnackBar(content: Text('Attendance record deleted')));
   }
 
-  // ✅ NEW: Toggle Record Logic (P -> A, or A -> P)
+  // Toggle Record Logic: NU → P, P → A, A → P
   Future<void> _toggleStatus(
     int timetableId,
     String date,
     String currentStatus,
   ) async {
-    String newStatus = currentStatus == 'P' ? 'A' : 'P';
+    String newStatus;
+    if (currentStatus == 'NU') {
+      newStatus = 'P';
+    } else if (currentStatus == 'P') {
+      newStatus = 'A';
+    } else {
+      newStatus = 'P';
+    }
 
     await _attendanceDao.upsertAttendance(
       timetableId: timetableId,
@@ -239,20 +250,31 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                             }
 
                             final isPresent = status == 'P';
-                            final colorBg = isPresent
-                                ? (isDark
-                                      ? Colors.green.shade400.withAlpha(64)
-                                      : Colors.green.withAlpha(64))
-                                : (isDark
-                                      ? Colors.red.shade400.withAlpha(64)
-                                      : Colors.red.withAlpha(64));
-                            final colorIcon = isPresent
-                                ? (isDark
-                                      ? Colors.green.shade300
-                                      : Colors.green.shade700)
-                                : (isDark
-                                      ? Colors.red.shade300
-                                      : Colors.red.shade700);
+                            final isNU = status == 'NU';
+                            final Color colorBg;
+                            final Color colorIcon;
+                            if (isNU) {
+                              colorBg = isDark
+                                  ? Colors.orange.shade400.withAlpha(48)
+                                  : Colors.orange.withAlpha(48);
+                              colorIcon = isDark
+                                  ? Colors.orange.shade300
+                                  : Colors.orange.shade700;
+                            } else if (isPresent) {
+                              colorBg = isDark
+                                  ? Colors.green.shade400.withAlpha(64)
+                                  : Colors.green.withAlpha(64);
+                              colorIcon = isDark
+                                  ? Colors.green.shade300
+                                  : Colors.green.shade700;
+                            } else {
+                              colorBg = isDark
+                                  ? Colors.red.shade400.withAlpha(64)
+                                  : Colors.red.withAlpha(64);
+                              colorIcon = isDark
+                                  ? Colors.red.shade300
+                                  : Colors.red.shade700;
+                            }
 
                             // ✅ NEW: Wrapped Card in Dismissible for Swipe-to-Delete
                             return Dismissible(
@@ -343,9 +365,11 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                                         shape: BoxShape.circle,
                                       ),
                                       child: Icon(
-                                        isPresent
-                                            ? Icons.check_rounded
-                                            : Icons.close_rounded,
+                                        isNU
+                                            ? Icons.help_outline_rounded
+                                            : (isPresent
+                                                ? Icons.check_rounded
+                                                : Icons.close_rounded),
                                         color: colorIcon,
                                         size: 20,
                                       ),
@@ -357,11 +381,20 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                                         color: theme.textTheme.bodyLarge?.color,
                                       ),
                                     ),
+                                    subtitle: isNU
+                                        ? Text(
+                                            'Status not updated in PDF. Tap to set.',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.orange.shade400,
+                                            ),
+                                          )
+                                        : null,
                                     trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          isPresent ? 'Present' : 'Absent',
+                                          isNU ? 'Not Updated' : (isPresent ? 'Present' : 'Absent'),
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             color: colorIcon,

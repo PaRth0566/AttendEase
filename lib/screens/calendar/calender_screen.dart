@@ -144,12 +144,20 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
         if (statuses.isEmpty) {
           newStatuses[day] = 'no_record';
-        } else if (statuses.every((s) => s == 'P')) {
-          newStatuses[day] = 'all_p';
-        } else if (statuses.every((s) => s == 'A')) {
-          newStatuses[day] = 'all_a';
+        } else if (statuses.every((s) => s == 'NU')) {
+          newStatuses[day] = 'all_nu';
         } else {
-          newStatuses[day] = 'mixed';
+          // Filter out NU to determine P/A status
+          final paStatuses = statuses.where((s) => s != 'NU').toList();
+          if (paStatuses.isEmpty) {
+            newStatuses[day] = 'all_nu';
+          } else if (paStatuses.every((s) => s == 'P')) {
+            newStatuses[day] = 'all_p';
+          } else if (paStatuses.every((s) => s == 'A')) {
+            newStatuses[day] = 'all_a';
+          } else {
+            newStatuses[day] = 'mixed';
+          }
         }
       }
     }
@@ -566,6 +574,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                 bgColor = colorAbsentBg;
                               case 'mixed':
                                 bgColor = colorMixedBg;
+                              case 'all_nu':
+                                bgColor = isDark
+                                    ? Colors.orange.shade700.withAlpha(80)
+                                    : Colors.orange.shade200.withAlpha(120);
                               default:
                                 bgColor = null;
                             }
@@ -677,8 +689,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                       .length > 1;
 
                                   final isPresent = status == 'P';
-                                  final statusColor =
-                                      isPresent ? Colors.green : Colors.red;
+                                  final isNU = status == 'NU';
+                                  final Color statusColor;
+                                  if (isNU) {
+                                    statusColor = Colors.orange;
+                                  } else if (isPresent) {
+                                    statusColor = Colors.green;
+                                  } else {
+                                    statusColor = Colors.red;
+                                  }
 
                                   return Card(
                                     key: ValueKey(recordId ?? 'rec_$i'),
@@ -723,9 +742,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                                 ),
                                                 const SizedBox(height: 2),
                                                 Text(
-                                                  hasDuplicates
-                                                      ? '${isPresent ? 'Present' : 'Absent'} · Lecture $lectureNum'
-                                                      : (isPresent ? 'Present' : 'Absent'),
+                                                  isNU
+                                                      ? (hasDuplicates
+                                                          ? 'Not Updated · Lecture $lectureNum'
+                                                          : 'Not Updated — tap to set status')
+                                                      : (hasDuplicates
+                                                          ? '${isPresent ? 'Present' : 'Absent'} · Lecture $lectureNum'
+                                                          : (isPresent ? 'Present' : 'Absent')),
                                                   style: TextStyle(
                                                     fontSize: 12,
                                                     fontWeight: FontWeight.w500,
@@ -735,21 +758,48 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                               ],
                                             ),
                                           ),
-                                          // Toggle P/A
+                                          // Toggle buttons
                                           if (timetableId != null) ...[
-                                            _inlineToggle(
-                                              label: isPresent ? 'Present' : 'Absent',
-                                              selected: true,
-                                              color: isPresent ? Colors.green : Colors.red,
-                                              theme: theme,
-                                              onTap: () async {
-                                                final newStatus =
-                                                    isPresent ? 'A' : 'P';
-                                                await _saveRecord(timetableId,
-                                                    recordDate, newStatus);
-                                                await _loadForDate(_selectedDay!);
-                                              },
-                                            ),
+                                            if (isNU) ...[
+                                              // NU: show P and A buttons
+                                              _inlineToggle(
+                                                label: 'P',
+                                                selected: false,
+                                                color: Colors.green,
+                                                theme: theme,
+                                                onTap: () async {
+                                                  await _saveRecord(timetableId,
+                                                      recordDate, 'P');
+                                                  await _loadForDate(_selectedDay!);
+                                                },
+                                              ),
+                                              const SizedBox(width: 4),
+                                              _inlineToggle(
+                                                label: 'A',
+                                                selected: false,
+                                                color: Colors.red,
+                                                theme: theme,
+                                                onTap: () async {
+                                                  await _saveRecord(timetableId,
+                                                      recordDate, 'A');
+                                                  await _loadForDate(_selectedDay!);
+                                                },
+                                              ),
+                                            ] else ...[
+                                              _inlineToggle(
+                                                label: isPresent ? 'Present' : 'Absent',
+                                                selected: true,
+                                                color: isPresent ? Colors.green : Colors.red,
+                                                theme: theme,
+                                                onTap: () async {
+                                                  final newStatus =
+                                                      isPresent ? 'A' : 'P';
+                                                  await _saveRecord(timetableId,
+                                                      recordDate, newStatus);
+                                                  await _loadForDate(_selectedDay!);
+                                                },
+                                              ),
+                                            ],
                                             const SizedBox(width: 6),
                                             // Delete
                                             IconButton(

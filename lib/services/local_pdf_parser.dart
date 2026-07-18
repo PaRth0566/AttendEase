@@ -16,20 +16,21 @@ class LocalPdfParser {
 
   // ── Pattern: matches the RIGHT side of each attendance row ────────────
   //
-  //   <Month Day, Year>  <H:MM:SS AM/PM>  <H:MM:SS AM/PM>  <P|A>
+  //   <Month Day, Year>  <H:MM:SS AM/PM>  <H:MM:SS AM/PM>  <P|A|NU>
   //
-  // Groups: (1) = full date string, (2) = start time, (3) = status (P or A)
+  // Groups: (1) = full date string, (2) = start time, (3) = status (P, A, or NU)
   static final _dateTimeStatusRe = RegExp(
     r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s+\d{1,2},?\s+\d{4})'
     r'\s+(\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M)' // Capture start time
     r'\s+\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M'
-    r'\s+([PA])\b',
+    r'\s+(P|A|NU)\b',
     caseSensitive: false,
   );
 
   // ── Pattern: finds <number> <course name> at the end of a text chunk ──
-  // Course name = letters and spaces only, at least 3 chars, ends with letter.
-  static final _srNoCourseRe = RegExp(r'(\d+)\s+([A-Za-z][A-Za-z ]*[A-Za-z])');
+  // Course name = letters, spaces, dots, plus, hash, ampersand, parens.
+  // Supports names like ".NET", "C++", "C#", "Data Structures & Algorithms".
+  static final _srNoCourseRe = RegExp(r'(\d+)\s+([A-Za-z][A-Za-z .+#&()]*[A-Za-z.+#&)])');
 
   // ── Core parsing ──────────────────────────────────────────────────────
 
@@ -46,6 +47,11 @@ class LocalPdfParser {
     String semester = '';
     String startDate = '';
     String endDate = '';
+
+    // Data structure to infer timetable: dayOfWeek -> timeInMinutes -> subject -> count
+    final scheduleFreq = <int, Map<int, Map<String, int>>>{
+      1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}
+    };
 
     var text = '';
 
@@ -134,7 +140,7 @@ class LocalPdfParser {
         final dateStr = m.group(1)!.trim();
         final timeStr = m.group(2)!.trim();
         final status = m.group(3)!.toUpperCase();
-        if (status != 'P' && status != 'A') continue;
+        if (status != 'P' && status != 'A' && status != 'NU') continue;
 
         // Text between previous match end and current match start
         final between = text.substring(lastEnd, m.start).trim();
@@ -180,11 +186,24 @@ class LocalPdfParser {
         final finalDate = count > 1 ? '${isoDate}_$count' : isoDate;
 
         subjects.add(courseName);
-        records.add({'date': finalDate, 'subject': courseName, 'status': status});
-        stats.putIfAbsent(courseName, () => {'attended': 0, 'total': 0});
-        stats[courseName]!['total'] = stats[courseName]!['total']! + 1;
-        if (status == 'P') {
-          stats[courseName]!['attended'] = stats[courseName]!['attended']! + 1;
+        records.add({'date': finalDate, 'subject': courseName, 'status': status, 'time': timeStr});
+        // NU records don't count toward P/A stats
+        if (status != 'NU') {
+          stats.putIfAbsent(courseName, () => {'attended': 0, 'total': 0});
+          stats[courseName]!['total'] = stats[courseName]!['total']! + 1;
+          if (status == 'P') {
+            stats[courseName]!['attended'] = stats[courseName]!['attended']! + 1;
+          }
+        }
+
+        // Track frequency for timetable inference (NU counts too — a lecture happened)
+        final dt = DateTime.tryParse(isoDate);
+        if (dt != null) {
+          final day = dt.weekday; // 1 = Monday, 7 = Sunday
+          final timeMinutes = _timeToMinutes(timeStr);
+          scheduleFreq[day] ??= {};
+          scheduleFreq[day]![timeMinutes] ??= {};
+          scheduleFreq[day]![timeMinutes]![courseName] = (scheduleFreq[day]![timeMinutes]![courseName] ?? 0) + 1;
         }
       }
 
@@ -195,6 +214,38 @@ class LocalPdfParser {
 
     } finally {
       document.dispose();
+    }
+
+    // Process inferred timetable
+    final inferredTimetable = <String, List<String>>{};
+    for (int day = 1; day <= 7; day++) {
+      final times = scheduleFreq[day]!;
+      if (times.isEmpty) continue;
+      
+      // Sort time slots chronologically
+      final sortedTimes = times.keys.toList()..sort();
+      final daySchedule = <String>[];
+      
+      for (final t in sortedTimes) {
+        final subjectsCounts = times[t]!;
+        var maxSubject = '';
+        var maxCount = 0;
+        for (final entry in subjectsCounts.entries) {
+          if (entry.value > maxCount) {
+            maxCount = entry.value;
+            maxSubject = entry.key;
+          }
+        }
+        // Only include if this subject appeared at least 2 times on this
+        // day+time slot — filters out one-off extra lectures
+        if (maxSubject.isNotEmpty && maxCount >= 2) {
+          daySchedule.add(maxSubject);
+        }
+      }
+      
+      if (daySchedule.isNotEmpty) {
+        inferredTimetable[day.toString()] = daySchedule;
+      }
     }
 
     if (records.isEmpty) {
@@ -214,6 +265,7 @@ class LocalPdfParser {
       'subjects': subjects.toList(),
       'subjectStats': stats,
       'attendanceRecords': records,
+      'inferredTimetable': inferredTimetable,
     };
   }
 
@@ -246,5 +298,24 @@ class LocalPdfParser {
           '${dt.day.toString().padLeft(2, '0')}';
     }
     return null;
+  }
+
+  static int _timeToMinutes(String timeStr) {
+    try {
+      final parts = timeStr.trim().split(RegExp(r'\s+'));
+      if (parts.isEmpty) return 0;
+      final timeParts = parts[0].split(':');
+      if (timeParts.isEmpty) return 0;
+      int hours = int.parse(timeParts[0]);
+      int minutes = timeParts.length > 1 ? int.parse(timeParts[1]) : 0;
+      if (parts.length > 1) {
+        final ampm = parts[1].toUpperCase();
+        if (ampm.contains('PM') && hours < 12) hours += 12;
+        if (ampm.contains('AM') && hours == 12) hours = 0;
+      }
+      return hours * 60 + minutes;
+    } catch (e) {
+      return 0;
+    }
   }
 }

@@ -8,6 +8,7 @@ import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../database/attendance_dao.dart';
 import '../../models/subject.dart';
+import '../../models/timetable_entry.dart';
 import '../setup/attendance_criteria_screen.dart';
 import '../../services/cloud_sync_service.dart';
 
@@ -226,7 +227,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
             final status = rec['status']?.toString().toUpperCase();
 
             if (dateStr == null || subName == null || status == null) continue;
-            if (status != 'P' && status != 'A') continue;
+            if (status != 'P' && status != 'A' && status != 'NU') continue;
             // The local parser appends '_N' for same-day lectures to prevent DB overwrite
             final parts = dateStr.split('_');
             final parsedDate = DateTime.tryParse(parts[0]);
@@ -294,6 +295,28 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                 date: 'pad_A_${subId}_$i',
                 status: 'A',
               );
+            }
+          }
+        }
+        // Step 3D: Insert inferred timetable entries
+        final inferredTimetable = widget.prefilledData!['inferredTimetable'] as Map<String, dynamic>?;
+        if (inferredTimetable != null) {
+          for (final dayEntry in inferredTimetable.entries) {
+            final dayOfWeek = int.tryParse(dayEntry.key);
+            if (dayOfWeek == null) continue;
+            final subjectsForDay = dayEntry.value as List<dynamic>;
+            for (int i = 0; i < subjectsForDay.length; i++) {
+              final subName = subjectsForDay[i].toString();
+              final subId = subjectNameToId[subName];
+              if (subId != null) {
+                await timetableDao.insertEntry(
+                  TimetableEntry(
+                    dayOfWeek: dayOfWeek,
+                    subjectId: subId,
+                    lectureOrder: i,
+                  ),
+                );
+              }
             }
           }
         }

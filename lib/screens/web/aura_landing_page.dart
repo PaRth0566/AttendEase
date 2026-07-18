@@ -10,7 +10,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/subject.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../theme/theme_provider.dart';
-import '../profile/profile_screen.dart';
 import 'aura_ai_dashboard.dart';
 import 'aura_upload_config.dart';
 
@@ -52,6 +51,20 @@ class _AuraLandingPageState extends State<AuraLandingPage>
       vsync: this,
       duration: const Duration(seconds: 15),
     )..repeat(reverse: true);
+    
+    // Guard: if trying to access dashboard directly without data, redirect to upload
+    if (_currentIndex == 2 && _parsedSubjects == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          if (widget.navigationShell != null) {
+            widget.navigationShell!.goBranch(1);
+          } else {
+            setState(() => _currentIndex = 1);
+          }
+        }
+      });
+    }
+
     // Restore the last-viewed tab after a browser refresh (if not using router)
     if (widget.navigationShell == null) {
       _restoreTabIndex();
@@ -62,9 +75,19 @@ class _AuraLandingPageState extends State<AuraLandingPage>
   void didUpdateWidget(AuraLandingPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.navigationShell != null) {
-      setState(() {
-        _currentIndex = widget.navigationShell!.currentIndex;
-      });
+      final newIndex = widget.navigationShell!.currentIndex;
+      // Guard: if router updates to dashboard without data, reject and redirect
+      if (newIndex == 2 && _parsedSubjects == null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && widget.navigationShell != null) {
+            widget.navigationShell!.goBranch(1);
+          }
+        });
+      } else {
+        setState(() {
+          _currentIndex = newIndex;
+        });
+      }
     }
   }
 
@@ -93,6 +116,10 @@ class _AuraLandingPageState extends State<AuraLandingPage>
   }
 
   void _onNavTap(int index) {
+    // Guard: dashboard tab requires parsed data from a PDF upload
+    if (index == 2 && _parsedSubjects == null) {
+      index = 1; // redirect to Upload tab
+    }
     if (widget.navigationShell != null) {
       widget.navigationShell!.goBranch(index);
     } else {
@@ -255,7 +282,10 @@ class _AuraLandingPageState extends State<AuraLandingPage>
             reportMeta: _reportMeta,
           );
         }
-        return ProfileScreen(key: ValueKey('profile_$_refreshKey'));
+        // No parsed data — show a proper "upload first" empty state
+        return _buildDashboardEmptyState(
+          Theme.of(context).brightness == Brightness.dark,
+        );
       case 0:
       default:
         return _buildHomeTab(isDark);
@@ -1230,6 +1260,113 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                 color: isDark
                     ? const Color(0xFFFBBF24)
                     : const Color(0xFFD97706),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Empty state shown when user navigates to Dashboard without uploading a PDF.
+  Widget _buildDashboardEmptyState(bool isDark) {
+    final isMobile = MediaQuery.of(context).size.width < 768;
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: isMobile ? 24 : 48,
+          vertical: isMobile ? 60 : 100,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: isDark
+                    ? const Color(0xFF6366F1).withOpacity(0.15)
+                    : const Color(0xFF6366F1).withOpacity(0.08),
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDark
+                      ? const Color(0xFF818CF8).withOpacity(0.3)
+                      : const Color(0xFF6366F1).withOpacity(0.2),
+                ),
+              ),
+              child: Icon(
+                Icons.upload_file_rounded,
+                size: 36,
+                color: isDark
+                    ? const Color(0xFFA5B4FC)
+                    : const Color(0xFF6366F1),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'No Report Uploaded',
+              style: TextStyle(
+                fontSize: isMobile ? 20 : 24,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Text(
+                'Upload your attendance PDF report first to unlock the dashboard with insights, charts, and analytics.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: isMobile ? 14 : 16,
+                  height: 1.6,
+                  color: isDark
+                      ? Colors.white.withOpacity(0.5)
+                      : const Color(0xFF64748B),
+                ),
+              ),
+            ),
+            const SizedBox(height: 32),
+            InkWell(
+              onTap: () => _onNavTap(1),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 24 : 32,
+                  vertical: isMobile ? 12 : 14,
+                ),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6366F1).withOpacity(0.4),
+                      blurRadius: 20,
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.cloud_upload_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Go to Upload',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: isMobile ? 14 : 16,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],

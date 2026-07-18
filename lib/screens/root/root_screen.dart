@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../services/cloud_sync_service.dart';
+import '../../services/update_service.dart';
+import '../../widgets/update_dialog.dart';
 import '../calendar/calender_screen.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../profile/profile_screen.dart';
@@ -29,6 +31,22 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     _currentIndex = widget.navigationShell?.currentIndex ?? 0;
     WidgetsBinding.instance.addObserver(this);
     _initialSync();
+    // Check for app updates on mobile only
+    if (!kIsWeb) {
+      _checkForUpdates();
+    }
+  }
+
+  /// Checks GitHub for a newer release and shows an update prompt if available.
+  Future<void> _checkForUpdates() async {
+    // Small delay so the UI is fully rendered before showing the sheet
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
+
+    final updateInfo = await UpdateService().checkForUpdate();
+    if (updateInfo != null && mounted) {
+      showUpdateBottomSheet(context, updateInfo);
+    }
   }
 
   @override

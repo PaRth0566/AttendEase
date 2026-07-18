@@ -22,7 +22,7 @@ class DBHelper {
       return await factory.openDatabase(
         'attendease.db',
         options: OpenDatabaseOptions(
-          version: 3, // ✅ UPGRADED TO VERSION 3
+          version: 4, // ✅ UPGRADED TO VERSION 3
           onConfigure: _onConfigure,
           onCreate: _onCreate,
           onUpgrade: _onUpgrade, // ✅ ADDED UPGRADE LOGIC
@@ -35,7 +35,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 3, // ✅ UPGRADED TO VERSION 3
+      version: 4, // ✅ UPGRADED TO VERSION 3
       onConfigure: _onConfigure,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade, // ✅ ADDED UPGRADE LOGIC
@@ -52,6 +52,27 @@ class DBHelper {
       await db.execute(
         'ALTER TABLE subjects ADD COLUMN semester INTEGER NOT NULL DEFAULT 1',
       );
+    }
+    if (oldVersion < 4) {
+      // Rebuild attendance_records to allow 'NU' in the status CHECK constraint
+      await db.execute('ALTER TABLE attendance_records RENAME TO _ar_old');
+      await db.execute('''
+        CREATE TABLE attendance_records (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          timetable_entry_id INTEGER NOT NULL,
+          date TEXT NOT NULL,
+          status TEXT CHECK(status IN ('P','A','NU')) NOT NULL,
+          UNIQUE(timetable_entry_id, date),
+          FOREIGN KEY (timetable_entry_id)
+            REFERENCES timetable(id)
+            ON DELETE CASCADE
+        )
+      ''');
+      await db.execute('''
+        INSERT INTO attendance_records (id, timetable_entry_id, date, status)
+        SELECT id, timetable_entry_id, date, status FROM _ar_old
+      ''');
+      await db.execute('DROP TABLE _ar_old');
     }
   }
 
@@ -83,7 +104,7 @@ class DBHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timetable_entry_id INTEGER NOT NULL,
         date TEXT NOT NULL,
-        status TEXT CHECK(status IN ('P','A')) NOT NULL,
+        status TEXT CHECK(status IN ('P','A','NU')) NOT NULL,
         UNIQUE(timetable_entry_id, date),
         FOREIGN KEY (timetable_entry_id)
           REFERENCES timetable(id)

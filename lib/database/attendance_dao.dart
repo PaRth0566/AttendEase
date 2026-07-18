@@ -18,6 +18,7 @@ class AttendanceDao {
       JOIN subjects s ON t.subject_id = s.id
       WHERE s.semester = ?
         AND a.date NOT LIKE 'pad_%'
+        AND a.status != 'NU'
       GROUP BY t.subject_id
     ''', [semester]);
 
@@ -106,6 +107,7 @@ class AttendanceDao {
       INNER JOIN subjects s ON t.subject_id = s.id
       WHERE s.semester = ? AND a.date >= ? AND a.date <= ?
         AND a.date NOT LIKE 'pad_%'
+        AND a.status != 'NU'
       GROUP BY t.subject_id
     ''',
       [semester, startDate, endDate],
@@ -259,6 +261,7 @@ class AttendanceDao {
       JOIN timetable t ON a.timetable_entry_id = t.id
       JOIN subjects s ON t.subject_id = s.id
       WHERE s.semester = ? AND a.date NOT LIKE 'pad_%'
+        AND a.status != 'NU'
       GROUP BY substr(a.date, 1, 10)
       ORDER BY substr(a.date, 1, 10) DESC
     ''', [semester]);
