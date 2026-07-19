@@ -324,6 +324,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             onPressed: () async {
               if (deleteController.text == 'DELETE') {
                 Navigator.pop(ctx);
+                final bool reAuthed = await _reAuthenticate();
+                if (!reAuthed) return;
                 await _performDeletion();
               } else {
                 ScaffoldMessenger.of(ctx).showSnackBar(

@@ -1,4 +1,4 @@
-package com.example.attend_ease
+package com.parthm.attendease
 
 import io.flutter.embedding.android.FlutterActivity
 

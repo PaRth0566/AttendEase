@@ -25,18 +25,22 @@ class _BugReportScreenState extends State<BugReportScreen> {
       return;
     }
 
+    if (title.length > 200 || desc.length > 5000) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Title or description is too long.')),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
       final user = FirebaseAuth.instance.currentUser;
       final uid = user?.uid ?? 'unknown_uid';
-      final email = user?.email ?? 'anonymous_guest';
-
       await FirebaseFirestore.instance.collection('bug_reports').add({
         'title': title,
         'description': desc,
         'uid': uid,
-        'email': email,
         'timestamp': FieldValue.serverTimestamp(),
         'status': 'open',
       });

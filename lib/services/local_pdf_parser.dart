@@ -11,7 +11,7 @@ class LocalPdfParser {
   static Future<Map<String, dynamic>> extractAttendanceFromPdf(
     Uint8List bytes,
   ) async {
-    return _parse(bytes);
+    return compute(_parse, bytes);
   }
 
   // ── Pattern: matches the RIGHT side of each attendance row ────────────

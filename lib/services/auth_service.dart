@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../database/db_helper.dart';
 
@@ -43,8 +43,8 @@ class AuthService {
         return userCredential.user;
       }
     } catch (e) {
-      print("Google Auth Error: $e");
-      throw e;
+      debugPrint("Google Auth Error: ${e.runtimeType}");
+      rethrow;
     }
   }
 
@@ -54,12 +54,20 @@ class AuthService {
       final UserCredential userCredential = await _auth
           .signInWithEmailAndPassword(
         email: email.trim(),
-        password: password.trim(),
+        password: password,
       );
-      return userCredential.user;
+      final user = userCredential.user;
+      if (user != null && !user.emailVerified) {
+        await _auth.signOut();
+        throw FirebaseAuthException(
+          code: 'email-not-verified',
+          message: 'Please verify your email before logging in.',
+        );
+      }
+      return user;
     } catch (e) {
-      print("Email Login Error: $e");
-      throw e;
+      debugPrint("Email Login Error: ${e.runtimeType}");
+      rethrow;
     }
   }
 
@@ -69,7 +77,7 @@ class AuthService {
       final UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(
         email: email.trim(),
-        password: password.trim(),
+        password: password,
       );
 
       // Automatically send a verification email
@@ -77,8 +85,8 @@ class AuthService {
 
       return userCredential.user;
     } catch (e) {
-      print("Email Signup Error: $e");
-      throw e;
+      debugPrint("Email Signup Error: ${e.runtimeType}");
+      rethrow;
     }
   }
 
@@ -87,8 +95,8 @@ class AuthService {
     try {
       await _auth.sendPasswordResetEmail(email: email.trim());
     } catch (e) {
-      print("Password Reset Error: $e");
-      throw e;
+      debugPrint("Password Reset Error: ${e.runtimeType}");
+      rethrow;
     }
   }
 
@@ -105,7 +113,7 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.clear();
     } catch (e) {
-      print('Failed to wipe local data on logout: $e');
+      debugPrint('Failed to wipe local data on logout: ${e.runtimeType}');
     }
 
     await _googleSignIn.signOut();
@@ -124,7 +132,7 @@ class AuthService {
       UserCredential result = await _auth.signInAnonymously();
       return result.user;
     } catch (e) {
-      print("Error signing in anonymously: $e");
+      debugPrint("Error signing in anonymously: ${e.runtimeType}");
       return null;
     }
   }

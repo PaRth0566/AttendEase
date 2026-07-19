@@ -3,12 +3,51 @@ import axios from 'axios';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import multer from 'multer';
+import rateLimit from 'express-rate-limit';
+import { fileTypeFromBuffer } from 'file-type';
+import admin from 'firebase-admin';
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+admin.initializeApp({ credential: admin.credential.applicationDefault() });
+
+const corsOptions = {
+  origin: ['https://attendease-cbc6f.web.app', 'http://localhost:3000'],
+  methods: ['GET', 'POST'],
+};
+app.use(cors(corsOptions));
 app.use(express.json());
+
+async function requireAuth(req, res, next) {
+  const authorization = req.header('authorization') ?? '';
+  const match = authorization.match(/^Bearer (.+)$/i);
+  if (!match) {
+    return res.status(401).json({ error: 'Authentication required.' });
+  }
+  try {
+    req.user = await admin.auth().verifyIdToken(match[1], true);
+    return next();
+  } catch (_) {
+    return res.status(401).json({ error: 'Invalid or expired authentication token.' });
+  }
+}
+
+const analysisLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 5, // 5 requests per IP per minute
+  message: { error: 'Too many requests. Please wait.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const healthLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -57,16 +96,16 @@ async function callWithFallback(prompt, pdfPart) {
 }
 
 // ── Health Check ──────────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'awake', timestamp: new Date() });
+app.get('/api/health', healthLimiter, (req, res) => {
+  res.json({ status: 'ok' });
 });
 
 // ── Attendance Analysis Endpoint (Web) ────────────────────────────────────────
-app.post('/api/analyze-attendance', (req, res, next) => {
+app.post('/api/analyze-attendance', analysisLimiter, requireAuth, (req, res, next) => {
   upload.single('report')(req, res, function (err) {
     if (err) {
       console.error("Multer Error:", err);
-      return res.status(400).json({ success: false, error: `File Upload Error: ${err.message}` });
+      return res.status(400).json({ success: false, error: 'File Upload Error.' });
     }
     next();
   });
@@ -75,11 +114,16 @@ app.post('/api/analyze-attendance', (req, res, next) => {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No PDF file provided under the "report" field.' });
     }
-    if (req.file.mimetype !== 'application/pdf') {
-      return res.status(400).json({ success: false, error: 'Only PDF files are accepted.' });
+
+    const detected = await fileTypeFromBuffer(req.file.buffer);
+    if (!detected || detected.mime !== 'application/pdf') {
+      return res.status(400).json({ success: false, error: 'Invalid file format. Only real PDFs accepted.' });
+    }
+    if (req.file.buffer.slice(0, 4).toString() !== '%PDF') {
+      return res.status(400).json({ success: false, error: 'Invalid PDF header.' });
     }
 
-    console.log(`Received PDF: ${req.file.originalname} (${req.file.size} bytes)`);
+    console.log(`Received authenticated PDF upload (${req.file.size} bytes)`);
 
     const prompt = `
 You are a precise attendance data extractor. Accuracy is critical — a student's academic standing depends on this.
@@ -124,7 +168,7 @@ RULES:
 
     const pdfPart = {
       inlineData: {
-        mimeType: req.file.mimetype,
+        mimeType: 'application/pdf',
         data: req.file.buffer.toString("base64")
       }
     };
@@ -143,7 +187,7 @@ RULES:
 // ── Global Error Handler ──────────────────────────────────────────────────────
 app.use((err, req, res, next) => {
   console.error("Critical Server Error:", err);
-  res.status(500).json({ success: false, error: `Critical server error: ${err.message}` });
+  res.status(500).json({ success: false, error: 'An internal error occurred.' });
 });
 
 const PORT = process.env.PORT || 3000;

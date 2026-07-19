@@ -8,11 +8,17 @@ class DBHelper {
   static final DBHelper instance = DBHelper._internal();
 
   static Database? _database;
+  static Future<Database>? _databaseFuture;
 
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDatabase();
-    return _database!;
+    _databaseFuture ??= _initDatabase();
+    try {
+      return _database = await _databaseFuture!;
+    } catch (_) {
+      _databaseFuture = null;
+      rethrow;
+    }
   }
 
   Future<Database> _initDatabase() async {
@@ -22,7 +28,7 @@ class DBHelper {
       return await factory.openDatabase(
         'attendease.db',
         options: OpenDatabaseOptions(
-          version: 4, // ✅ UPGRADED TO VERSION 3
+          version: 4, // ✅ UPGRADED TO VERSION 4
           onConfigure: _onConfigure,
           onCreate: _onCreate,
           onUpgrade: _onUpgrade, // ✅ ADDED UPGRADE LOGIC
@@ -35,7 +41,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 4, // ✅ UPGRADED TO VERSION 3
+      version: 4, // ✅ UPGRADED TO VERSION 4
       onConfigure: _onConfigure,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade, // ✅ ADDED UPGRADE LOGIC

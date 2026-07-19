@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -9,6 +10,7 @@ import 'package:sqflite/sqflite.dart';
 import '../../database/db_helper.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../utils/db_utils.dart';
 import 'package:go_router/go_router.dart';
 import 'forgot_password_screen.dart';
 import 'signup_screen.dart';
@@ -28,6 +30,49 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   bool _obscurePassword = true;
+
+  // ── Login throttling ──────────────────────────────────────
+  static const int _maxAttempts = 5;
+  static const int _lockoutSeconds = 60;
+  int _failedAttempts = 0;
+  DateTime? _lockoutUntil;
+  Timer? _lockoutTimer;
+  int _lockoutRemaining = 0;
+
+  bool get _isLockedOut =>
+      _lockoutUntil != null && DateTime.now().isBefore(_lockoutUntil!);
+
+  void _startLockout() {
+    _lockoutUntil = DateTime.now().add(const Duration(seconds: _lockoutSeconds));
+    _lockoutRemaining = _lockoutSeconds;
+    _lockoutTimer?.cancel();
+    _lockoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) { timer.cancel(); return; }
+      setState(() {
+        _lockoutRemaining--;
+        if (_lockoutRemaining <= 0) {
+          _lockoutUntil = null;
+          _failedAttempts = 0;
+          timer.cancel();
+        }
+      });
+    });
+  }
+
+  void _recordFailedAttempt() {
+    _failedAttempts++;
+    if (_failedAttempts >= _maxAttempts) {
+      _startLockout();
+    }
+  }
+
+  @override
+  void dispose() {
+    _lockoutTimer?.cancel();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _handlePostLogin(User? user) async {
     if (user == null) {
@@ -88,10 +133,10 @@ class _LoginScreenState extends State<LoginScreen> {
     // Check for pending email transfer data (from "Change Email" flow)
     if (!hasRestored && user.email != null) {
       try {
-        final transferEmail = user.email!.toLowerCase();
+        final transferId = user.uid; // Secured: lookup by UID
         final transferDoc = await FirebaseFirestore.instance
             .collection('data_transfers')
-            .doc(transferEmail)
+            .doc(transferId)
             .get();
 
         if (transferDoc.exists && transferDoc.data() != null) {
@@ -127,15 +172,15 @@ class _LoginScreenState extends State<LoginScreen> {
             await db.delete('attendance_records');
 
             for (var row in (data['subjects'] as List<dynamic>? ?? [])) {
-              await db.insert('subjects', _sanitizeRow(Map<String, dynamic>.from(row)),
+              await db.insert('subjects', DbUtils.sanitizeRow(Map<String, dynamic>.from(row)),
                   conflictAlgorithm: ConflictAlgorithm.replace);
             }
             for (var row in (data['timetable'] as List<dynamic>? ?? [])) {
-              await db.insert('timetable', _sanitizeRow(Map<String, dynamic>.from(row)),
+              await db.insert('timetable', DbUtils.sanitizeRow(Map<String, dynamic>.from(row)),
                   conflictAlgorithm: ConflictAlgorithm.replace);
             }
             for (var row in (data['attendance_records'] as List<dynamic>? ?? [])) {
-              await db.insert('attendance_records', _sanitizeRow(Map<String, dynamic>.from(row)),
+              await db.insert('attendance_records', DbUtils.sanitizeRow(Map<String, dynamic>.from(row)),
                   conflictAlgorithm: ConflictAlgorithm.replace);
             }
           }
@@ -146,7 +191,7 @@ class _LoginScreenState extends State<LoginScreen> {
           // Delete the transfer document — it's been consumed
           await FirebaseFirestore.instance
               .collection('data_transfers')
-              .doc(transferEmail)
+              .doc(transferId)
               .delete();
 
           hasRestored = true;
@@ -206,11 +251,13 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       User? user = await _authService.signInWithEmail(
         _emailController.text.trim(),
-        _passwordController.text.trim(),
+        _passwordController.text,
       );
+      _failedAttempts = 0; // Reset on success
       await _handlePostLogin(user);
     } on FirebaseAuthException catch (e) {
       setState(() => _isLoading = false);
+      _recordFailedAttempt();
 
       String errorMessage = 'An error occurred. Please try again.';
 
@@ -307,24 +354,6 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     }
-  }
-
-  /// Sanitizes a Firestore row for safe SQLite insertion.
-  Map<String, dynamic> _sanitizeRow(Map<String, dynamic> row) {
-    final sanitized = <String, dynamic>{};
-    for (final entry in row.entries) {
-      final key = entry.key;
-      var value = entry.value;
-      if (value is num) {
-        if (key == 'required_percent') {
-          value = value.toDouble();
-        } else {
-          value = value.toInt();
-        }
-      }
-      sanitized[key] = value;
-    }
-    return sanitized;
   }
 
   @override
@@ -424,6 +453,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ? Icons.visibility_off
                                 : Icons.visibility,
                           ),
+                          tooltip: _obscurePassword ? 'Show password' : 'Hide password',
                           onPressed: () => setState(
                                 () => _obscurePassword = !_obscurePassword,
                           ),
@@ -461,7 +491,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 16),
 
                     ElevatedButton(
-                      onPressed: _loginWithEmail,
+                      onPressed: _isLockedOut ? null : _loginWithEmail,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: theme.colorScheme.primary,
                         foregroundColor: Colors.white,
@@ -471,13 +501,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         elevation: 0,
                       ),
-                      child: const Text(
-                        'Log In',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      child: _isLockedOut
+                          ? Text(
+                              'Try again in ${_lockoutRemaining}s',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            )
+                          : const Text(
+                              'Log In',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            ),
                     ),
                     const SizedBox(height: 24),
 

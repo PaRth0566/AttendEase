@@ -41,6 +41,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
   String? _errorMessage;
   String? _fileName;
   bool _isDragging = false;
+  bool _hasConsented = false;
 
   // ── Web drag-and-drop JS bridge listeners ─────────────────
   web.EventListener? _onFileDropped;
@@ -187,6 +188,13 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
   }
 
   void _handleWebDrop() {
+    if (!_hasConsented) {
+      setState(() {
+        _isDragging = false;
+        _errorMessage = 'Please check the AI Privacy Consent box before uploading.';
+      });
+      return;
+    }
     final name = _jsDropFileName;
     final base64 = _jsDropFileBase64;
     if (name == null || base64 == null || base64.isEmpty) return;
@@ -234,6 +242,12 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
   double get _subjectTarget => double.tryParse(_subjectTargetCtrl.text) ?? 70.0;
 
   Future<void> _handleUpload() async {
+    if (!_hasConsented) {
+      setState(() {
+        _errorMessage = 'Please check the AI Privacy Consent box before uploading.';
+      });
+      return;
+    }
     try {
       final FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -536,6 +550,8 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                             children: [
                               _buildSettingsCard(isDark, isMobile),
                               const SizedBox(height: 16),
+                              _buildConsentCheckbox(isDark, isMobile),
+                              const SizedBox(height: 16),
                               _buildUploadCard(isDark, isMobile),
                             ],
                           );
@@ -551,7 +567,13 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                               const SizedBox(width: 32),
                               Expanded(
                                 flex: 2,
-                                child: _buildUploadCard(isDark, isMobile),
+                                child: Column(
+                                  children: [
+                                    _buildConsentCheckbox(isDark, isMobile),
+                                    const SizedBox(height: 16),
+                                    Expanded(child: _buildUploadCard(isDark, isMobile)),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -883,6 +905,50 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildConsentCheckbox(bool isDark, bool isMobile) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E1B4B).withOpacity(0.4) : Colors.white.withOpacity(0.8),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _hasConsented
+              ? (isDark ? const Color(0xFF10B981) : const Color(0xFF059669))
+              : (isDark ? const Color(0xFF818CF8).withOpacity(0.2) : Colors.black.withOpacity(0.05)),
+        ),
+      ),
+      child: CheckboxListTile(
+        value: _hasConsented,
+        onChanged: (val) {
+          setState(() {
+            _hasConsented = val ?? false;
+            if (_hasConsented) _errorMessage = null;
+          });
+        },
+        title: Text(
+          'I consent to sending my PDF to Google Gemini AI for processing.',
+          style: TextStyle(
+            fontSize: isMobile ? 12 : 14,
+            color: isDark ? const Color(0xFFEEF2FF) : const Color(0xFF1E293B),
+          ),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            'Your PDF is sent for one-time analysis and is not stored on our servers.',
+            style: TextStyle(
+              fontSize: isMobile ? 10 : 12,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            ),
+          ),
+        ),
+        controlAffinity: ListTileControlAffinity.leading,
+        contentPadding: EdgeInsets.zero,
+        activeColor: isDark ? const Color(0xFF10B981) : const Color(0xFF059669),
+      ),
     );
   }
 

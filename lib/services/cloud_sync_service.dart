@@ -2,21 +2,32 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../database/db_helper.dart'; // Ensure this path matches your project!
+import '../utils/db_utils.dart';
 
 class CloudSyncService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  bool _isSyncing = false;
+
+  static const _prefsWhitelist = {
+    'name', 'course', 'semester', 'semester_start_date', 'semester_end_date',
+    'last_sync_time', 'manual_semester', 'overall_required_attendance', 'subject_required_attendance'
+  };
 
   // 1. BACKUP EVERYTHING (SQLite + SharedPreferences)
   Future<bool> backupDataToCloud() async {
     try {
+      if (_isSyncing) return false;
+      _isSyncing = true;
       final user = _auth.currentUser;
-      if (user == null) {
-        debugPrint('☁️ [Sync] Backup skipped: No user logged in.');
+      if (user == null || user.isAnonymous) {
+        debugPrint('☁️ [Sync] Backup skipped: No user logged in or user is anonymous.');
+        _isSyncing = false;
         return false;
       }
 
@@ -25,6 +36,7 @@ class CloudSyncService {
           .checkConnectivity());
       if (connectivityResult.contains(ConnectivityResult.none)) {
         debugPrint('☁️ [Sync] Backup skipped: No internet connection.');
+        _isSyncing = false;
         return false;
       }
 
@@ -41,10 +53,14 @@ class CloudSyncService {
       // Grab all SharedPreferences Data (Name, Course, Semester Dates, etc.)
       final Map<String, dynamic> userPrefs = {};
       for (String key in prefs.getKeys()) {
-        userPrefs[key] = prefs.get(key);
+        if (_prefsWhitelist.contains(key)) {
+          userPrefs[key] = prefs.get(key);
+        }
       }
 
       final syncTime = DateTime.now().toUtc();
+      final packageInfo = await PackageInfo.fromPlatform();
+      final appVersion = packageInfo.version;
 
       // Package it all together
       final backupData = {
@@ -53,12 +69,25 @@ class CloudSyncService {
         'timetable': timetable,
         'attendance_records': attendanceRecords,
         'last_backed_up': Timestamp.fromDate(syncTime),
-        'app_version': '1.1.0', // Track version for migration safety
+        'app_version': appVersion, // Track version for migration safety
       };
 
-      // Upload to Firestore
+      // Upload to Firestore with optimistic-locking transaction
       final userDoc = _firestore.collection('users').doc(user.uid);
-      await userDoc.set(backupData);
+      await _firestore.runTransaction((txn) async {
+        final snapshot = await txn.get(userDoc);
+        if (snapshot.exists) {
+          final existing = snapshot.data();
+          if (existing != null && existing['last_backed_up'] is Timestamp) {
+            final cloudTime = (existing['last_backed_up'] as Timestamp).toDate();
+            if (cloudTime.isAfter(syncTime)) {
+              debugPrint('☁️ [Sync] Cloud data is newer — skipping overwrite.');
+              throw Exception('SKIP_BACKUP');
+            }
+          }
+        }
+        txn.set(userDoc, backupData);
+      });
 
       // Update local last sync time ONLY after successful upload
       final nowStr = syncTime.toIso8601String();
@@ -69,14 +98,21 @@ class CloudSyncService {
     } catch (e) {
       debugPrint("☁️ [Sync] Backup Error: $e");
       return false;
+    } finally {
+      _isSyncing = false;
     }
   }
 
   // 2. RESTORE EVERYTHING (Returns true if returning user, false if new user)
   Future<bool> restoreDataFromCloud() async {
     try {
+      if (_isSyncing) return false;
+      _isSyncing = true;
       final user = _auth.currentUser;
-      if (user == null) return false;
+      if (user == null || user.isAnonymous) {
+        _isSyncing = false;
+        return false;
+      }
 
       final docSnapshot = await _firestore
           .collection('users')
@@ -86,6 +122,7 @@ class CloudSyncService {
       // If no document exists, they are a brand new user
       if (!docSnapshot.exists || docSnapshot.data() == null) {
         debugPrint('☁️ [Sync] Restore skipped: No cloud document found.');
+        _isSyncing = false;
         return false;
       }
 
@@ -157,15 +194,15 @@ class CloudSyncService {
       debugPrint('☁️ [Sync] Restoring DB: ${subjects.length} subjects, ${attendanceRecords.length} records.');
 
       for (var subject in subjects) {
-        final sanitized = _sanitizeRow(Map<String, dynamic>.from(subject));
+        final sanitized = DbUtils.sanitizeRow(Map<String, dynamic>.from(subject));
         await db.insert('subjects', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
       }
       for (var session in timetable) {
-        final sanitized = _sanitizeRow(Map<String, dynamic>.from(session));
+        final sanitized = DbUtils.sanitizeRow(Map<String, dynamic>.from(session));
         await db.insert('timetable', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
       }
       for (var record in attendanceRecords) {
-        final sanitized = _sanitizeRow(Map<String, dynamic>.from(record));
+        final sanitized = DbUtils.sanitizeRow(Map<String, dynamic>.from(record));
         await db.insert('attendance_records', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
       }
 
@@ -225,6 +262,8 @@ class CloudSyncService {
     } catch (e) {
       debugPrint("☁️ [Sync] Restore Error: $e");
       return false;
+    } finally {
+      _isSyncing = false;
     }
   }
 
@@ -232,7 +271,9 @@ class CloudSyncService {
   Future<String> syncBidirectional() async {
     try {
       final user = _auth.currentUser;
-      if (user == null) return 'no_user';
+      if (user == null || user.isAnonymous) return 'no_user';
+
+      if (_isSyncing) return 'syncing';
 
       final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
       if (connectivityResult.contains(ConnectivityResult.none)) return 'no_network';
@@ -279,24 +320,5 @@ class CloudSyncService {
       debugPrint("☁️ [Sync] Bidirectional Sync Error: $e");
       return 'error';
     }
-  }
-
-  /// Sanitizes a row from Firestore for safe SQLite insertion.
-  Map<String, dynamic> _sanitizeRow(Map<String, dynamic> row) {
-    final sanitized = <String, dynamic>{};
-    for (final entry in row.entries) {
-      final key = entry.key;
-      var value = entry.value;
-
-      if (value is num) {
-        if (key == 'required_percent') {
-          value = value.toDouble();
-        } else {
-          value = value.toInt();
-        }
-      }
-      sanitized[key] = value;
-    }
-    return sanitized;
   }
 }

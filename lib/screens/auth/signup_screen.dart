@@ -55,7 +55,7 @@ class _SignupScreenState extends State<SignupScreen> {
     try {
       User? user = await _authService.signUpWithEmail(
         _emailController.text.trim(),
-        _passwordController.text.trim(),
+        _passwordController.text,
       );
 
       if (user != null) {
@@ -229,6 +229,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                 ? Icons.visibility_off
                                 : Icons.visibility,
                           ),
+                          tooltip: _obscurePassword ? 'Show password' : 'Hide password',
                           onPressed: () => setState(
                             () => _obscurePassword = !_obscurePassword,
                           ),
@@ -270,6 +271,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                 ? Icons.visibility_off
                                 : Icons.visibility,
                           ),
+                          tooltip: _obscureConfirmPassword ? 'Show password' : 'Hide password',
                           onPressed: () => setState(
                             () => _obscureConfirmPassword =
                                 !_obscureConfirmPassword,

@@ -44,6 +44,7 @@ Page<dynamic> _fadeTransition(GoRouterState state, Widget child) {
 
 class AppRouter {
   static final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
+  static bool? _hasDataCache;
 
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
@@ -92,18 +93,21 @@ class AppRouter {
 
       // /app/* routes require setup completion (subjects must exist)
       if (isAppRoute) {
-        bool hasData = false;
-        try {
-          final db = await DBHelper.instance.database;
-          final subjects = await db.query('subjects', limit: 1);
-          if (subjects.isNotEmpty) {
-            hasData = true;
-          } else {
-            hasData = await CloudSyncService().restoreDataFromCloud();
+        if (_hasDataCache == null) {
+          try {
+            final db = await DBHelper.instance.database;
+            final subjects = await db.query('subjects', limit: 1);
+            if (subjects.isNotEmpty) {
+              _hasDataCache = true;
+            } else {
+              _hasDataCache = await CloudSyncService().restoreDataFromCloud();
+            }
+          } catch (_) {
+            _hasDataCache = false;
           }
-        } catch (_) {}
+        }
 
-        if (!hasData) {
+        if (!(_hasDataCache ?? false)) {
           return '/setup';
         }
         return null; // allow — user has auth + data
@@ -111,18 +115,21 @@ class AppRouter {
 
       // If they hit the root domain '/', send them to the appropriate start page
       if (state.matchedLocation == '/') {
-        bool hasData = false;
-        try {
-          final db = await DBHelper.instance.database;
-          final subjects = await db.query('subjects', limit: 1);
-          if (subjects.isNotEmpty) {
-            hasData = true;
-          } else {
-            hasData = await CloudSyncService().restoreDataFromCloud();
+        if (_hasDataCache == null) {
+          try {
+            final db = await DBHelper.instance.database;
+            final subjects = await db.query('subjects', limit: 1);
+            if (subjects.isNotEmpty) {
+              _hasDataCache = true;
+            } else {
+              _hasDataCache = await CloudSyncService().restoreDataFromCloud();
+            }
+          } catch (_) {
+            _hasDataCache = false;
           }
-        } catch (_) {}
+        }
 
-        return hasData ? '/app/dashboard' : '/setup';
+        return (_hasDataCache ?? false) ? '/app/dashboard' : '/setup';
       }
 
       // Allow everything else (/web/home, /web/upload, /setup/*)
@@ -315,7 +322,18 @@ final extra = state.extra as Map<String, dynamic>?;
       // Legacy root redirect
       GoRoute(
         path: '/',
-        builder: (context, state) => const Scaffold(body: Center(child: CircularProgressIndicator())),
+        builder: (context, state) => const Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.auto_graph_rounded, size: 64, color: Colors.indigo),
+                SizedBox(height: 16),
+                CircularProgressIndicator(),
+              ],
+            ),
+          ),
+        ),
       ),
     ],
   );

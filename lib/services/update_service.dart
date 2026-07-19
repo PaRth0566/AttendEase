@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 /// Information about an available update.
 class UpdateInfo {
@@ -73,6 +72,17 @@ class UpdateService {
       // Fallback: use the GitHub release page if no APK asset found
       if (downloadUrl.isEmpty) {
         downloadUrl = htmlUrl;
+      }
+
+      // Validate the download URL domain — only trust GitHub
+      if (downloadUrl.isNotEmpty) {
+        final uri = Uri.tryParse(downloadUrl);
+        if (uri == null ||
+            !(uri.host == 'github.com' ||
+              uri.host.endsWith('.githubusercontent.com'))) {
+          debugPrint('Update check: rejected untrusted download URL: $downloadUrl');
+          downloadUrl = htmlUrl; // Fall back to release page
+        }
       }
 
       // Compare versions
