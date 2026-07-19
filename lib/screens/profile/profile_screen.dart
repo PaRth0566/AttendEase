@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/attendance_dao.dart';
@@ -41,6 +42,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   double overallAttendance = 0.0;
   bool _loading = true;
+  String _appVersion = '';
 
   @override
   void initState() {
@@ -75,6 +77,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       overallAttendance = total == 0 ? 0.0 : (attended / total) * 100;
       _loading = false;
     });
+
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() {
+          _appVersion = 'v${info.version} (${info.buildNumber})';
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _switchSemester(int newSemester) async {
@@ -366,6 +377,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     onTap: _handleLogout,
                   ),
 
+                  const SizedBox(height: 16),
+                  if (_appVersion.isNotEmpty)
+                    Center(
+                      child: Text(
+                        'AttendEase $_appVersion',
+                        style: TextStyle(
+                          color: theme.textTheme.bodyMedium?.color?.withAlpha(150),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 24),
                 ],
               ),
