@@ -1,306 +1,308 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 
 import '../services/update_service.dart';
 
-/// Shows a styled bottom sheet prompting the user to update the app.
-///
-/// Call [showUpdateBottomSheet] with an [UpdateInfo] to display it.
-Future<void> showUpdateBottomSheet(
-  BuildContext context,
-  UpdateInfo updateInfo,
-) async {
+Future<void> showUpdateBottomSheet(BuildContext context, UpdateInfo info) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     backgroundColor: Colors.transparent,
-    builder: (context) => _UpdateBottomSheet(updateInfo: updateInfo),
+    builder: (_) => _UpdateSheet(info: info),
   );
 }
 
-class _UpdateBottomSheet extends StatelessWidget {
-  final UpdateInfo updateInfo;
+Future<void> showPatchNotesSheet(
+  BuildContext context,
+  ReleaseNotes notes, {
+  bool markViewed = false,
+}) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _PatchNotesSheet(notes: notes),
+  );
+  if (markViewed) await UpdateService.instance.markPatchNotesViewed(notes.version);
+}
 
-  const _UpdateBottomSheet({required this.updateInfo});
+Future<void> showPatchNotesHistory(BuildContext context) async {
+  final history = await UpdateService.instance.patchNotesHistory();
+  if (!context.mounted) return;
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => _PatchNotesHistorySheet(history: history),
+  );
+}
+
+class _UpdateSheet extends StatefulWidget {
+  final UpdateInfo info;
+  const _UpdateSheet({required this.info});
+
+  @override
+  State<_UpdateSheet> createState() => _UpdateSheetState();
+}
+
+class _UpdateSheetState extends State<_UpdateSheet> {
+  UpdateDownload? _download;
+  StreamSubscription<double>? _progressSubscription;
+  double _progress = 0;
+  bool _working = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _progressSubscription?.cancel();
+    _download?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _update() async {
+    setState(() {
+      _working = true;
+      _error = null;
+      _progress = 0;
+    });
+    final download = UpdateService.instance.download(widget.info);
+    _download = download;
+    _progressSubscription = download.progress.listen((value) {
+      if (mounted) setState(() => _progress = value);
+    });
+    try {
+      final apkPath = await download.completedPath;
+      if (!mounted) return;
+      setState(() => _progress = 1);
+      await UpdateService.instance.launchInstaller(apkPath, widget.info);
+      if (mounted) Navigator.pop(context);
+    } on UpdatePlatformCancelledException {
+      // User cancelled — not an error, just reset the sheet quietly.
+      if (mounted) setState(() => _error = null);
+    } on UpdateException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'The update could not be completed.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _working = false;
+          _progress = 0;
+        });
+      }
+      _download = null;
+      await _progressSubscription?.cancel();
+      _progressSubscription = null;
+    }
+  }
+
+  void _cancel() {
+    _download?.cancel();
+    // Leave `_working` true until the download future completes and the
+    // `finally` block resets state, so the button can't be double-triggered.
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final screenHeight = MediaQuery.of(context).size.height;
+    final theme = Theme.of(context);
+    return _SheetFrame(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: CircleAvatar(
+                radius: 30,
+                backgroundColor: theme.colorScheme.primary.withAlpha(24),
+                child: Icon(Icons.system_update_rounded, size: 30, color: theme.colorScheme.primary),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Center(
+              child: Text('Update Available', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            ),
+            const SizedBox(height: 6),
+            Center(
+              child: Text(
+                'Version ${widget.info.latestVersion}',
+                style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(widget.info.notes.summary, style: const TextStyle(height: 1.45)),
+            if (_working) ...[
+              const SizedBox(height: 20),
+              Semantics(
+                label: _progress > 0
+                    ? 'Downloading update, ${(_progress * 100).round()} percent'
+                    : 'Preparing update download',
+                value: _progress > 0 ? '${(_progress * 100).round()}%' : null,
+                child: LinearProgressIndicator(
+                  value: _progress > 0 ? _progress : null,
+                  minHeight: 7,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _progress > 0 ? 'Downloading ${(_progress * 100).round()}%' : 'Preparing download...',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 14),
+              Text(
+                _error!,
+                style: TextStyle(color: theme.colorScheme.error, fontWeight: FontWeight.w600),
+                semanticsLabel: 'Update error: ${_error!}',
+              ),
+            ],
+            const SizedBox(height: 22),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _working ? _cancel : _update,
+                icon: Icon(_working ? Icons.close_rounded : Icons.download_rounded),
+                label: Text(_working ? 'Cancel Download' : 'Update'),
+              ),
+            ),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: _working ? null : () => Navigator.pop(context),
+                child: const Text('Later'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-    return Container(
-      constraints: BoxConstraints(maxHeight: screenHeight * 0.65),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0F172A) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-        border: Border(
-          top: BorderSide(
-            color: isDark
-                ? const Color(0xFF6366F1).withOpacity(0.3)
-                : const Color(0xFFE2E8F0),
-            width: 1.5,
+class _PatchNotesSheet extends StatelessWidget {
+  final ReleaseNotes notes;
+  const _PatchNotesSheet({required this.notes});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return _SheetFrame(
+      child: Flexible(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 12, 24, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.new_releases_rounded, color: theme.colorScheme.primary, size: 30),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("What's New", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                        Text('Version ${notes.version} • ${DateFormat.yMMMd().format(notes.publishedAt.toLocal())}'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(notes.summary, style: const TextStyle(fontWeight: FontWeight.w600, height: 1.45)),
+              const SizedBox(height: 16),
+              ...notes.changes.map(
+                (change) => Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 7),
+                        child: Container(width: 6, height: 6, decoration: BoxDecoration(color: theme.colorScheme.primary, shape: BoxShape.circle)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(change, style: const TextStyle(height: 1.4))),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Done')),
+              ),
+            ],
           ),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(isDark ? 0.5 : 0.15),
-            blurRadius: 30,
-            offset: const Offset(0, -10),
-          ),
-        ],
+      ),
+    );
+  }
+}
+
+class _PatchNotesHistorySheet extends StatelessWidget {
+  final List<ReleaseNotes> history;
+  const _PatchNotesHistorySheet({required this.history});
+
+  @override
+  Widget build(BuildContext context) {
+    return _SheetFrame(
+      child: Flexible(
+        child: history.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: Text('No installed update notes yet.')),
+              )
+            : ListView.separated(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                itemCount: history.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final notes = history[index];
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    leading: const Icon(Icons.article_outlined),
+                    title: Text('Version ${notes.version}', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    subtitle: Text(notes.summary, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => showPatchNotesSheet(context, notes),
+                  );
+                },
+              ),
+      ),
+    );
+  }
+}
+
+class _SheetFrame extends StatelessWidget {
+  final Widget child;
+  const _SheetFrame({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Drag handle
-          const SizedBox(height: 12),
-          Container(
-            width: 40,
-            height: 4,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.2)
-                  : Colors.black.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Update icon
-          Container(
-            width: 64,
-            height: 64,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: isDark
-                    ? [
-                        const Color(0xFF6366F1).withOpacity(0.25),
-                        const Color(0xFF8B5CF6).withOpacity(0.15),
-                      ]
-                    : [
-                        const Color(0xFF6366F1).withOpacity(0.12),
-                        const Color(0xFF8B5CF6).withOpacity(0.08),
-                      ],
-              ),
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isDark
-                    ? const Color(0xFF818CF8).withOpacity(0.3)
-                    : const Color(0xFF6366F1).withOpacity(0.2),
-              ),
-            ),
-            child: Icon(
-              Icons.system_update_rounded,
-              size: 30,
-              color: isDark
-                  ? const Color(0xFFA5B4FC)
-                  : const Color(0xFF4F46E5),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Title
-          Text(
-            'Update Available',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.5,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
-            ),
-          ),
           const SizedBox(height: 10),
-
-          // Version comparison
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.05)
-                  : const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(100),
-              border: Border.all(
-                color: isDark
-                    ? Colors.white.withOpacity(0.1)
-                    : const Color(0xFFE2E8F0),
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'v${updateInfo.currentVersion}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isDark
-                        ? Colors.white.withOpacity(0.5)
-                        : const Color(0xFF94A3B8),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 16,
-                    color: isDark
-                        ? const Color(0xFF818CF8)
-                        : const Color(0xFF6366F1),
-                  ),
-                ),
-                Text(
-                  'v${updateInfo.latestVersion}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: isDark
-                        ? const Color(0xFFA5B4FC)
-                        : const Color(0xFF4F46E5),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Release notes (scrollable)
-          if (updateInfo.releaseNotes.isNotEmpty)
-            Flexible(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.03)
-                        : const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isDark
-                          ? Colors.white.withOpacity(0.06)
-                          : const Color(0xFFE2E8F0),
-                    ),
-                  ),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.article_rounded,
-                              size: 14,
-                              color: isDark
-                                  ? const Color(0xFF818CF8)
-                                  : const Color(0xFF6366F1),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              "What's New",
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.5,
-                                color: isDark
-                                    ? const Color(0xFF818CF8)
-                                    : const Color(0xFF6366F1),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          updateInfo.releaseNotes,
-                          style: TextStyle(
-                            fontSize: 13,
-                            height: 1.6,
-                            color: isDark
-                                ? Colors.white.withOpacity(0.6)
-                                : const Color(0xFF475569),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          const SizedBox(height: 20),
-
-          // Buttons
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              children: [
-                // Update Now button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      final uri = Uri.parse(updateInfo.downloadUrl);
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
-                      }
-                      if (context.mounted) {
-                        Navigator.of(context).pop();
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4F46E5),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.download_rounded, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Update Now',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // Later & Skip row
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: Text(
-                      'Later',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey.shade500,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: Theme.of(context).dividerColor, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 8),
+          child,
         ],
       ),
     );

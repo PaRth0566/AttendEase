@@ -181,8 +181,8 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                           gradient: RadialGradient(
                             colors: [
                               isDark
-                                  ? const Color(0xFF6366F1).withOpacity(0.15)
-                                  : const Color(0xFF6366F1).withOpacity(0.08),
+                                  ? const Color(0xFF6366F1).withValues(alpha: 0.15)
+                                  : const Color(0xFF6366F1).withValues(alpha: 0.08),
                               Colors.transparent,
                             ],
                             stops: const [0.0, 1.0],
@@ -203,8 +203,8 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                           gradient: RadialGradient(
                             colors: [
                               isDark
-                                  ? const Color(0xFF8B5CF6).withOpacity(0.1)
-                                  : const Color(0xFF8B5CF6).withOpacity(0.05),
+                                  ? const Color(0xFF8B5CF6).withValues(alpha: 0.1)
+                                  : const Color(0xFF8B5CF6).withValues(alpha: 0.05),
                               Colors.transparent,
                             ],
                             stops: const [0.0, 1.0],
@@ -306,25 +306,25 @@ class _AuraLandingPageState extends State<AuraLandingPage>
           padding: EdgeInsets.symmetric(horizontal: isDesktop ? 64 : 24),
           decoration: BoxDecoration(
             color: isDark
-                ? const Color(0xFF0F172A).withOpacity(0.3)
-                : Colors.white.withOpacity(0.95),
+                ? const Color(0xFF0F172A).withValues(alpha: 0.3)
+                : Colors.white.withValues(alpha: 0.95),
             border: Border(
               bottom: BorderSide(
                 color: isDark
-                    ? const Color(0xFF6366F1).withOpacity(0.2)
+                    ? const Color(0xFF6366F1).withValues(alpha: 0.2)
                     : const Color(0xFFE2E8F0),
               ),
             ),
             boxShadow: [
               if (isDark)
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
+                  color: Colors.black.withValues(alpha: 0.5),
                   blurRadius: 30,
                   offset: const Offset(0, 4),
                 ),
               if (!isDark)
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
+                  color: Colors.black.withValues(alpha: 0.02),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -572,7 +572,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
           color: isSelected
               ? (isDark ? Colors.white : const Color(0xFF111319))
               : (isDark
-                    ? const Color(0xFFC7D2FE).withOpacity(0.8)
+                    ? const Color(0xFFC7D2FE).withValues(alpha: 0.8)
                     : const Color(0xFF64748B)),
         ),
       ),
@@ -589,13 +589,13 @@ class _AuraLandingPageState extends State<AuraLandingPage>
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
             color: isDark
-                ? const Color(0xFF0F172A).withOpacity(0.4)
-                : Colors.white.withOpacity(0.8),
+                ? const Color(0xFF0F172A).withValues(alpha: 0.4)
+                : Colors.white.withValues(alpha: 0.8),
             border: Border(
               top: BorderSide(
                 color: isDark
-                    ? const Color(0xFF6366F1).withOpacity(0.3)
-                    : Colors.black.withOpacity(0.05),
+                    ? const Color(0xFF6366F1).withValues(alpha: 0.3)
+                    : Colors.black.withValues(alpha: 0.05),
               ),
             ),
           ),
@@ -618,7 +618,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
     final color = isSelected
         ? (isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5))
         : (isDark
-              ? const Color(0xFFC7D2FE).withOpacity(0.6)
+              ? const Color(0xFFC7D2FE).withValues(alpha: 0.6)
               : const Color(0xFF94A3B8));
 
     return InkWell(
@@ -628,12 +628,12 @@ class _AuraLandingPageState extends State<AuraLandingPage>
         decoration: isSelected
             ? BoxDecoration(
                 color: isDark
-                    ? const Color(0xFF6366F1).withOpacity(0.2)
-                    : const Color(0xFF6366F1).withOpacity(0.08),
+                    ? const Color(0xFF6366F1).withValues(alpha: 0.2)
+                    : const Color(0xFF6366F1).withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
                   color: isDark
-                      ? const Color(0xFF6366F1).withOpacity(0.3)
+                      ? const Color(0xFF6366F1).withValues(alpha: 0.3)
                       : Colors.transparent,
                 ),
               )
@@ -686,13 +686,13 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                 ),
                 decoration: BoxDecoration(
                   color: isDark
-                      ? const Color(0xFF6366F1).withOpacity(0.1)
-                      : const Color(0xFF6366F1).withOpacity(0.08),
+                      ? const Color(0xFF6366F1).withValues(alpha: 0.1)
+                      : const Color(0xFF6366F1).withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(100),
                   border: Border.all(
                     color: isDark
-                        ? const Color(0xFF818CF8).withOpacity(0.3)
-                        : const Color(0xFF6366F1).withOpacity(0.2),
+                        ? const Color(0xFF818CF8).withValues(alpha: 0.3)
+                        : const Color(0xFF6366F1).withValues(alpha: 0.2),
                   ),
                 ),
                 child: Row(
@@ -752,7 +752,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                     style: TextStyle(
                       fontSize: isMobile ? 18 : 22,
                       color: isDark
-                          ? Colors.white.withOpacity(0.6)
+                          ? Colors.white.withValues(alpha: 0.6)
                           : const Color(0xFF64748B),
                       height: 1.65,
                     ),
@@ -780,7 +780,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF6366F1).withOpacity(0.4),
+                            color: const Color(0xFF6366F1).withValues(alpha: 0.4),
                             blurRadius: 20,
                           ),
                         ],
@@ -821,12 +821,12 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                       ),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? const Color(0xFF0F172A).withOpacity(0.5)
+                            ? const Color(0xFF0F172A).withValues(alpha: 0.5)
                             : Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: isDark
-                              ? Colors.white.withOpacity(0.2)
+                              ? Colors.white.withValues(alpha: 0.2)
                               : const Color(0xFF94A3B8),
                         ),
                       ),
@@ -889,12 +889,12 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                 padding: EdgeInsets.all(isMobile ? 14 : 18),
                 decoration: BoxDecoration(
                   color: isDark
-                      ? Colors.red.withOpacity(0.08)
+                      ? Colors.red.withValues(alpha: 0.08)
                       : Colors.red.shade50,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isDark
-                        ? Colors.red.withOpacity(0.25)
+                        ? Colors.red.withValues(alpha: 0.25)
                         : Colors.red.shade200,
                   ),
                 ),
@@ -905,8 +905,8 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: isDark
-                            ? Colors.red.withOpacity(0.15)
-                            : Colors.red.withOpacity(0.1),
+                            ? Colors.red.withValues(alpha: 0.15)
+                            : Colors.red.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(
@@ -962,19 +962,19 @@ class _AuraLandingPageState extends State<AuraLandingPage>
     return Container(
       decoration: BoxDecoration(
         color: isDark
-            ? Colors.white.withOpacity(0.05)
-            : const Color(0xFF6366F1).withOpacity(0.05),
+            ? Colors.white.withValues(alpha: 0.05)
+            : const Color(0xFF6366F1).withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: isDark
-              ? const Color(0xFF818CF8).withOpacity(0.3)
-              : const Color(0xFF6366F1).withOpacity(0.2),
+              ? const Color(0xFF818CF8).withValues(alpha: 0.3)
+              : const Color(0xFF6366F1).withValues(alpha: 0.2),
         ),
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? Colors.black.withOpacity(0.5)
-                : const Color(0xFF6366F1).withOpacity(0.05),
+                ? Colors.black.withValues(alpha: 0.5)
+                : const Color(0xFF6366F1).withValues(alpha: 0.05),
             blurRadius: isDark ? 32 : 10,
             offset: const Offset(0, 8),
           ),
@@ -998,8 +998,6 @@ class _AuraLandingPageState extends State<AuraLandingPage>
       ),
     );
   }
-
-  void _featureCardHelper() {} // Placeholder for potential future use
 
   // ── FEATURE CARDS ─────────────────────────────────────────
   Widget _buildFeatureCards(bool isDark, bool isMobile, bool isTablet) {
@@ -1030,8 +1028,6 @@ class _AuraLandingPageState extends State<AuraLandingPage>
       ),
     ];
 
-    final w = MediaQuery.of(context).size.width;
-    final double horizontalPadding = isMobile ? 16 : 24;
     final double spacing = isMobile ? 12 : 24;
 
     return Wrap(
@@ -1073,17 +1069,17 @@ class _AuraLandingPageState extends State<AuraLandingPage>
           height: isMobile ? 180 : 200,
           padding: EdgeInsets.all(isMobile ? 16 : 24),
           decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
+            color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.white,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: isDark
-                  ? Colors.white.withOpacity(0.1)
+                  ? Colors.white.withValues(alpha: 0.1)
                   : const Color(0xFFE2E8F0),
               width: 1.5,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.4 : 0.05),
+                color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.05),
                 blurRadius: isDark ? 25 : 10,
                 offset: const Offset(0, 8),
               ),
@@ -1096,9 +1092,9 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                 width: isMobile ? 36 : 48,
                 height: isMobile ? 36 : 48,
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(0.15),
+                  color: accent.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: accent.withOpacity(0.3)),
+                  border: Border.all(color: accent.withValues(alpha: 0.3)),
                 ),
                 child: Icon(icon, color: accent, size: isMobile ? 18 : 24),
               ),
@@ -1120,7 +1116,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                     fontSize: isMobile ? 11 : 13,
                     height: 1.4,
                     color: isDark
-                        ? Colors.white.withOpacity(0.5)
+                        ? Colors.white.withValues(alpha: 0.5)
                         : const Color(0xFF64748B),
                   ),
                   maxLines: 3,
@@ -1151,13 +1147,13 @@ class _AuraLandingPageState extends State<AuraLandingPage>
         ),
         decoration: BoxDecoration(
           color: isDark
-              ? Colors.white.withOpacity(0.04)
+              ? Colors.white.withValues(alpha: 0.04)
               : const Color(0xFFFFF7ED),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: isDark
-                ? Colors.white.withOpacity(0.08)
-                : const Color(0xFFFDBA74).withOpacity(0.5),
+                ? Colors.white.withValues(alpha: 0.08)
+                : const Color(0xFFFDBA74).withValues(alpha: 0.5),
           ),
         ),
         child: isMobile
@@ -1185,7 +1181,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                             fontWeight: FontWeight.w500,
                             height: 1.4,
                             color: isDark
-                                ? Colors.white.withOpacity(0.6)
+                                ? Colors.white.withValues(alpha: 0.6)
                                 : const Color(0xFF92400E),
                           ),
                           textAlign: TextAlign.center,
@@ -1226,7 +1222,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                             style: TextStyle(
                               fontWeight: FontWeight.w400,
                               color: isDark
-                                  ? Colors.white.withOpacity(0.5)
+                                  ? Colors.white.withValues(alpha: 0.5)
                                   : const Color(0xFF92400E),
                             ),
                           ),
@@ -1253,13 +1249,13 @@ class _AuraLandingPageState extends State<AuraLandingPage>
         ),
         decoration: BoxDecoration(
           color: isDark
-              ? const Color(0xFFFBBF24).withOpacity(0.15)
-              : const Color(0xFFFBBF24).withOpacity(0.2),
+              ? const Color(0xFFFBBF24).withValues(alpha: 0.15)
+              : const Color(0xFFFBBF24).withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
             color: isDark
-                ? const Color(0xFFFBBF24).withOpacity(0.3)
-                : const Color(0xFFD97706).withOpacity(0.3),
+                ? const Color(0xFFFBBF24).withValues(alpha: 0.3)
+                : const Color(0xFFD97706).withValues(alpha: 0.3),
             width: 1,
           ),
         ),
@@ -1305,13 +1301,13 @@ class _AuraLandingPageState extends State<AuraLandingPage>
               height: 80,
               decoration: BoxDecoration(
                 color: isDark
-                    ? const Color(0xFF6366F1).withOpacity(0.15)
-                    : const Color(0xFF6366F1).withOpacity(0.08),
+                    ? const Color(0xFF6366F1).withValues(alpha: 0.15)
+                    : const Color(0xFF6366F1).withValues(alpha: 0.08),
                 shape: BoxShape.circle,
                 border: Border.all(
                   color: isDark
-                      ? const Color(0xFF818CF8).withOpacity(0.3)
-                      : const Color(0xFF6366F1).withOpacity(0.2),
+                      ? const Color(0xFF818CF8).withValues(alpha: 0.3)
+                      : const Color(0xFF6366F1).withValues(alpha: 0.2),
                 ),
               ),
               child: Icon(
@@ -1342,7 +1338,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                   fontSize: isMobile ? 14 : 16,
                   height: 1.6,
                   color: isDark
-                      ? Colors.white.withOpacity(0.5)
+                      ? Colors.white.withValues(alpha: 0.5)
                       : const Color(0xFF64748B),
                 ),
               ),
@@ -1363,7 +1359,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF6366F1).withOpacity(0.4),
+                      color: const Color(0xFF6366F1).withValues(alpha: 0.4),
                       blurRadius: 20,
                     ),
                   ],

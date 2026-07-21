@@ -300,13 +300,13 @@ class _SignupScreenState extends State<SignupScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: theme.brightness == Brightness.dark
-                            ? Colors.orange.withOpacity(0.1)
+                            ? Colors.orange.withValues(alpha: 0.1)
                             : Colors.orange.shade50,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: theme.brightness == Brightness.dark
-                              ? Colors.orange.withOpacity(0.3)
-                              : Colors.orange.withOpacity(0.2),
+                              ? Colors.orange.withValues(alpha: 0.3)
+                              : Colors.orange.withValues(alpha: 0.2),
                         ),
                       ),
                       child: Row(

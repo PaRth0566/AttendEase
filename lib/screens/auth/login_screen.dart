@@ -12,8 +12,6 @@ import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../utils/db_utils.dart';
 import 'package:go_router/go_router.dart';
-import 'forgot_password_screen.dart';
-import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

@@ -315,7 +315,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: (_isDone ? Colors.green.shade500 : const Color(0xFF6366F1)).withOpacity(0.35),
+                        color: (_isDone ? Colors.green.shade500 : const Color(0xFF6366F1)).withValues(alpha: 0.35),
                         blurRadius: 32,
                         offset: const Offset(0, 12),
                       ),
@@ -352,9 +352,9 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(isDark ? 0.15 : 0.1),
+                      color: Colors.blue.withValues(alpha: isDark ? 0.15 : 0.1),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.blue.withOpacity(0.4)),
+                      border: Border.all(color: Colors.blue.withValues(alpha: 0.4)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -399,7 +399,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF6366F1).withOpacity(0.4),
+                        color: const Color(0xFF6366F1).withValues(alpha: 0.4),
                         blurRadius: 24,
                         offset: const Offset(0, 10),
                       ),
@@ -431,7 +431,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF6366F1).withOpacity(0.4),
+                            color: const Color(0xFF6366F1).withValues(alpha: 0.4),
                             blurRadius: 24,
                             offset: const Offset(0, 10),
                           ),
@@ -459,12 +459,12 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(16),
                         color: isDark
-                            ? const Color(0xFFFBBF24).withOpacity(0.08)
+                            ? const Color(0xFFFBBF24).withValues(alpha: 0.08)
                             : const Color(0xFFFFF7ED),
                         border: Border.all(
                           color: isDark
-                              ? const Color(0xFFFBBF24).withOpacity(0.35)
-                              : const Color(0xFFD97706).withOpacity(0.4),
+                              ? const Color(0xFFFBBF24).withValues(alpha: 0.35)
+                              : const Color(0xFFD97706).withValues(alpha: 0.4),
                           width: 1.5,
                         ),
                       ),

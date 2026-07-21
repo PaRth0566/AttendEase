@@ -6,7 +6,6 @@ import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
 import '../../models/subject.dart';
 import '../../services/cloud_sync_service.dart';
-import '../report/subject_detail_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final List<Subject>? overrideSubjects;
@@ -106,20 +105,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     int total,
     double requiredPercent,
   ) {
-    if (total == 0)
+    if (total == 0) {
       return {'text': 'No classes recorded yet.', 'isSafe': true, 'skips': 0};
+    }
 
     double reqFrac = requiredPercent / 100;
     double currentPercent = (attended / total) * 100;
 
     if (currentPercent >= requiredPercent) {
       int skips = ((attended / reqFrac) - total).floor();
-      if (skips <= 0)
+      if (skips <= 0) {
         return {
           'text': 'On track, but you cannot skip the next lecture.',
           'isSafe': true,
           'skips': 0,
         };
+      }
       return {
         'text':
             'You can safely skip the next $skips lecture${skips > 1 ? 's' : ''}.',
@@ -428,10 +429,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               margin: const EdgeInsets.symmetric(horizontal: 16),
               padding: EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: isDark ? Colors.red.withOpacity(0.08) : Colors.red.shade50,
+                color: isDark ? Colors.red.withValues(alpha: 0.08) : Colors.red.shade50,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isDark ? Colors.red.withOpacity(0.25) : Colors.red.shade200,
+                  color: isDark ? Colors.red.withValues(alpha: 0.25) : Colors.red.shade200,
                 ),
               ),
               child: Row(
@@ -441,8 +442,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? Colors.red.withOpacity(0.15)
-                          : Colors.red.withOpacity(0.1),
+                          ? Colors.red.withValues(alpha: 0.15)
+                          : Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Icon(

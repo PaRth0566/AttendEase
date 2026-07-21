@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/local_pdf_parser.dart';
-import 'basic_info_screen.dart';
 
 class UploadPdfScreen extends StatefulWidget {
   const UploadPdfScreen({super.key});
@@ -97,7 +96,7 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
               Container(
                 padding: const EdgeInsets.all(32),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.05) : theme.colorScheme.primary.withOpacity(0.05),
+                  color: isDark ? Colors.white.withValues(alpha: 0.05) : theme.colorScheme.primary.withValues(alpha: 0.05),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -162,9 +161,9 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.indigo.withOpacity(0.15) : Colors.indigo.shade50.withOpacity(0.6),
+                  color: isDark ? Colors.indigo.withValues(alpha: 0.15) : Colors.indigo.shade50.withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: isDark ? Colors.indigo.withOpacity(0.3) : Colors.indigo.withOpacity(0.2)),
+                  border: Border.all(color: isDark ? Colors.indigo.withValues(alpha: 0.3) : Colors.indigo.withValues(alpha: 0.2)),
                 ),
                 child: Column(
                   children: [
@@ -187,7 +186,7 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    Divider(color: isDark ? Colors.indigo.withOpacity(0.3) : Colors.indigo.withOpacity(0.2)),
+                    Divider(color: isDark ? Colors.indigo.withValues(alpha: 0.3) : Colors.indigo.withValues(alpha: 0.2)),
                     const SizedBox(height: 12),
                     Text(
                       "Students from other colleges, please use our Smart AI Web version for accurate insights.",
@@ -211,7 +210,7 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
                         label: const Text('Open Web Version', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: isDark ? Colors.indigo.shade300 : Colors.indigo.shade700,
-                          side: BorderSide(color: isDark ? Colors.indigo.withOpacity(0.4) : Colors.indigo.withOpacity(0.3)),
+                          side: BorderSide(color: isDark ? Colors.indigo.withValues(alpha: 0.4) : Colors.indigo.withValues(alpha: 0.3)),
                           padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),

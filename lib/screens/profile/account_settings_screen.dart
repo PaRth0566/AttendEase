@@ -9,7 +9,6 @@ import 'package:go_router/go_router.dart';
 import '../../database/db_helper.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
-import '../auth/login_screen.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -143,6 +142,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
     // Backup data to cloud first so it survives any re-login
     await _syncService.backupDataToCloud();
+    if (!mounted) return;
 
     final bool hasPasswordProvider = user.providerData.any(
       (p) => p.providerId == 'password',
@@ -156,7 +156,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         _showSnackBar(
           'Password reset link sent to ${user.email}. Check your inbox.',
         );
-      } on FirebaseAuthException catch (e) {
+      } on FirebaseAuthException {
         _showSnackBar('Could not send reset email. Please try again.');
       } catch (e) {
         _showSnackBar('Something went wrong. Please try again.');
@@ -507,12 +507,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     return Card(
       elevation: 0,
       margin: const EdgeInsets.only(bottom: 12),
-      color: isDestructive ? Colors.red.withOpacity(0.05) : theme.cardColor,
+      color: isDestructive ? Colors.red.withValues(alpha: 0.05) : theme.cardColor,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
           color: isDestructive
-              ? Colors.red.withOpacity(0.3)
+              ? Colors.red.withValues(alpha: 0.3)
               : theme.dividerColor,
         ),
       ),
@@ -530,7 +530,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           style: TextStyle(
             fontSize: 12,
             color: isDestructive
-                ? Colors.red.withOpacity(0.8)
+                ? Colors.red.withValues(alpha: 0.8)
                 : theme.textTheme.bodySmall?.color,
           ),
         ),

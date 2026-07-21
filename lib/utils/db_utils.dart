@@ -20,8 +20,11 @@ class DbUtils {
 
       // Enforce basic string constraints
       if (value is String) {
-        if (key == 'status' && !['P', 'A', 'NU'].contains(value.toUpperCase())) {
-          value = 'NU'; // Fallback to Not Updated if invalid
+        if (key == 'status') {
+          // Normalize to canonical upper-case form so downstream `status == 'P'`
+          // comparisons stay consistent; fall back to 'NU' for unknown values.
+          final normalized = value.toUpperCase();
+          value = ['P', 'A', 'NU'].contains(normalized) ? normalized : 'NU';
         }
         // Limit abnormally long strings
         if (value.length > 255) {

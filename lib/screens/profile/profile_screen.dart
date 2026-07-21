@@ -9,19 +9,11 @@ import '../../database/db_helper.dart';
 import '../../database/subject_dao.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../services/update_service.dart';
 import '../../theme/theme_provider.dart'; // ✅ NEW IMPORT
 import '../../widgets/backup_sync_card.dart';
-import '../auth/login_screen.dart';
-import '../dashboard/refresh_pdf_screen.dart';
-import 'account_settings_screen.dart';
-import 'bug_report_screen.dart';
+import '../../widgets/update_dialog.dart';
 
-import '../report/report_screen.dart';
-import '../setup/add_subjects_screen.dart';
-import '../setup/attendance_criteria_screen.dart';
-import '../setup/basic_info_screen.dart';
-import '../setup/timetable_setup_screen.dart';
-import '../web/aura_landing_page.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -43,6 +35,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   double overallAttendance = 0.0;
   bool _loading = true;
   String _appVersion = '';
+  bool _checkingForUpdate = false;
 
   @override
   void initState() {
@@ -110,6 +103,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
     await _loadProfileData();
   }
 
+  Future<void> _checkForUpdates() async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('In-app updates are available on Android.')),
+      );
+      return;
+    }
+    if (_checkingForUpdate) return;
+    // If the automatic startup sheet is already on screen, don't stack another.
+    if (UpdateService.instance.isUpdateSheetVisible) return;
+    setState(() => _checkingForUpdate = true);
+    try {
+      final update = await UpdateService.instance.checkForUpdate();
+      if (!mounted) return;
+      if (update == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Already up to date.')),
+        );
+      } else {
+        await UpdateService.instance.runExclusiveSheet(
+          () => showUpdateBottomSheet(context, update),
+        );
+      }
+    } on UpdateException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not check for updates. Please try again.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _checkingForUpdate = false);
+    }
+  }
+
   Future<void> _handleLogout() async {
     final rootContext = context; // capture before dialog opens
     showDialog(
@@ -155,7 +186,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 }
               } catch (_) {}
 
-              if (!mounted) return;
+              if (!rootContext.mounted) return;
               rootContext.go(kIsWeb ? '/web/home' : '/login');
             },
             child: const Text('Log Out', style: TextStyle(color: Colors.white)),
@@ -370,6 +401,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
 
                   _profileTile(
+                    icon: Icons.system_update_rounded,
+                    title: _checkingForUpdate ? 'Checking for updates…' : 'Check for Updates',
+                    enabled: !_checkingForUpdate,
+                    trailing: _checkingForUpdate
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : null,
+                    onTap: _checkForUpdates,
+                  ),
+
+                  _profileTile(
+                    icon: Icons.article_rounded,
+                    title: 'Patch Notes',
+                    onTap: () => showPatchNotesHistory(context),
+                  ),
+
+                  _profileTile(
                     icon: Icons.logout_rounded,
                     title: 'Log Out',
                     isRedAlert:
@@ -430,7 +481,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         trailing: Switch.adaptive(
           value: isDark,
-          activeColor: theme.colorScheme.primary,
+          activeThumbColor: theme.colorScheme.primary,
           onChanged: (bool value) {
             themeProvider.setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
             setState(() {});
@@ -446,6 +497,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required String title,
     required VoidCallback onTap,
     bool isRedAlert = false,
+    bool enabled = true,
     Widget? trailing,
   }) {
     final theme = Theme.of(context);
@@ -485,7 +537,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               size: 16,
               color: isRedAlert ? Colors.red : Colors.grey,
             ),
-        onTap: onTap,
+        enabled: enabled,
+        onTap: enabled ? onTap : null,
       ),
     );
   }

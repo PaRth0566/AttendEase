@@ -2,7 +2,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../models/subject.dart';
-import '../../theme/theme_provider.dart';
 
 class AuraAIDashboard extends StatelessWidget {
   final List<Subject> subjects;
@@ -135,8 +134,6 @@ class AuraAIDashboard extends StatelessWidget {
     final w = MediaQuery.of(context).size.width;
     final bool isSmallMobile = w < 600;
     final double cardPadding = isSmallMobile ? 16.0 : 32.0;
-    final double circleSize = isSmallMobile ? 160.0 : 192.0;
-    final double innerCircleSize = isSmallMobile ? 110.0 : 130.0;
 
     Color progressColor;
     if (overallPercentage >= overallTarget) {
@@ -157,16 +154,16 @@ class AuraAIDashboard extends StatelessWidget {
             filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
             child: Container(
               decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                  color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
                       color: isDark
-                          ? Colors.white.withOpacity(0.2)
+                          ? Colors.white.withValues(alpha: 0.2)
                           : const Color(0xFFE2E8F0),
                       width: 1.5),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                      color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
                       blurRadius: isDark ? 24 : 10,
                       offset: const Offset(0, 4),
                     )
@@ -283,14 +280,14 @@ class AuraAIDashboard extends StatelessWidget {
                                     value: totalLectures == 0 ? 0 : (totalAttended / totalLectures),
                                     strokeWidth: 8,
                                     strokeCap: StrokeCap.round,
-                                    backgroundColor: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFE2E8F0),
+                                    backgroundColor: isDark ? Colors.white.withValues(alpha: 0.05) : const Color(0xFFE2E8F0),
                                     valueColor: AlwaysStoppedAnimation<Color>(progressColor),
                                   )
                                 ),
                                 Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: progressColor.withOpacity(0.2),
+                                    color: progressColor.withValues(alpha: 0.2),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(
@@ -407,8 +404,7 @@ class AuraAIDashboard extends StatelessWidget {
     // Status Logic
     String status = "On Track";
     Color statusColor = const Color(0xFF4ADE80);
-    Color statusBg = const Color(0xFF22C55E).withOpacity(0.2);
-    IconData statusIcon = Icons.check_circle_outline_rounded;
+    Color statusBg = const Color(0xFF22C55E).withValues(alpha: 0.2);
     String statusMessage = "";
     
     if (total > 0) {
@@ -417,8 +413,7 @@ class AuraAIDashboard extends StatelessWidget {
         if (percentNumber < subjectTarget + 10) {
           status = "At Risk";
           statusColor = const Color(0xFFFBBF24);
-          statusBg = const Color(0xFFF59E0B).withOpacity(0.2);
-          statusIcon = Icons.warning_amber_rounded;
+          statusBg = const Color(0xFFF59E0B).withValues(alpha: 0.2);
         }
         if (canSkip > 0) {
            statusMessage = "Safely above target. You can skip $canSkip ${canSkip == 1 ? 'lecture' : 'lectures'}.";
@@ -428,9 +423,8 @@ class AuraAIDashboard extends StatelessWidget {
       } else {
         status = "Critical";
         statusColor = const Color(0xFFF87171);
-        statusBg = const Color(0xFFEF4444).withOpacity(0.2);
-        statusIcon = Icons.error_outline_rounded;
-        
+        statusBg = const Color(0xFFEF4444).withValues(alpha: 0.2);
+
         int requiredToAttend = (((subjectTarget / 100) * total - attended) / (1 - (subjectTarget / 100))).ceil();
         if (requiredToAttend > 0) {
            statusMessage = "Critical. Attend next $requiredToAttend ${requiredToAttend == 1 ? 'lecture' : 'lectures'} to reach target.";
@@ -450,16 +444,16 @@ class AuraAIDashboard extends StatelessWidget {
           width: double.infinity,
           constraints: const BoxConstraints(minHeight: 185),
           decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+              color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.white,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
                   color: isDark
-                      ? Colors.white.withOpacity(0.1)
+                      ? Colors.white.withValues(alpha: 0.1)
                       : const Color(0xFFE2E8F0),
                   width: 1.5),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                  color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
                   blurRadius: isDark ? 16 : 8,
                   offset: const Offset(0, 4),
                 )
@@ -494,11 +488,11 @@ class AuraAIDashboard extends StatelessWidget {
                             color: statusBg,
                             borderRadius: BorderRadius.circular(100),
                             border:
-                                Border.all(color: statusColor.withOpacity(0.5)),
+                                Border.all(color: statusColor.withValues(alpha: 0.5)),
                             boxShadow: isDark
                                 ? [
                                     BoxShadow(
-                                      color: statusColor.withOpacity(0.3),
+                                      color: statusColor.withValues(alpha: 0.3),
                                       blurRadius: 15,
                                     )
                                   ]
@@ -547,7 +541,7 @@ class AuraAIDashboard extends StatelessWidget {
                                         ? [
                                             Shadow(
                                                 color: statusColor
-                                                    .withOpacity(0.5),
+                                                    .withValues(alpha: 0.5),
                                                 blurRadius: 10)
                                           ]
                                         : null)),
@@ -559,13 +553,13 @@ class AuraAIDashboard extends StatelessWidget {
                           width: double.infinity,
                           decoration: BoxDecoration(
                             color: isDark
-                                ? Colors.black.withOpacity(0.4)
+                                ? Colors.black.withValues(alpha: 0.4)
                                 : const Color(0xFFE2E8F0),
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(
                                 color: isDark
-                                    ? Colors.white.withOpacity(0.05)
-                                    : Colors.black.withOpacity(0.05)),
+                                    ? Colors.white.withValues(alpha: 0.05)
+                                    : Colors.black.withValues(alpha: 0.05)),
                           ),
                           child: FractionallySizedBox(
                             alignment: Alignment.centerLeft,
@@ -577,7 +571,7 @@ class AuraAIDashboard extends StatelessWidget {
                                 boxShadow: isDark
                                     ? [
                                         BoxShadow(
-                                            color: statusColor.withOpacity(0.8),
+                                            color: statusColor.withValues(alpha: 0.8),
                                             blurRadius: 10)
                                       ]
                                     : null,
@@ -651,10 +645,10 @@ class AuraAIDashboard extends StatelessWidget {
     return Container(
       padding: EdgeInsets.all(isMobile ? 14 : 18),
       decoration: BoxDecoration(
-        color: isDark ? Colors.red.withOpacity(0.08) : Colors.red.shade50,
+        color: isDark ? Colors.red.withValues(alpha: 0.08) : Colors.red.shade50,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark ? Colors.red.withOpacity(0.25) : Colors.red.shade200,
+          color: isDark ? Colors.red.withValues(alpha: 0.25) : Colors.red.shade200,
         ),
       ),
       child: Row(
@@ -664,8 +658,8 @@ class AuraAIDashboard extends StatelessWidget {
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               color: isDark
-                  ? Colors.red.withOpacity(0.15)
-                  : Colors.red.withOpacity(0.1),
+                  ? Colors.red.withValues(alpha: 0.15)
+                  : Colors.red.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(

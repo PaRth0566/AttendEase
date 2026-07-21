@@ -1,5 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -9,6 +9,8 @@ import 'firebase_options.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
+import 'services/update_service.dart';
+import 'widgets/update_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,11 +61,41 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 
 class _AttendEaseAppState extends State<AttendEaseApp>
     with WidgetsBindingObserver {
+  bool _startupFlowRan = false;
+
   @override
   void initState() {
     super.initState();
     // Listen for OS-level brightness changes so ThemeMode.system reacts live
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runUpdateStartupFlow());
+  }
+
+  Future<void> _runUpdateStartupFlow() async {
+    if (kIsWeb || _startupFlowRan) return;
+    _startupFlowRan = true;
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+    try {
+      // Reconcile a completed install and show "What's New" exactly once.
+      final installedNotes = await UpdateService.instance.reconcileInstalledUpdate();
+      final notesContext = AppRouter.rootNavigatorKey.currentContext;
+      if (installedNotes != null && notesContext != null && notesContext.mounted) {
+        await UpdateService.instance.runExclusiveSheet(
+          () => showPatchNotesSheet(notesContext, installedNotes, markViewed: true),
+        );
+      }
+      // Then check for a newer release. Guarded so a manual check can't stack.
+      final update = await UpdateService.instance.checkForUpdate();
+      final updateContext = AppRouter.rootNavigatorKey.currentContext;
+      if (update != null && updateContext != null && updateContext.mounted) {
+        await UpdateService.instance.runExclusiveSheet(
+          () => showUpdateBottomSheet(updateContext, update),
+        );
+      }
+    } catch (error) {
+      debugPrint('Automatic update check skipped: $error');
+    }
   }
 
   @override

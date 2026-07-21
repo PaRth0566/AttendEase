@@ -397,7 +397,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
           _isLoading = false;
         });
       }
-    } on http.ClientException catch (e) {
+    } on http.ClientException {
       _stopProgressAnimation();
       setState(() {
         _isLoading = false;
@@ -476,7 +476,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                     fontSize: isMobile ? 13 : 16,
                     height: 1.5,
                     color: isDark
-                        ? const Color(0xFFC7D2FE).withOpacity(0.8)
+                        ? const Color(0xFFC7D2FE).withValues(alpha: 0.8)
                         : const Color(0xFF475569),
                   ),
                 ),
@@ -607,11 +607,11 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? const Color(0xFF9F1239).withOpacity(0.2)
+                          ? const Color(0xFF9F1239).withValues(alpha: 0.2)
                           : const Color(0xFFFFE4E6),
                       border: Border.all(
                         color: isDark
-                            ? const Color(0xFFBE123C).withOpacity(0.4)
+                            ? const Color(0xFFBE123C).withValues(alpha: 0.4)
                             : const Color(0xFFFDA4AF),
                       ),
                       borderRadius: BorderRadius.circular(12),
@@ -660,22 +660,22 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
           padding: EdgeInsets.all(isMobile ? 12 : 24),
           decoration: BoxDecoration(
             color: isDark
-                ? const Color(0xFF1E1B4B).withOpacity(0.4)
-                : Colors.white.withOpacity(0.8),
+                ? const Color(0xFF1E1B4B).withValues(alpha: 0.4)
+                : Colors.white.withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               width: 1.5,
               color: isInfo
                   ? (isDark
-                        ? const Color(0xFFF43F5E).withOpacity(0.4)
+                        ? const Color(0xFFF43F5E).withValues(alpha: 0.4)
                         : const Color(0xFFFDA4AF))
                   : (isDark
-                        ? const Color(0xFFF59E0B).withOpacity(0.4)
+                        ? const Color(0xFFF59E0B).withValues(alpha: 0.4)
                         : const Color(0xFFFDE68A)),
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.3 : 0.05),
+                color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
                 blurRadius: 32,
                 offset: const Offset(0, 8),
               ),
@@ -688,13 +688,13 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                 padding: EdgeInsets.all(isMobile ? 6 : 8),
                 decoration: BoxDecoration(
                   color: isInfo
-                      ? const Color(0xFFF43F5E).withOpacity(0.1)
-                      : const Color(0xFFF59E0B).withOpacity(0.1),
+                      ? const Color(0xFFF43F5E).withValues(alpha: 0.1)
+                      : const Color(0xFFF59E0B).withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                   border: Border.all(
                     color: isInfo
-                        ? const Color(0xFFF43F5E).withOpacity(0.2)
-                        : const Color(0xFFF59E0B).withOpacity(0.2),
+                        ? const Color(0xFFF43F5E).withValues(alpha: 0.2)
+                        : const Color(0xFFF59E0B).withValues(alpha: 0.2),
                   ),
                 ),
                 child: Icon(
@@ -726,7 +726,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                       style: TextStyle(
                         fontSize: isMobile ? 11 : 14,
                         color: isDark
-                            ? const Color(0xFFC7D2FE).withOpacity(0.7)
+                            ? const Color(0xFFC7D2FE).withValues(alpha: 0.7)
                             : const Color(0xFF64748B),
                         height: 1.4,
                       ),
@@ -750,13 +750,13 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
           padding: EdgeInsets.all(isMobile ? 16 : 32),
           decoration: BoxDecoration(
             color: isDark
-                ? const Color(0xFF1E1B4B).withOpacity(0.4)
-                : Colors.white.withOpacity(0.8),
+                ? const Color(0xFF1E1B4B).withValues(alpha: 0.4)
+                : Colors.white.withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(isMobile ? 16 : 24),
             border: Border.all(
               color: isDark
-                  ? const Color(0xFF818CF8).withOpacity(0.2)
-                  : Colors.black.withOpacity(0.05),
+                  ? const Color(0xFF818CF8).withValues(alpha: 0.2)
+                  : Colors.black.withValues(alpha: 0.05),
             ),
           ),
           child: Column(
@@ -779,7 +779,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark
-                        ? const Color(0xFFC7D2FE).withOpacity(0.7)
+                        ? const Color(0xFFC7D2FE).withValues(alpha: 0.7)
                         : const Color(0xFF64748B),
                   ),
                 ),
@@ -851,7 +851,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
             fontWeight: FontWeight.w600,
             letterSpacing: 0.5,
             color: isDark
-                ? const Color(0xFFA5B4FC).withOpacity(0.8)
+                ? const Color(0xFFA5B4FC).withValues(alpha: 0.8)
                 : const Color(0xFF64748B),
           ),
         ),
@@ -862,17 +862,17 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
           alignment: Alignment.centerLeft,
           decoration: BoxDecoration(
             color: isDark
-                ? const Color(0xFF0F172A).withOpacity(0.8)
+                ? const Color(0xFF0F172A).withValues(alpha: 0.8)
                 : Colors.white,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: isDark
-                  ? const Color(0xFF6366F1).withOpacity(0.3)
+                  ? const Color(0xFF6366F1).withValues(alpha: 0.3)
                   : const Color(0xFFE2E8F0),
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
+                color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.02),
                 blurRadius: 10,
                 offset: const Offset(0, 2),
               ),
@@ -899,7 +899,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
             style: TextStyle(
               fontSize: 12,
               color: isDark
-                  ? const Color(0xFFC7D2FE).withOpacity(0.5)
+                  ? const Color(0xFFC7D2FE).withValues(alpha: 0.5)
                   : const Color(0xFF94A3B8),
             ),
           ),
@@ -912,12 +912,12 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1B4B).withOpacity(0.4) : Colors.white.withOpacity(0.8),
+        color: isDark ? const Color(0xFF1E1B4B).withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: _hasConsented
               ? (isDark ? const Color(0xFF10B981) : const Color(0xFF059669))
-              : (isDark ? const Color(0xFF818CF8).withOpacity(0.2) : Colors.black.withOpacity(0.05)),
+              : (isDark ? const Color(0xFF818CF8).withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.05)),
         ),
       ),
       child: CheckboxListTile(
@@ -968,23 +968,23 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
             decoration: BoxDecoration(
               color: _isDragging
                   ? (isDark
-                        ? const Color(0xFF312E81).withOpacity(0.6)
-                        : const Color(0xFFE0E7FF).withOpacity(0.8))
+                        ? const Color(0xFF312E81).withValues(alpha: 0.6)
+                        : const Color(0xFFE0E7FF).withValues(alpha: 0.8))
                   : (isDark
-                        ? const Color(0xFF1E1B4B).withOpacity(0.4)
-                        : Colors.white.withOpacity(0.8)),
+                        ? const Color(0xFF1E1B4B).withValues(alpha: 0.4)
+                        : Colors.white.withValues(alpha: 0.8)),
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
                 color: _isDragging
                     ? const Color(0xFF818CF8)
                     : (isDark
-                          ? const Color(0xFF818CF8).withOpacity(0.2)
-                          : Colors.black.withOpacity(0.05)),
+                          ? const Color(0xFF818CF8).withValues(alpha: 0.2)
+                          : Colors.black.withValues(alpha: 0.05)),
                 width: _isDragging ? 2 : 1,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(isDark ? 0.4 : 0.05),
+                  color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.05),
                   blurRadius: _isDragging ? 80 : 50,
                   offset: const Offset(0, 15),
                 ),
@@ -1014,19 +1014,19 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
                                 color: isDark
-                                    ? const Color(0xFF312E81).withOpacity(0.4)
+                                    ? const Color(0xFF312E81).withValues(alpha: 0.4)
                                     : const Color(0xFFEEF2FF),
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: isDark
-                                      ? const Color(0xFF818CF8).withOpacity(0.4)
+                                      ? const Color(0xFF818CF8).withValues(alpha: 0.4)
                                       : const Color(0xFFC7D2FE),
                                 ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: const Color(
                                       0xFF6366F1,
-                                    ).withOpacity(isDark ? 0.3 : 0.15),
+                                    ).withValues(alpha: isDark ? 0.3 : 0.15),
                                     blurRadius: 40,
                                   ),
                                 ],
@@ -1076,7 +1076,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                               style: TextStyle(
                                 fontSize: isMobile ? 12 : 14,
                                 color: isDark
-                                    ? const Color(0xFFC7D2FE).withOpacity(0.7)
+                                    ? const Color(0xFFC7D2FE).withValues(alpha: 0.7)
                                     : const Color(0xFF64748B),
                               ),
                             ),
@@ -1093,7 +1093,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                                     backgroundColor: isDark
                                         ? const Color(
                                             0xFF312E81,
-                                          ).withOpacity(0.4)
+                                          ).withValues(alpha: 0.4)
                                         : const Color(0xFFE0E7FF),
                                     valueColor: AlwaysStoppedAnimation<Color>(
                                       isDark
@@ -1107,7 +1107,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                                     backgroundColor: isDark
                                         ? const Color(
                                             0xFF312E81,
-                                          ).withOpacity(0.4)
+                                          ).withValues(alpha: 0.4)
                                         : const Color(0xFFE0E7FF),
                                     valueColor: AlwaysStoppedAnimation<Color>(
                                       isDark
@@ -1126,19 +1126,19 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? const Color(0xFF312E81).withOpacity(0.3)
+                          ? const Color(0xFF312E81).withValues(alpha: 0.3)
                           : const Color(0xFFEEF2FF),
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: isDark
-                            ? const Color(0xFF818CF8).withOpacity(0.3)
+                            ? const Color(0xFF818CF8).withValues(alpha: 0.3)
                             : const Color(0xFFC7D2FE),
                       ),
                       boxShadow: [
                         BoxShadow(
                           color: isDark
-                              ? const Color(0xFF6366F1).withOpacity(0.2)
-                              : const Color(0xFF6366F1).withOpacity(0.1),
+                              ? const Color(0xFF6366F1).withValues(alpha: 0.2)
+                              : const Color(0xFF6366F1).withValues(alpha: 0.1),
                           blurRadius: 50,
                         ),
                       ],
@@ -1169,7 +1169,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                         text: 'or ',
                         style: TextStyle(
                           color: isDark
-                              ? const Color(0xFFC7D2FE).withOpacity(0.8)
+                              ? const Color(0xFFC7D2FE).withValues(alpha: 0.8)
                               : const Color(0xFF64748B),
                           fontSize: 16,
                         ),

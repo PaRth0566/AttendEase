@@ -64,9 +64,9 @@ class _ReportScreenState extends State<ReportScreen> {
 
     if (picked != null) {
       setState(() {
-        if (isStart)
+        if (isStart) {
           _startDate = picked;
-        else {
+        } else {
           if (_startDate != null && picked.isBefore(_startDate!)) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -578,9 +578,12 @@ class _ReportScreenState extends State<ReportScreen> {
         if (!mounted) return;
         Navigator.pop(context);
 
-        await Share.shareXFiles([
-          XFile(file.path),
-        ], text: 'My Attendance Report');
+        await SharePlus.instance.share(
+          ShareParams(
+            files: [XFile(file.path)],
+            text: 'My Attendance Report',
+          ),
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -636,49 +639,46 @@ class _ReportScreenState extends State<ReportScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: RadioListTile<int>(
-                        title: Text(
-                          'Semester',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: theme.textTheme.bodyLarge?.color,
+                RadioGroup<int>(
+                  groupValue: _reportType,
+                  onChanged: (val) => setState(() {
+                    _reportType = val!;
+                    _reportGenerated = false;
+                  }),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: RadioListTile<int>(
+                          title: Text(
+                            'Semester',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
                           ),
+                          value: 0,
+                          contentPadding: EdgeInsets.zero,
+                          activeColor: theme.colorScheme.primary,
                         ),
-                        value: 0,
-                        groupValue: _reportType,
-                        contentPadding: EdgeInsets.zero,
-                        activeColor: theme.colorScheme.primary,
-                        onChanged: (val) => setState(() {
-                          _reportType = val!;
-                          _reportGenerated = false;
-                        }),
                       ),
-                    ),
-                    Expanded(
-                      child: RadioListTile<int>(
-                        title: Text(
-                          'Custom Dates',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: theme.textTheme.bodyLarge?.color,
+                      Expanded(
+                        child: RadioListTile<int>(
+                          title: Text(
+                            'Custom Dates',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
                           ),
+                          value: 1,
+                          contentPadding: EdgeInsets.zero,
+                          activeColor: theme.colorScheme.primary,
                         ),
-                        value: 1,
-                        groupValue: _reportType,
-                        contentPadding: EdgeInsets.zero,
-                        activeColor: theme.colorScheme.primary,
-                        onChanged: (val) => setState(() {
-                          _reportType = val!;
-                          _reportGenerated = false;
-                        }),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 8),
                 if (_reportType == 0)

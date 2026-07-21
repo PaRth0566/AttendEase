@@ -4,8 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/subject_dao.dart';
 import '../../models/subject.dart';
-import 'add_subjects_screen.dart';
-import '../../database/db_helper.dart';
 import '../../services/cloud_sync_service.dart';
 
 class AttendanceCriteriaScreen extends StatefulWidget {
@@ -155,7 +153,7 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
               'Default values are pre-filled — edit them to match your college requirements.',
               style: TextStyle(
                 fontSize: 13,
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
                 height: 1.4,
               ),
             ),

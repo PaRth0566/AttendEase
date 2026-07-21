@@ -8,7 +8,6 @@ import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
 import '../../models/timetable_entry.dart';
 import '../../services/cloud_sync_service.dart';
-import '../root/root_screen.dart';
 
 class TimetableSetupScreen extends StatefulWidget {
   final bool isEditMode;
@@ -217,7 +216,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     height: 1.4,
-                    color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                    color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -239,14 +238,14 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                             selectedColor: theme.colorScheme.primary,
                             backgroundColor: isDark
                                 ? theme.cardColor
-                                : theme.colorScheme.surfaceVariant.withOpacity(0.5),
+                                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                               side: BorderSide(
                                 color: isSelected
                                     ? Colors.transparent
-                                    : theme.dividerColor.withOpacity(0.5),
+                                    : theme.dividerColor.withValues(alpha: 0.5),
                               ),
                             ),
                             labelStyle: TextStyle(
@@ -275,19 +274,19 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                   decoration: BoxDecoration(
                     color: isDark
                         ? theme.cardColor
-                        : theme.colorScheme.primary.withOpacity(0.05),
+                        : theme.colorScheme.primary.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
                       color: isDark
                           ? theme.dividerColor
-                          : theme.colorScheme.primary.withOpacity(0.1),
+                          : theme.colorScheme.primary.withValues(alpha: 0.1),
                     ),
                   ),
                   child: Row(
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<Subject>(
-                          value: _selectedSubject,
+                          initialValue: _selectedSubject,
                           isExpanded: true,
                           dropdownColor: theme.cardColor,
                           style: TextStyle(
@@ -298,7 +297,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                           decoration: InputDecoration(
                             hintText: 'Select subject',
                             hintStyle: TextStyle(
-                              color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6),
+                              color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
                               fontWeight: FontWeight.normal,
                             ),
                             contentPadding: const EdgeInsets.symmetric(
@@ -320,7 +319,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
                               borderSide: BorderSide(
-                                color: theme.colorScheme.primary.withOpacity(0.5),
+                                color: theme.colorScheme.primary.withValues(alpha: 0.5),
                                 width: 2,
                               ),
                             ),
@@ -341,7 +340,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                         decoration: BoxDecoration(
                           boxShadow: [
                             BoxShadow(
-                              color: theme.colorScheme.primary.withOpacity(0.3),
+                              color: theme.colorScheme.primary.withValues(alpha: 0.3),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),
@@ -382,13 +381,13 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                               Container(
                                 padding: const EdgeInsets.all(24),
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary.withOpacity(0.1),
+                                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   Icons.calendar_today_rounded,
                                   size: 48,
-                                  color: theme.colorScheme.primary.withOpacity(0.6),
+                                  color: theme.colorScheme.primary.withValues(alpha: 0.6),
                                 ),
                               ),
                               const SizedBox(height: 20),
@@ -406,7 +405,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
+                                  color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
                                 ),
                               ),
                             ],
@@ -415,20 +414,20 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                       : ListView.separated(
                           physics: const BouncingScrollPhysics(),
                           itemCount: _daySubjects.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          separatorBuilder: (_, _) => const SizedBox(height: 12),
                           itemBuilder: (_, i) {
                             return Container(
                               decoration: BoxDecoration(
                                 color: isDark ? theme.cardColor : Colors.white,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: theme.dividerColor.withOpacity(0.5),
+                                  color: theme.dividerColor.withValues(alpha: 0.5),
                                 ),
                                 boxShadow: isDark
                                     ? []
                                     : [
                                         BoxShadow(
-                                          color: Colors.black.withOpacity(0.03),
+                                          color: Colors.black.withValues(alpha: 0.03),
                                           blurRadius: 10,
                                           offset: const Offset(0, 4),
                                         )
@@ -443,7 +442,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                                   width: 40,
                                   height: 40,
                                   decoration: BoxDecoration(
-                                    color: theme.colorScheme.primary.withOpacity(0.15),
+                                    color: theme.colorScheme.primary.withValues(alpha: 0.15),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Center(
@@ -520,7 +519,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                             style: OutlinedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               side: BorderSide(
-                                color: theme.colorScheme.secondary.withOpacity(0.5),
+                                color: theme.colorScheme.secondary.withValues(alpha: 0.5),
                                 width: 1.5,
                               ),
                               shape: RoundedRectangleBorder(
@@ -548,7 +547,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             elevation: 4,
-                            shadowColor: theme.colorScheme.primary.withOpacity(0.4),
+                            shadowColor: theme.colorScheme.primary.withValues(alpha: 0.4),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),

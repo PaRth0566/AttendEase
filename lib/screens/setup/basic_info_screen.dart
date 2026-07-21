@@ -9,7 +9,6 @@ import '../../database/timetable_dao.dart';
 import '../../database/attendance_dao.dart';
 import '../../models/subject.dart';
 import '../../models/timetable_entry.dart';
-import '../setup/attendance_criteria_screen.dart';
 import '../../services/cloud_sync_service.dart';
 
 class BasicInfoScreen extends StatefulWidget {
@@ -376,7 +375,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
               const SizedBox(height: 16),
 
               DropdownButtonFormField<int>(
-                value: _selectedSemester,
+                initialValue: _selectedSemester,
                 decoration: _inputDecoration('Semester', theme),
                 dropdownColor: theme.cardColor,
                 style: TextStyle(color: theme.textTheme.bodyLarge?.color),
@@ -413,8 +412,8 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.amber.withOpacity(0.15),
-                  border: Border.all(color: Colors.amber.shade700.withOpacity(0.5)),
+                  color: Colors.amber.withValues(alpha: 0.15),
+                  border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.5)),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(

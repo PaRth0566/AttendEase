@@ -5,10 +5,21 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-val keystorePath = System.getenv("KEYSTORE_PATH")
-val keystorePassword = System.getenv("KEYSTORE_PASSWORD")
-val releaseKeyAlias = System.getenv("KEY_ALIAS")
-val releaseKeyPassword = System.getenv("KEY_PASSWORD")
+import java.util.Properties
+
+// Release signing is read from android/key.properties (gitignored) when present,
+// falling back to environment variables for CI. Debug builds are unaffected.
+val keystoreProperties = Properties().apply {
+    val keystorePropertiesFile = rootProject.file("key.properties")
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+
+val keystorePath = keystoreProperties.getProperty("storeFile") ?: System.getenv("KEYSTORE_PATH")
+val keystorePassword = keystoreProperties.getProperty("storePassword") ?: System.getenv("KEYSTORE_PASSWORD")
+val releaseKeyAlias = keystoreProperties.getProperty("keyAlias") ?: System.getenv("KEY_ALIAS")
+val releaseKeyPassword = keystoreProperties.getProperty("keyPassword") ?: System.getenv("KEY_PASSWORD")
 
 android {
     namespace = "com.parthm.attendease"

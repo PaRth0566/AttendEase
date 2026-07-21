@@ -271,7 +271,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
                 // Subject picker
                 DropdownButtonFormField<Subject>(
-                  value: selectedSubject,
+                  initialValue: selectedSubject,
                   decoration: InputDecoration(
                     labelText: 'Select Subject',
                     labelStyle: TextStyle(color: theme.textTheme.bodyMedium?.color),
@@ -355,7 +355,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                 : '${dateKey}_$existingCount';
 
                             await _saveRecord(seedId, uniqueDateKey, selectedStatus);
-                            if (!mounted) return;
+                            if (!ctx.mounted) return;
                             Navigator.pop(ctx);
                             await _loadForDate(_selectedDay!);
                           },

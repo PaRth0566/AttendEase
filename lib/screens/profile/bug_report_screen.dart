@@ -99,7 +99,7 @@ class _BugReportScreenState extends State<BugReportScreen> {
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF6366F1).withOpacity(0.35),
+                            color: const Color(0xFF6366F1).withValues(alpha: 0.35),
                             blurRadius: 32,
                             offset: const Offset(0, 12),
                           ),
@@ -131,7 +131,7 @@ class _BugReportScreenState extends State<BugReportScreen> {
                       fontSize: 14,
                       height: 1.5,
                       color: isDark
-                          ? Colors.white.withOpacity(0.55)
+                          ? Colors.white.withValues(alpha: 0.55)
                           : const Color(0xFF64748B),
                     ),
                   ),
@@ -155,18 +155,18 @@ class _BugReportScreenState extends State<BugReportScreen> {
                       ),
                       hintStyle: TextStyle(
                         color: isDark
-                            ? Colors.white.withOpacity(0.3)
+                            ? Colors.white.withValues(alpha: 0.3)
                             : const Color(0xFF94A3B8),
                       ),
                       filled: true,
                       fillColor: isDark
-                          ? Colors.white.withOpacity(0.05)
+                          ? Colors.white.withValues(alpha: 0.05)
                           : const Color(0xFFF8FAFC),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide(
                           color: isDark
-                              ? Colors.white.withOpacity(0.1)
+                              ? Colors.white.withValues(alpha: 0.1)
                               : const Color(0xFFE2E8F0),
                         ),
                       ),
@@ -174,7 +174,7 @@ class _BugReportScreenState extends State<BugReportScreen> {
                         borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide(
                           color: isDark
-                              ? Colors.white.withOpacity(0.1)
+                              ? Colors.white.withValues(alpha: 0.1)
                               : const Color(0xFFE2E8F0),
                         ),
                       ),
@@ -216,19 +216,19 @@ class _BugReportScreenState extends State<BugReportScreen> {
                         ),
                         hintStyle: TextStyle(
                           color: isDark
-                              ? Colors.white.withOpacity(0.3)
+                              ? Colors.white.withValues(alpha: 0.3)
                               : const Color(0xFF94A3B8),
                         ),
                         filled: true,
                         fillColor: isDark
-                            ? Colors.white.withOpacity(0.05)
+                            ? Colors.white.withValues(alpha: 0.05)
                             : const Color(0xFFF8FAFC),
                         alignLabelWithHint: true,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide(
                             color: isDark
-                                ? Colors.white.withOpacity(0.1)
+                                ? Colors.white.withValues(alpha: 0.1)
                                 : const Color(0xFFE2E8F0),
                           ),
                         ),
@@ -236,7 +236,7 @@ class _BugReportScreenState extends State<BugReportScreen> {
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide(
                             color: isDark
-                                ? Colors.white.withOpacity(0.1)
+                                ? Colors.white.withValues(alpha: 0.1)
                                 : const Color(0xFFE2E8F0),
                           ),
                         ),
@@ -265,7 +265,7 @@ class _BugReportScreenState extends State<BugReportScreen> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF6366F1).withOpacity(0.4),
+                          color: const Color(0xFF6366F1).withValues(alpha: 0.4),
                           blurRadius: 24,
                           offset: const Offset(0, 10),
                         ),

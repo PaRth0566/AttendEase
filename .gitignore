@@ -58,3 +58,6 @@ backend/.env
 lib/firebase_options.dart
 *.log
 android/app/google-services.json
+
+# Signing config (never commit)
+android/key.properties

@@ -19,7 +19,6 @@ import '../screens/setup/basic_info_screen.dart';
 import '../screens/setup/setup_choice_screen.dart';
 import '../screens/setup/timetable_setup_screen.dart';
 import '../screens/setup/upload_pdf_screen.dart';
-import '../screens/web/aura_ai_dashboard.dart';
 import '../screens/web/aura_landing_page.dart';
 import '../screens/web/aura_upload_config.dart';
 import '../screens/report/subject_detail_screen.dart';
@@ -43,11 +42,11 @@ Page<dynamic> _fadeTransition(GoRouterState state, Widget child) {
 }
 
 class AppRouter {
-  static final GlobalKey<NavigatorState> _rootNavigatorKey = GlobalKey<NavigatorState>();
+  static final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
   static bool? _hasDataCache;
 
   static final GoRouter router = GoRouter(
-    navigatorKey: _rootNavigatorKey,
+    navigatorKey: rootNavigatorKey,
     initialLocation: kIsWeb ? '/web/home' : '/',
     redirect: (context, state) async {
       final user = FirebaseAuth.instance.currentUser;
@@ -186,7 +185,7 @@ class AppRouter {
                 routes: [
                   GoRoute(
                     path: 'subject-detail',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     redirect: (context, state) {
                       // Guard: this route requires a Subject passed via state.extra.
                       // If force-browsed directly without data, redirect to dashboard.
@@ -220,42 +219,42 @@ final subject = state.extra as Subject;
                 routes: [
                   GoRoute(
                     path: 'basic',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const BasicInfoScreen(isEditMode: true),
                   ),
                   GoRoute(
                     path: 'subjects',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const AddSubjectsScreen(isEditMode: true),
                   ),
                   GoRoute(
                     path: 'timetable',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const TimetableSetupScreen(isEditMode: true),
                   ),
                   GoRoute(
                     path: 'criteria',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const AttendanceCriteriaScreen(isEditMode: true),
                   ),
                   GoRoute(
                     path: 'report',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const ReportScreen(),
                   ),
                   GoRoute(
                     path: 'refresh-pdf',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const RefreshPdfScreen(),
                   ),
                   GoRoute(
                     path: 'account',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const AccountSettingsScreen(),
                   ),
                   GoRoute(
                     path: 'bug-report',
-                    parentNavigatorKey: _rootNavigatorKey,
+                    parentNavigatorKey: rootNavigatorKey,
                     builder: (context, state) => const BugReportScreen(),
                   ),
                 ],

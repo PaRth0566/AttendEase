@@ -138,12 +138,12 @@ class CloudSyncService {
       debugPrint('☁️ [Sync] Starting Cloud Restoration...');
 
       // Keys that must always be stored as double (even when Firestore returns int)
-      const _doubleKeys = {'overall_required_attendance', 'subject_required_attendance'};
+      const doubleKeys = {'overall_required_attendance', 'subject_required_attendance'};
 
       // Keys that we intentionally skip during bulk restore and handle separately
       // 'semester' is protected so a stale cloud value doesn't overwrite the
       // locally-selected semester.
-      const _skipKeys = {'semester'};
+      const skipKeys = {'semester'};
 
       // 1. Restore SharedPreferences (Name, Course, Dates)
       final Map<String, dynamic> prefsData = data['preferences'] ?? {};
@@ -154,13 +154,13 @@ class CloudSyncService {
           if (value == null) continue;
 
           // Skip protected keys — handled separately below
-          if (_skipKeys.contains(key)) continue;
+          if (skipKeys.contains(key)) continue;
 
           if (value is String) {
             await prefs.setString(key, value);
           } else if (value is bool) {
             await prefs.setBool(key, value);
-          } else if (_doubleKeys.contains(key)) {
+          } else if (doubleKeys.contains(key)) {
             // Always store known-double keys as double regardless of Firestore type
             await prefs.setDouble(key, (value as num).toDouble());
           } else if (value is int) {
@@ -178,33 +178,34 @@ class CloudSyncService {
         debugPrint('☁️ [Sync] Restored ${prefsData.length} preferences.');
       }
 
-      // 2. Wipe current local SQLite data to avoid duplicates
-      // We do this AFTER preferences to ensure we don't wipe local if preference restore fails
-      await db.transaction((txn) async {
-        await txn.delete('attendance_records');
-        await txn.delete('timetable');
-        await txn.delete('subjects');
-      });
-
-      // 3. Restore SQLite Data
+      // 2 + 3. Wipe and restore SQLite data atomically.
+      // The delete and re-inserts run in a single transaction so a failure
+      // mid-restore rolls back completely, rather than leaving the user with
+      // partially-restored or empty local data.
       final List<dynamic> subjects = data['subjects'] ?? [];
       final List<dynamic> timetable = data['timetable'] ?? [];
       final List<dynamic> attendanceRecords = data['attendance_records'] ?? [];
 
       debugPrint('☁️ [Sync] Restoring DB: ${subjects.length} subjects, ${attendanceRecords.length} records.');
 
-      for (var subject in subjects) {
-        final sanitized = DbUtils.sanitizeRow(Map<String, dynamic>.from(subject));
-        await db.insert('subjects', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
-      }
-      for (var session in timetable) {
-        final sanitized = DbUtils.sanitizeRow(Map<String, dynamic>.from(session));
-        await db.insert('timetable', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
-      }
-      for (var record in attendanceRecords) {
-        final sanitized = DbUtils.sanitizeRow(Map<String, dynamic>.from(record));
-        await db.insert('attendance_records', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
-      }
+      await db.transaction((txn) async {
+        await txn.delete('attendance_records');
+        await txn.delete('timetable');
+        await txn.delete('subjects');
+
+        for (var subject in subjects) {
+          final sanitized = DbUtils.sanitizeRow(Map<String, dynamic>.from(subject));
+          await txn.insert('subjects', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+        for (var session in timetable) {
+          final sanitized = DbUtils.sanitizeRow(Map<String, dynamic>.from(session));
+          await txn.insert('timetable', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+        for (var record in attendanceRecords) {
+          final sanitized = DbUtils.sanitizeRow(Map<String, dynamic>.from(record));
+          await txn.insert('attendance_records', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+      });
 
       // 4. Robust Semester Resolution
       // Priority order:
@@ -220,8 +221,11 @@ class CloudSyncService {
         // No local semester — try to use cloud value first
         final cloudSem = prefsData['semester'];
         int? cloudSemInt;
-        if (cloudSem is int) cloudSemInt = cloudSem;
-        else if (cloudSem is num) cloudSemInt = cloudSem.toInt();
+        if (cloudSem is int) {
+          cloudSemInt = cloudSem;
+        } else if (cloudSem is num) {
+          cloudSemInt = cloudSem.toInt();
+        }
 
         if (cloudSemInt != null && cloudSemInt >= 1) {
           await prefs.setInt('semester', cloudSemInt);
@@ -234,8 +238,11 @@ class CloudSyncService {
           if (semResult.isNotEmpty) {
             final detectedSem = semResult.first['semester'];
             int? target;
-            if (detectedSem is int) target = detectedSem;
-            else if (detectedSem is num) target = detectedSem.toInt();
+            if (detectedSem is int) {
+              target = detectedSem;
+            } else if (detectedSem is num) {
+              target = detectedSem.toInt();
+            }
 
             if (target != null) {
               await prefs.setInt('semester', target);
