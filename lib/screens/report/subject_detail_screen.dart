@@ -6,6 +6,7 @@ import '../../models/subject.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../theme/app_colors.dart';
 import '../../utils/calculation_utils.dart';
+import '../../widgets/app_overlays.dart';
 
 class SubjectDetailScreen extends StatefulWidget {
   final Subject subject;
@@ -32,7 +33,6 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
 
   @override
   void initState() {
@@ -45,13 +45,6 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
       parent: _animController,
       curve: Curves.easeOutCubic,
     );
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutCubic,
-    ));
     _loadHistory();
   }
 
@@ -173,17 +166,18 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Hero(
-          tag: 'subject_name_${widget.subject.id}',
-          child: Material(
-            type: MaterialType.transparency,
-            child: Text(
-              widget.subject.name,
-              style: TextStyle(
-                color: theme.textTheme.bodyLarge?.color,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
+        // Deliberately not a Hero. The container transform already carries this
+        // title up from the tapped card: it lays the page out full-size and
+        // clips it to a rect that grows from the tile, so the AppBar rides
+        // along with everything else. A Hero on top of that animated the title
+        // a second time, on the route's raw animation under Material's
+        // front-loaded fastOutSlowIn rather than the transform's emphasized
+        // easing — so it reached the top while the card was still expanding.
+        title: Text(
+          widget.subject.name,
+          style: TextStyle(
+            color: theme.textTheme.bodyLarge?.color,
+            fontWeight: FontWeight.bold,
           ),
         ),
         backgroundColor: Colors.transparent,
@@ -202,9 +196,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
                 child: Column(
               children: [
                 // OVERALL STATS CARD
-                SlideTransition(
-                  position: _slideAnim,
-                  child: FadeTransition(
+                FadeTransition(
                     opacity: _fadeAnim,
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
@@ -272,13 +264,10 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
                       ),
                     ),
                   ),
-                ),
 
                 // SKIP CALCULATOR
                 if (_maxSkips > 0)
-                  SlideTransition(
-                    position: _slideAnim,
-                    child: FadeTransition(
+                  FadeTransition(
                       opacity: _fadeAnim,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -405,7 +394,6 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
                         ),
                       ),
                     ),
-                  ),
 
                 // TIMELINE HEADER & UX HINT
                 Padding(
@@ -515,7 +503,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
                                 ),
                               ),
                               confirmDismiss: (direction) async {
-                                return await showDialog(
+                                return await showAppDialog(
                                   context: context,
                                   builder: (ctx) => AlertDialog(
                                     backgroundColor: theme.cardColor,

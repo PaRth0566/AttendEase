@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:ui';
+import '../../theme/container_transform.dart';
 
 class SetupChoiceScreen extends StatelessWidget {
   const SetupChoiceScreen({super.key});
@@ -121,71 +122,74 @@ class SetupChoiceScreen extends StatelessWidget {
         ? Colors.white.withValues(alpha: 0.1)
         : Colors.black.withValues(alpha: 0.08);
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            child: Ink(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: backgroundColor,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: borderColor,
-                  width: 1.5,
+    return ContainerTransformAnchor(
+      borderRadius: 20,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              child: Ink(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: backgroundColor,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: borderColor,
+                    width: 1.5,
+                  ),
                 ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        icon,
+                        color: theme.colorScheme.primary,
+                        size: 28,
+                      ),
                     ),
-                    child: Icon(
-                      icon,
-                      color: theme.colorScheme.primary,
-                      size: 28,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: theme.textTheme.bodyLarge?.color,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            fontSize: 14,
-                            height: 1.4,
-                            color: theme.textTheme.bodyMedium?.color,
+                          const SizedBox(height: 6),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontSize: 14,
+                              height: 1.4,
+                              color: theme.textTheme.bodyMedium?.color,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    size: 16,
-                    color: theme.iconTheme.color?.withValues(alpha: 0.5),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 16,
+                      color: theme.iconTheme.color?.withValues(alpha: 0.5),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

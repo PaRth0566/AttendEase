@@ -10,6 +10,8 @@ import 'package:sqflite/sqflite.dart';
 import '../../database/db_helper.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../theme/app_dimens.dart';
+import '../../theme/container_transform.dart';
 import '../../utils/db_utils.dart';
 import 'package:go_router/go_router.dart';
 
@@ -436,13 +438,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     Align(
                       alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {
-                          context.push('/forgot-password');
-                        },
-                        child: Text(
-                          'Forgot Password?',
-                          style: TextStyle(color: theme.colorScheme.primary),
+                      child: ContainerTransformAnchor(
+                        borderRadius: AppDimens.radiusSm,
+                        child: TextButton(
+                          onPressed: () {
+                            context.push('/forgot-password');
+                          },
+                          child: Text(
+                            'Forgot Password?',
+                            style: TextStyle(color: theme.colorScheme.primary),
+                          ),
                         ),
                       ),
                     ),
@@ -546,13 +551,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             color: theme.textTheme.bodyMedium?.color,
                           ),
                         ),
-                        TextButton(
-                          onPressed: () => context.push('/signup'),
-                          child: Text(
-                            'Sign up',
-                            style: TextStyle(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.bold,
+                        ContainerTransformAnchor(
+                          borderRadius: AppDimens.radiusSm,
+                          child: TextButton(
+                            onPressed: () => context.push('/signup'),
+                            child: Text(
+                              'Sign up',
+                              style: TextStyle(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),

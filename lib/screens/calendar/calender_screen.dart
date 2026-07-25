@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,7 +13,10 @@ import '../../services/cloud_sync_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/app_motion.dart';
+import '../../theme/glass_nav_theme.dart';
 import '../../widgets/empty_state.dart';
+import '../../widgets/glass_action_button.dart';
+import '../../widgets/app_overlays.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
@@ -118,7 +123,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     await _loadForDate(_selectedDay!);
   }
 
-
   Future<void> _fetchMonthData(DateTime month) async {
     final monthStart = DateTime(month.year, month.month, 1);
     final monthEnd = DateTime(month.year, month.month + 1, 0);
@@ -133,7 +137,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
 
     final Map<DateTime, String> newStatuses = {};
-    final today = DateTime.utc(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final today = DateTime.utc(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
 
     for (int i = 1; i <= monthEnd.day; i++) {
       final day = DateTime.utc(month.year, month.month, i);
@@ -193,8 +201,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
     });
   }
 
-  Future<void> _saveRecord(int timetableEntryId, String date, String status,
-      {String source = 'manual', String? originalStatus}) async {
+  Future<void> _saveRecord(
+    int timetableEntryId,
+    String date,
+    String status, {
+    String source = 'manual',
+    String? originalStatus,
+  }) async {
     await _attendanceDao.upsertAttendance(
       timetableId: timetableEntryId,
       date: date,
@@ -210,10 +223,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
   /// baseline was NU — a real Present/Absent from the report cannot be reverted
   /// to NU (the report never left it blank). If the record was a virtual slot
   /// (never persisted), there is nothing to remove.
-  Future<void> _revertToNotUpdated(int timetableEntryId, String date, int? recordId) async {
+  Future<void> _revertToNotUpdated(
+    int timetableEntryId,
+    String date,
+    int? recordId,
+  ) async {
     if (recordId == null) return; // virtual slot; nothing stored
-    await _saveRecord(timetableEntryId, date, 'NU',
-        source: 'pdf', originalStatus: 'NU');
+    await _saveRecord(
+      timetableEntryId,
+      date,
+      'NU',
+      source: 'pdf',
+      originalStatus: 'NU',
+    );
     await _loadForDate(_selectedDay!);
   }
 
@@ -239,7 +261,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     if (available.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No subjects found. Please add subjects first.')),
+        const SnackBar(
+          content: Text('No subjects found. Please add subjects first.'),
+        ),
       );
       return;
     }
@@ -247,7 +271,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     Subject? selectedSubject;
     String selectedStatus = 'P';
 
-    showModalBottomSheet(
+    showAppModalSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -263,7 +287,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
             decoration: BoxDecoration(
               color: theme.cardColor,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -297,21 +323,30 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   initialValue: selectedSubject,
                   decoration: InputDecoration(
                     labelText: 'Select Subject',
-                    labelStyle: TextStyle(color: theme.textTheme.bodyMedium?.color),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    labelStyle: TextStyle(
+                      color: theme.textTheme.bodyMedium?.color,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: BorderSide(color: theme.dividerColor),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: theme.colorScheme.primary, width: 2),
+                      borderSide: BorderSide(
+                        color: theme.colorScheme.primary,
+                        width: 2,
+                      ),
                     ),
                   ),
                   dropdownColor: theme.cardColor,
                   style: TextStyle(color: theme.textTheme.bodyLarge?.color),
                   items: available
-                      .map((s) => DropdownMenuItem(value: s, child: Text(s.name)))
+                      .map(
+                        (s) => DropdownMenuItem(value: s, child: Text(s.name)),
+                      )
                       .toList(),
                   onChanged: (v) => setSheetState(() => selectedSubject = v),
                 ),
@@ -366,7 +401,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         ? null
                         : () async {
                             final sub = selectedSubject!;
-                            final seedId = await _timetableDao.ensureSeedEntry(sub.id!);
+                            final seedId = await _timetableDao.ensureSeedEntry(
+                              sub.id!,
+                            );
 
                             // Find a free date key for this subject. _dayRecords
                             // now includes virtual timetable slots, so pick the
@@ -374,18 +411,27 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             // fills an empty timetable slot before creating an
                             // extra one beyond the schedule.
                             final usedKeys = _dayRecords
-                                .where((r) => r['subject_id'] == sub.id && r['record_id'] != null)
+                                .where(
+                                  (r) =>
+                                      r['subject_id'] == sub.id &&
+                                      r['record_id'] != null,
+                                )
                                 .map((r) => r['record_date'] as String)
                                 .toSet();
                             var idx = 0;
-                            String candidate() => idx == 0 ? dateKey : '${dateKey}_${idx + 1}';
+                            String candidate() =>
+                                idx == 0 ? dateKey : '${dateKey}_${idx + 1}';
                             while (usedKeys.contains(candidate())) {
                               idx++;
                             }
                             final uniqueDateKey = candidate();
 
-                            await _saveRecord(seedId, uniqueDateKey, selectedStatus,
-                                originalStatus: selectedStatus);
+                            await _saveRecord(
+                              seedId,
+                              uniqueDateKey,
+                              selectedStatus,
+                              originalStatus: selectedStatus,
+                            );
                             if (!ctx.mounted) return;
                             Navigator.pop(ctx);
                             await _loadForDate(_selectedDay!);
@@ -394,12 +440,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       backgroundColor: theme.colorScheme.primary,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       disabledBackgroundColor: theme.dividerColor,
                     ),
                     child: const Text(
                       'Save Record',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
@@ -437,7 +488,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: selected ? color : theme.iconTheme.color, size: 20),
+            Icon(
+              icon,
+              color: selected ? color : theme.iconTheme.color,
+              size: 20,
+            ),
             const SizedBox(width: 8),
             Text(
               label,
@@ -479,7 +534,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final today = DateTime.utc(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final today = DateTime.utc(
+      DateTime.now().year,
+      DateTime.now().month,
+      DateTime.now().day,
+    );
     final isFutureDay = _selectedDay != null && _selectedDay!.isAfter(today);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -488,7 +547,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final colorPresentBg = c.success.withAlpha(64);
     final colorAbsentBg = c.danger.withAlpha(64);
     final colorMixedBg = c.warning.withAlpha(64);
-    final colorHolidayBg = isDark ? Colors.white.withAlpha(25) : Colors.grey.withAlpha(38);
+    final colorHolidayBg = isDark
+        ? Colors.white.withAlpha(25)
+        : Colors.grey.withAlpha(38);
 
     // Date key for selected day
     final selectedDateKey = _selectedDay != null
@@ -501,12 +562,43 @@ class _CalendarScreenState extends State<CalendarScreen> {
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(title: const Text('Calendar'), elevation: 0),
       floatingActionButton: canAddRecord
-          ? FloatingActionButton.extended(
-              onPressed: () => _showAddRecordSheet(selectedDateKey),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Add Record', style: TextStyle(fontWeight: FontWeight.w600)),
-              backgroundColor: theme.colorScheme.primary,
-              foregroundColor: Colors.white,
+          // The shell Scaffold sets extendBody, so this inner Scaffold's
+          // bottom edge is the screen edge and endFloat drops the FAB right
+          // under the floating glass bar. Scaffold's own clearance is
+          // max(16, viewPadding.bottom) — the system gesture inset only; it
+          // knows nothing about a bar belonging to a Scaffold above it. The
+          // record list already makes this correction for its last row.
+          //
+          // This double-counts the gesture inset, since Scaffold's margin
+          // covered that part already. Left as-is: the overlap is the gap
+          // between the FAB and the bar, and a floating control wants one.
+          ? Padding(
+              padding: EdgeInsets.only(
+                // endFloat already lifts the pill by max(16, viewPadding) for
+                // the system gesture inset, then this clears the nav bar on
+                // top of that — so the two stacked into a wide gap. Subtracting
+                // the margin back out leaves exactly GlassNavTheme.actionGap
+                // of air between the pill and the bar's glass.
+                bottom:
+                    (MediaQuery.paddingOf(context).bottom -
+                            math.max(
+                              kFloatingActionButtonMargin,
+                              MediaQuery.viewPaddingOf(context).bottom,
+                            ) -
+                            GlassNavTheme.verticalInset +
+                            GlassNavTheme.actionGap)
+                        .clamp(0.0, double.infinity),
+                // Scaffold's endFloat sits the pill 16 from the screen edge;
+                // the bar is inset 32. Making up the difference is what puts
+                // the two on a shared right edge, which is most of why the
+                // pill reads as part of the bar rather than next to it.
+                right: GlassNavTheme.actionInset - kFloatingActionButtonMargin,
+              ),
+              child: GlassActionButton(
+                icon: Icons.add_rounded,
+                label: 'Add record',
+                onPressed: () => _showAddRecordSheet(selectedDateKey),
+              ),
             )
           : null,
       body: Center(
@@ -517,390 +609,515 @@ class _CalendarScreenState extends State<CalendarScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-          // Calendar widget
-          Container(
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              border: Border(bottom: BorderSide(color: theme.dividerColor)),
-            ),
-            child: Column(
-              children: [
-                !_isCalendarReady
-                    ? const SizedBox(
-                        height: 80,
-                        child: Center(child: CircularProgressIndicator()),
-                      )
-                    : TableCalendar(
-                        firstDay: _firstDay,
-                        lastDay: _lastDay,
-                        focusedDay: _focusedDay,
-                        selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                        calendarFormat: CalendarFormat.month,
-                        availableCalendarFormats: const {CalendarFormat.month: 'Month'},
-                        rowHeight: 42,
-                        daysOfWeekHeight: 20,
-                        headerStyle: HeaderStyle(
-                          formatButtonVisible: false,
-                          titleCentered: true,
-                          headerPadding: const EdgeInsets.symmetric(vertical: 4),
-                          titleTextStyle: TextStyle(
-                            color: theme.textTheme.bodyLarge?.color,
-                            fontSize: 17,
-                          ),
-                          leftChevronIcon:
-                              Icon(Icons.chevron_left, color: theme.iconTheme.color),
-                          rightChevronIcon:
-                              Icon(Icons.chevron_right, color: theme.iconTheme.color),
-                        ),
-                        daysOfWeekStyle: DaysOfWeekStyle(
-                          weekdayStyle:
-                              TextStyle(color: theme.textTheme.bodyMedium?.color),
-                          weekendStyle:
-                              TextStyle(color: theme.textTheme.bodyMedium?.color),
-                        ),
-                        calendarBuilders: CalendarBuilders(
-                          prioritizedBuilder: (context, day, focusedDay) {
-                            final normalizedDay =
-                                DateTime.utc(day.year, day.month, day.day);
-                            final bool isSelected = isSameDay(_selectedDay, day);
-                            final bool isToday = isSameDay(DateTime.now(), day);
-
-                            if (isSelected) {
-                              return Container(
-                                margin: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '${day.day}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }
-
-                            final status = _monthStatuses[normalizedDay];
-                            Color? bgColor;
-                            Color textColor =
-                                theme.textTheme.bodyLarge?.color ?? Colors.black;
-                            final FontWeight weight =
-                                isToday ? FontWeight.bold : FontWeight.normal;
-
-                            switch (status) {
-                              case 'outside':
-                                bgColor = Colors.transparent;
-                                textColor = isDark
-                                    ? Colors.white.withAlpha(50)
-                                    : Colors.black.withAlpha(50);
-                              case 'holiday':
-                                bgColor = colorHolidayBg;
-                                textColor = theme.textTheme.bodyMedium?.color ?? Colors.grey;
-                              case 'all_p':
-                                bgColor = colorPresentBg;
-                              case 'all_a':
-                                bgColor = colorAbsentBg;
-                              case 'mixed':
-                                bgColor = colorMixedBg;
-                              case 'all_nu':
-                                bgColor = c.warning.withAlpha(isDark ? 80 : 60);
-                              default:
-                                bgColor = null;
-                            }
-
-                            return Container(
-                              margin: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: bgColor,
-                                shape: BoxShape.circle,
-                                border: isToday
-                                    ? Border.all(
-                                        color: theme.colorScheme.primary, width: 1.5)
-                                    : null,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '${day.day}',
-                                  style: TextStyle(
-                                      color: textColor, fontWeight: weight),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                        onDaySelected: (selectedDay, focusedDay) {
-                          if (!isSameDay(_selectedDay, selectedDay)) {
-                            setState(() {
-                              _selectedDay = selectedDay;
-                              _focusedDay = focusedDay;
-                            });
-                            _loadForDate(selectedDay);
-                          }
-                        },
-                        onPageChanged: (focusedDay) {
-                          _focusedDay = focusedDay;
-                          _fetchMonthData(focusedDay);
-                        },
-                      ),
-
-                // Legend
-                if (_isCalendarReady)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                    child: Row(
-                      children: [
-                        Expanded(child: _buildLegendItem(colorPresentBg, 'All Present', theme)),
-                        Expanded(child: _buildLegendItem(colorAbsentBg, 'All Absent', theme)),
-                        Expanded(child: _buildLegendItem(colorMixedBg, 'Mixed', theme)),
-                        Expanded(child: _buildLegendItem(colorHolidayBg, 'Off', theme)),
-                      ],
+                // Calendar widget
+                Container(
+                  decoration: BoxDecoration(
+                    color: theme.cardColor,
+                    border: Border(
+                      bottom: BorderSide(color: theme.dividerColor),
                     ),
                   ),
-              ],
-            ),
-          ),
-
-          // Selected day label
-          if (_selectedDay != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-              child: Text(
-                DateFormat('EEEE, MMMM d, yyyy').format(_selectedDay!),
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: theme.textTheme.bodyLarge?.color,
-                ),
-              ),
-            ),
-
-          // Records list
-          Expanded(
-            child: AnimatedSwitcher(
-              duration: AppMotion.standard,
-              switchInCurve: AppMotion.enter,
-              switchOutCurve: AppMotion.exit,
-              child: _loading
-                  ? Center(
-                      key: const ValueKey('loading'),
-                      child: CircularProgressIndicator(color: theme.colorScheme.primary),
-                    )
-                  : isSunday
-                      ? EmptyState(
-                          key: const ValueKey('sunday'),
-                          icon: Icons.weekend_rounded,
-                          message: 'Sunday — no classes',
-                          compact: true,
-                        )
-                      : isFutureDay
-                          ? EmptyState(
-                              key: const ValueKey('future'),
-                              icon: Icons.event_outlined,
-                              message: 'No records yet',
-                              compact: true,
+                  child: Column(
+                    children: [
+                      !_isCalendarReady
+                          ? const SizedBox(
+                              height: 80,
+                              child: Center(child: CircularProgressIndicator()),
                             )
-                          : _dayRecords.isEmpty
-                              ? EmptyState(
-                                  key: const ValueKey('empty'),
-                                  icon: Icons.event_note_outlined,
-                                  message: 'No records for this date\nTap + to add one',
-                                  compact: true,
-                                )
-                              : ListView.builder(
-                                  key: ValueKey(_selectedDay),
-                                  padding: const EdgeInsets.fromLTRB(
-                                    AppDimens.space16, AppDimens.space4,
-                                    AppDimens.space16, 100,
-                                  ),
-                                  itemCount: _dayRecords.length,
-                                  itemBuilder: (_, i) {
-                                    final record = _dayRecords[i];
-                                    final recordId = record['record_id'] as int?;
-                                    final subjectName = record['subject_name'] as String? ?? 'Unknown';
-                                    final status = record['status'] as String? ?? '';
-                                    final timetableId = record['timetable_entry_id'] as int?;
-                                    final recordDate = record['record_date'] as String? ?? selectedDateKey!;
+                          : TableCalendar(
+                              firstDay: _firstDay,
+                              lastDay: _lastDay,
+                              focusedDay: _focusedDay,
+                              selectedDayPredicate: (day) =>
+                                  isSameDay(_selectedDay, day),
+                              calendarFormat: CalendarFormat.month,
+                              availableCalendarFormats: const {
+                                CalendarFormat.month: 'Month',
+                              },
+                              rowHeight: 42,
+                              daysOfWeekHeight: 20,
+                              headerStyle: HeaderStyle(
+                                formatButtonVisible: false,
+                                titleCentered: true,
+                                headerPadding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
+                                titleTextStyle: TextStyle(
+                                  color: theme.textTheme.bodyLarge?.color,
+                                  fontSize: 17,
+                                ),
+                                leftChevronIcon: Icon(
+                                  Icons.chevron_left,
+                                  color: theme.iconTheme.color,
+                                ),
+                                rightChevronIcon: Icon(
+                                  Icons.chevron_right,
+                                  color: theme.iconTheme.color,
+                                ),
+                              ),
+                              daysOfWeekStyle: DaysOfWeekStyle(
+                                weekdayStyle: TextStyle(
+                                  color: theme.textTheme.bodyMedium?.color,
+                                ),
+                                weekendStyle: TextStyle(
+                                  color: theme.textTheme.bodyMedium?.color,
+                                ),
+                              ),
+                              calendarBuilders: CalendarBuilders(
+                                prioritizedBuilder: (context, day, focusedDay) {
+                                  final normalizedDay = DateTime.utc(
+                                    day.year,
+                                    day.month,
+                                    day.day,
+                                  );
+                                  final bool isSelected = isSameDay(
+                                    _selectedDay,
+                                    day,
+                                  );
+                                  final bool isToday = isSameDay(
+                                    DateTime.now(),
+                                    day,
+                                  );
 
-                                    var lectureNum = 1;
-                                    for (var j = 0; j < i; j++) {
-                                      if (_dayRecords[j]['subject_name'] == subjectName) lectureNum++;
-                                    }
-                                    final hasDuplicates = _dayRecords
-                                            .where((r) => r['subject_name'] == subjectName)
-                                            .length >
-                                        1;
-
-                                    final isPresent = status == 'P';
-                                    final isNU = status == 'NU';
-                                    final isVirtual = record['is_virtual'] == 1 || recordId == null;
-                                    final originalStatus = record['original_status'] as String?;
-                                    // "Manual" = the current value differs from the PDF baseline.
-                                    final isManual = !isVirtual &&
-                                        originalStatus != null &&
-                                        status != originalStatus;
-                                    // Can revert to NU only when the PDF itself reported NU here.
-                                    final canRevertToNu = !isVirtual && originalStatus == 'NU' && !isNU;
-                                    final c = context.appColors;
-                                    final statusColor = isNU
-                                        ? c.warning
-                                        : isPresent
-                                            ? c.success
-                                            : c.danger;
-
-                                  return TweenAnimationBuilder<double>(
-                                    tween: Tween(begin: 0, end: 1),
-                                    duration: Duration(milliseconds: 260 + (i * 40).clamp(0, 220)),
-                                    curve: Curves.easeOutCubic,
-                                    builder: (context, value, child) => Transform.translate(
-                                      offset: Offset(0, 14 * (1 - value)),
-                                      child: Opacity(
-                                        opacity: value.clamp(0.0, 1.0),
-                                        child: child,
+                                  if (isSelected) {
+                                    return Container(
+                                      margin: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.primary,
+                                        shape: BoxShape.circle,
                                       ),
+                                      child: Center(
+                                        child: Text(
+                                          '${day.day}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }
+
+                                  final status = _monthStatuses[normalizedDay];
+                                  Color? bgColor;
+                                  Color textColor =
+                                      theme.textTheme.bodyLarge?.color ??
+                                      Colors.black;
+                                  final FontWeight weight = isToday
+                                      ? FontWeight.bold
+                                      : FontWeight.normal;
+
+                                  switch (status) {
+                                    case 'outside':
+                                      bgColor = Colors.transparent;
+                                      textColor = isDark
+                                          ? Colors.white.withAlpha(50)
+                                          : Colors.black.withAlpha(50);
+                                    case 'holiday':
+                                      bgColor = colorHolidayBg;
+                                      textColor =
+                                          theme.textTheme.bodyMedium?.color ??
+                                          Colors.grey;
+                                    case 'all_p':
+                                      bgColor = colorPresentBg;
+                                    case 'all_a':
+                                      bgColor = colorAbsentBg;
+                                    case 'mixed':
+                                      bgColor = colorMixedBg;
+                                    case 'all_nu':
+                                      bgColor = c.warning.withAlpha(
+                                        isDark ? 80 : 60,
+                                      );
+                                    default:
+                                      bgColor = null;
+                                  }
+
+                                  return Container(
+                                    margin: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: bgColor,
+                                      shape: BoxShape.circle,
+                                      border: isToday
+                                          ? Border.all(
+                                              color: theme.colorScheme.primary,
+                                              width: 1.5,
+                                            )
+                                          : null,
                                     ),
-                                    child: Card(
-                                      key: ValueKey(recordId ?? 'rec_$i'),
-                                      color: theme.cardColor,
-                                      elevation: 0,
-                                      margin: const EdgeInsets.only(bottom: 10),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(14),
-                                        side: BorderSide(color: statusColor.withAlpha(80)),
-                                      ),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                                        child: Row(
-                                          children: [
-                                            Container(
-                                              width: 10,
-                                              height: 10,
-                                              margin: const EdgeInsets.only(right: 12),
-                                              decoration: BoxDecoration(
-                                                color: statusColor,
-                                                shape: BoxShape.circle,
-                                              ),
-                                            ),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    subjectName,
-                                                    style: TextStyle(
-                                                      fontSize: 15,
-                                                      fontWeight: FontWeight.w600,
-                                                      color: theme.textTheme.bodyLarge?.color,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    isNU
-                                                        ? (hasDuplicates
-                                                            ? 'Not Updated - Lecture $lectureNum'
-                                                            : 'Not Updated - tap to set status')
-                                                        : (hasDuplicates
-                                                            ? '${isPresent ? 'Present' : 'Absent'} - Lecture $lectureNum'
-                                                            : (isPresent ? 'Present' : 'Absent')),
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight: FontWeight.w500,
-                                                      color: statusColor,
-                                                    ),
-                                                  ),
-                                                  if (isManual && !isNU)
-                                                    Text(
-                                                      'Manual',
-                                                      style: TextStyle(
-                                                        fontSize: 10,
-                                                        color: theme.textTheme.bodyMedium?.color?.withAlpha(160),
-                                                      ),
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                            if (timetableId != null) ...[
-                                              if (isNU) ...[
-                                                _inlineToggle(
-                                                  label: 'P',
-                                                  selected: false,
-                                                  color: c.success,
-                                                  theme: theme,
-                                                  onTap: () async {
-                                                    // Preserve NU baseline so this can be reverted later.
-                                                    await _saveRecord(timetableId, recordDate, 'P',
-                                                        originalStatus: originalStatus ?? 'NU');
-                                                    await _loadForDate(_selectedDay!);
-                                                  },
-                                                ),
-                                                const SizedBox(width: 4),
-                                                _inlineToggle(
-                                                  label: 'A',
-                                                  selected: false,
-                                                  color: c.danger,
-                                                  theme: theme,
-                                                  onTap: () async {
-                                                    await _saveRecord(timetableId, recordDate, 'A',
-                                                        originalStatus: originalStatus ?? 'NU');
-                                                    await _loadForDate(_selectedDay!);
-                                                  },
-                                                ),
-                                              ] else ...[
-                                                _inlineToggle(
-                                                  label: isPresent ? 'Present' : 'Absent',
-                                                  selected: true,
-                                                  color: isPresent ? c.success : c.danger,
-                                                  theme: theme,
-                                                  onTap: () async {
-                                                    await _saveRecord(
-                                                      timetableId,
-                                                      recordDate,
-                                                      isPresent ? 'A' : 'P',
-                                                    );
-                                                    await _loadForDate(_selectedDay!);
-                                                  },
-                                                ),
-                                                // Only offer revert-to-NU when the PDF itself reported NU.
-                                                if (canRevertToNu) ...[
-                                                  const SizedBox(width: 4),
-                                                  _inlineToggle(
-                                                    label: 'NU',
-                                                    selected: false,
-                                                    color: c.warning,
-                                                    theme: theme,
-                                                    onTap: () => _revertToNotUpdated(
-                                                        timetableId, recordDate, recordId),
-                                                  ),
-                                                ],
-                                              ],
-                                              const SizedBox(width: 6),
-                                              // Virtual (timetable-filled) rows have nothing stored to
-                                              // delete — they reappear from the timetable anyway.
-                                              if (!isVirtual)
-                                                IconButton(
-                                                  icon: Icon(
-                                                    Icons.delete_outline_rounded,
-                                                    size: 20,
-                                                    color: theme.textTheme.bodyMedium?.color,
-                                                  ),
-                                                  onPressed: () => _deleteRecord(timetableId, recordDate),
-                                                  visualDensity: VisualDensity.compact,
-                                                  padding: EdgeInsets.zero,
-                                                ),
-                                            ],
-                                          ],
+                                    child: Center(
+                                      child: Text(
+                                        '${day.day}',
+                                        style: TextStyle(
+                                          color: textColor,
+                                          fontWeight: weight,
                                         ),
                                       ),
                                     ),
                                   );
                                 },
                               ),
-            ),
-          ),
-        ],
+                              onDaySelected: (selectedDay, focusedDay) {
+                                if (!isSameDay(_selectedDay, selectedDay)) {
+                                  setState(() {
+                                    _selectedDay = selectedDay;
+                                    _focusedDay = focusedDay;
+                                  });
+                                  _loadForDate(selectedDay);
+                                }
+                              },
+                              onPageChanged: (focusedDay) {
+                                _focusedDay = focusedDay;
+                                _fetchMonthData(focusedDay);
+                              },
+                            ),
+
+                      // Legend
+                      if (_isCalendarReady)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _buildLegendItem(
+                                  colorPresentBg,
+                                  'All Present',
+                                  theme,
+                                ),
+                              ),
+                              Expanded(
+                                child: _buildLegendItem(
+                                  colorAbsentBg,
+                                  'All Absent',
+                                  theme,
+                                ),
+                              ),
+                              Expanded(
+                                child: _buildLegendItem(
+                                  colorMixedBg,
+                                  'Mixed',
+                                  theme,
+                                ),
+                              ),
+                              Expanded(
+                                child: _buildLegendItem(
+                                  colorHolidayBg,
+                                  'Off',
+                                  theme,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                // Selected day label
+                if (_selectedDay != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                    child: Text(
+                      DateFormat('EEEE, MMMM d, yyyy').format(_selectedDay!),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                  ),
+
+                // Records list
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: AppMotion.standard,
+                    switchInCurve: AppMotion.enter,
+                    switchOutCurve: AppMotion.exit,
+                    child: _loading
+                        ? Center(
+                            key: const ValueKey('loading'),
+                            child: CircularProgressIndicator(
+                              color: theme.colorScheme.primary,
+                            ),
+                          )
+                        : isSunday
+                        ? EmptyState(
+                            key: const ValueKey('sunday'),
+                            icon: Icons.weekend_rounded,
+                            message: 'Sunday — no classes',
+                            compact: true,
+                          )
+                        : isFutureDay
+                        ? EmptyState(
+                            key: const ValueKey('future'),
+                            icon: Icons.event_outlined,
+                            message: 'No records yet',
+                            compact: true,
+                          )
+                        : _dayRecords.isEmpty
+                        ? EmptyState(
+                            key: const ValueKey('empty'),
+                            icon: Icons.event_note_outlined,
+                            message:
+                                'No records for this date\nTap + to add one',
+                            compact: true,
+                          )
+                        : ListView.builder(
+                            key: ValueKey(_selectedDay),
+                            padding: EdgeInsets.fromLTRB(
+                              AppDimens.space16,
+                              AppDimens.space4,
+                              AppDimens.space16,
+                              // Was a flat 100 for the FAB; the floating
+                              // glass nav bar now sits under here too.
+                              100 + MediaQuery.paddingOf(context).bottom,
+                            ),
+                            itemCount: _dayRecords.length,
+                            itemBuilder: (_, i) {
+                              final record = _dayRecords[i];
+                              final recordId = record['record_id'] as int?;
+                              final subjectName =
+                                  record['subject_name'] as String? ??
+                                  'Unknown';
+                              final status = record['status'] as String? ?? '';
+                              final timetableId =
+                                  record['timetable_entry_id'] as int?;
+                              final recordDate =
+                                  record['record_date'] as String? ??
+                                  selectedDateKey!;
+
+                              var lectureNum = 1;
+                              for (var j = 0; j < i; j++) {
+                                if (_dayRecords[j]['subject_name'] ==
+                                    subjectName) {
+                                  lectureNum++;
+                                }
+                              }
+                              final hasDuplicates =
+                                  _dayRecords
+                                      .where(
+                                        (r) => r['subject_name'] == subjectName,
+                                      )
+                                      .length >
+                                  1;
+
+                              final isPresent = status == 'P';
+                              final isNU = status == 'NU';
+                              final isVirtual =
+                                  record['is_virtual'] == 1 || recordId == null;
+                              final originalStatus =
+                                  record['original_status'] as String?;
+                              // "Manual" = the current value differs from the PDF baseline.
+                              final isManual =
+                                  !isVirtual &&
+                                  originalStatus != null &&
+                                  status != originalStatus;
+                              // Can revert to NU only when the PDF itself reported NU here.
+                              final canRevertToNu =
+                                  !isVirtual && originalStatus == 'NU' && !isNU;
+                              final c = context.appColors;
+                              final statusColor = isNU
+                                  ? c.warning
+                                  : isPresent
+                                  ? c.success
+                                  : c.danger;
+
+                              return TweenAnimationBuilder<double>(
+                                tween: Tween(begin: 0, end: 1),
+                                duration: Duration(
+                                  milliseconds: 260 + (i * 40).clamp(0, 220),
+                                ),
+                                curve: Curves.easeOutCubic,
+                                builder: (context, value, child) => Opacity(
+                                  opacity: value.clamp(0.0, 1.0),
+                                  child: child,
+                                ),
+                                child: Card(
+                                  key: ValueKey(recordId ?? 'rec_$i'),
+                                  color: theme.cardColor,
+                                  elevation: 0,
+                                  margin: const EdgeInsets.only(bottom: 10),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    side: BorderSide(
+                                      color: statusColor.withAlpha(80),
+                                    ),
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 10,
+                                          height: 10,
+                                          margin: const EdgeInsets.only(
+                                            right: 12,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: statusColor,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                subjectName,
+                                                style: TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: theme
+                                                      .textTheme
+                                                      .bodyLarge
+                                                      ?.color,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                isNU
+                                                    ? (hasDuplicates
+                                                          ? 'Not Updated - Lecture $lectureNum'
+                                                          : 'Not Updated - tap to set status')
+                                                    : (hasDuplicates
+                                                          ? '${isPresent ? 'Present' : 'Absent'} - Lecture $lectureNum'
+                                                          : (isPresent
+                                                                ? 'Present'
+                                                                : 'Absent')),
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: statusColor,
+                                                ),
+                                              ),
+                                              if (isManual && !isNU)
+                                                Text(
+                                                  'Manual',
+                                                  style: TextStyle(
+                                                    fontSize: 10,
+                                                    color: theme
+                                                        .textTheme
+                                                        .bodyMedium
+                                                        ?.color
+                                                        ?.withAlpha(160),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                        if (timetableId != null) ...[
+                                          if (isNU) ...[
+                                            _inlineToggle(
+                                              label: 'P',
+                                              selected: false,
+                                              color: c.success,
+                                              theme: theme,
+                                              onTap: () async {
+                                                // Preserve NU baseline so this can be reverted later.
+                                                await _saveRecord(
+                                                  timetableId,
+                                                  recordDate,
+                                                  'P',
+                                                  originalStatus:
+                                                      originalStatus ?? 'NU',
+                                                );
+                                                await _loadForDate(
+                                                  _selectedDay!,
+                                                );
+                                              },
+                                            ),
+                                            const SizedBox(width: 4),
+                                            _inlineToggle(
+                                              label: 'A',
+                                              selected: false,
+                                              color: c.danger,
+                                              theme: theme,
+                                              onTap: () async {
+                                                await _saveRecord(
+                                                  timetableId,
+                                                  recordDate,
+                                                  'A',
+                                                  originalStatus:
+                                                      originalStatus ?? 'NU',
+                                                );
+                                                await _loadForDate(
+                                                  _selectedDay!,
+                                                );
+                                              },
+                                            ),
+                                          ] else ...[
+                                            _inlineToggle(
+                                              label: isPresent
+                                                  ? 'Present'
+                                                  : 'Absent',
+                                              selected: true,
+                                              color: isPresent
+                                                  ? c.success
+                                                  : c.danger,
+                                              theme: theme,
+                                              onTap: () async {
+                                                await _saveRecord(
+                                                  timetableId,
+                                                  recordDate,
+                                                  isPresent ? 'A' : 'P',
+                                                );
+                                                await _loadForDate(
+                                                  _selectedDay!,
+                                                );
+                                              },
+                                            ),
+                                            // Only offer revert-to-NU when the PDF itself reported NU.
+                                            if (canRevertToNu) ...[
+                                              const SizedBox(width: 4),
+                                              _inlineToggle(
+                                                label: 'NU',
+                                                selected: false,
+                                                color: c.warning,
+                                                theme: theme,
+                                                onTap: () =>
+                                                    _revertToNotUpdated(
+                                                      timetableId,
+                                                      recordDate,
+                                                      recordId,
+                                                    ),
+                                              ),
+                                            ],
+                                          ],
+                                          const SizedBox(width: 6),
+                                          // Virtual (timetable-filled) rows have nothing stored to
+                                          // delete — they reappear from the timetable anyway.
+                                          if (!isVirtual)
+                                            IconButton(
+                                              icon: Icon(
+                                                Icons.delete_outline_rounded,
+                                                size: 20,
+                                                color: theme
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.color,
+                                              ),
+                                              onPressed: () => _deleteRecord(
+                                                timetableId,
+                                                recordDate,
+                                              ),
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              padding: EdgeInsets.zero,
+                                            ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -936,5 +1153,4 @@ class _CalendarScreenState extends State<CalendarScreen> {
       ),
     );
   }
-
 }

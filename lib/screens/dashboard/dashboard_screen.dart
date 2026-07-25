@@ -11,6 +11,7 @@ import '../../services/cloud_sync_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/app_motion.dart';
+import '../../theme/container_transform.dart';
 import '../../utils/calculation_utils.dart';
 import '../../widgets/callout_box.dart';
 import '../../widgets/empty_state.dart';
@@ -225,11 +226,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onRefresh: _syncAndReload,
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.symmetric(
-                horizontal: MediaQuery.of(context).size.width > 600
+              padding: EdgeInsets.fromLTRB(
+                MediaQuery.of(context).size.width > 600
                     ? AppDimens.space32
                     : AppDimens.space16,
-                vertical: AppDimens.space16,
+                AppDimens.space16,
+                MediaQuery.of(context).size.width > 600
+                    ? AppDimens.space32
+                    : AppDimens.space16,
+                // The Scaffold reports the floating glass nav bar's height as
+                // bottom padding (it uses extendBody), so the last card can be
+                // scrolled clear of it instead of sitting under the glass.
+                AppDimens.space16 + MediaQuery.paddingOf(context).bottom,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -534,105 +542,106 @@ class _SubjectCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppDimens.space12),
-      child: Pressable(
-        borderRadius: AppDimens.brMd,
-        onTap: () => context.go('/app/dashboard/subject-detail', extra: subject),
-        child: Card(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(AppDimens.space16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Hero(
-                                tag: 'subject_name_${subject.id}',
-                                child: Material(
-                                  type: MaterialType.transparency,
-                                  child: Text(
-                                    subject.name,
-                                    style: theme.textTheme.titleSmall,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: AppDimens.space4),
-                              Icon(Icons.chevron_right_rounded, size: 18, color: theme.dividerColor),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          '${percent.toStringAsFixed(1)}%',
-                          style: TextStyle(color: color, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppDimens.space12),
-                    TweenAnimationBuilder<double>(
-                      tween: Tween(begin: 0, end: total == 0 ? 0.0 : percent / 100),
-                      duration: AppMotion.slow,
-                      curve: AppMotion.enter,
-                      builder: (context, value, _) => LinearProgressIndicator(
-                        value: value,
-                        color: color,
-                        backgroundColor: theme.dividerColor,
-                      ),
-                    ),
-                    const SizedBox(height: AppDimens.space8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '$attended/$total lectures',
-                          style: theme.textTheme.bodySmall,
-                        ),
-                        Text(
-                          isSafe ? 'Safe' : 'Risk',
-                          style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              if (total > 0)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimens.space16,
-                    vertical: AppDimens.space10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: AppDimens.rMd,
-                      bottomRight: AppDimens.rMd,
-                    ),
-                  ),
-                  child: Row(
+      child: ContainerTransformAnchor(
+        borderRadius: AppDimens.radiusMd,
+        child: Pressable(
+          borderRadius: AppDimens.brMd,
+          onTap: () => context.go('/app/dashboard/subject-detail', extra: subject),
+          child: Card(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(AppDimens.space16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        isSafe ? Icons.lightbulb_outline : Icons.warning_amber_rounded,
-                        size: 14,
-                        color: color,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                // The matching end of this was a Hero flying to
+                                // the detail screen's AppBar title. It fought
+                                // the container transform, which already
+                                // carries the card's contents into place.
+                                Text(
+                                  subject.name,
+                                  style: theme.textTheme.titleSmall,
+                                ),
+                                const SizedBox(width: AppDimens.space4),
+                                Icon(Icons.chevron_right_rounded, size: 18, color: theme.dividerColor),
+                              ],
+                            ),
+                          ),
+                          Text(
+                            '${percent.toStringAsFixed(1)}%',
+                            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: AppDimens.space6),
-                      Expanded(
-                        child: Text(
-                          insight['text'] as String,
-                          style: TextStyle(color: onBg, fontSize: 12, fontWeight: FontWeight.w600),
+                      const SizedBox(height: AppDimens.space12),
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: total == 0 ? 0.0 : percent / 100),
+                        duration: AppMotion.slow,
+                        curve: AppMotion.enter,
+                        builder: (context, value, _) => LinearProgressIndicator(
+                          value: value,
+                          color: color,
+                          backgroundColor: theme.dividerColor,
                         ),
+                      ),
+                      const SizedBox(height: AppDimens.space8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '$attended/$total lectures',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          Text(
+                            isSafe ? 'Safe' : 'Risk',
+                            style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-            ],
+                if (total > 0)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimens.space16,
+                      vertical: AppDimens.space10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: bg,
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: AppDimens.rMd,
+                        bottomRight: AppDimens.rMd,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isSafe ? Icons.lightbulb_outline : Icons.warning_amber_rounded,
+                          size: 14,
+                          color: color,
+                        ),
+                        const SizedBox(width: AppDimens.space6),
+                        Expanded(
+                          child: Text(
+                            insight['text'] as String,
+                            style: TextStyle(color: onBg, fontSize: 12, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
+      ),
       ),
     );
   }

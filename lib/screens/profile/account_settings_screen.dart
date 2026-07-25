@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../database/db_helper.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../widgets/app_overlays.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -81,7 +82,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     // Re-auth via email + password
     final passCtrl = TextEditingController();
     bool success = false;
-    await showDialog(
+    await showAppDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
@@ -167,7 +168,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       // Google-only user — needs to SET a password to enable email/password login
       final TextEditingController newPassCtrl = TextEditingController();
       final TextEditingController confirmPassCtrl = TextEditingController();
-      await showDialog(
+      await showAppDialog(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
@@ -292,7 +293,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
   Future<void> _deleteAccount() async {
     final TextEditingController deleteController = TextEditingController();
-    await showDialog(
+    await showAppDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(

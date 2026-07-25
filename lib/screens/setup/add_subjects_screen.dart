@@ -7,6 +7,7 @@ import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../widgets/app_buttons.dart';
+import '../../widgets/app_overlays.dart';
 
 class AddSubjectsScreen extends StatefulWidget {
   final bool isEditMode;
@@ -80,7 +81,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
     final subject = _subjects[index];
     final controller = TextEditingController(text: subject.name);
 
-    await showDialog(
+    await showAppDialog(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: Theme.of(context).cardColor, // ✅ Dynamic popup color

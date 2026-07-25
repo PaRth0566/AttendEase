@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'package:go_router/go_router.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/app_overlays.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -62,7 +63,7 @@ class _SignupScreenState extends State<SignupScreen> {
         if (!mounted) return;
         setState(() => _isLoading = false);
 
-        showDialog(
+        showAppDialog(
           context: context,
           barrierDismissible: false,
           builder: (_) => AlertDialog(

@@ -44,6 +44,7 @@ dependencies:
   path: ^1.9.0
   web: ^1.1.0
   http_parser: ^4.1.0
+  liquid_glass_widgets: ^0.18.4
 
 dev_dependencies:
   flutter_test:
@@ -66,6 +67,6 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/icon/app_icon.png"
-  adaptive_icon_background: "assets/icon/icon_bg.png"
-  adaptive_icon_foreground: "assets/icon/app_icon2.png"
+  image_path: "assets/icon/app_icon2.png"
+  adaptive_icon_background: "assets/icon/adaptive_bg.png"
+  adaptive_icon_foreground: "assets/icon/adaptive_fg.png"

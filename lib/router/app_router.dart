@@ -184,7 +184,7 @@ class AppRouter {
                     },
                     pageBuilder: (context, state) {
                       final subject = state.extra as Subject;
-                      return AppPageTransition.morphPage(state, SubjectDetailScreen(subject: subject));
+                      return AppPageTransition.containerPage(state, SubjectDetailScreen(subject: subject));
                     },
                   ),
                 ],
@@ -205,45 +205,56 @@ class AppRouter {
                 path: '/app/profile',
                 builder: (context, state) => const ProfileScreen(),
                 routes: [
+                  // Every settings row on the profile screen is wrapped in a
+                  // ContainerTransformAnchor, so these pages grow out of the
+                  // tapped tile (budget-app style) instead of cross-fading.
                   GoRoute(
                     path: 'basic',
                     parentNavigatorKey: rootNavigatorKey,
-                    builder: (context, state) => const BasicInfoScreen(isEditMode: true),
+                    pageBuilder: (context, state) => AppPageTransition.containerPage(
+                        state, const BasicInfoScreen(isEditMode: true)),
                   ),
                   GoRoute(
                     path: 'subjects',
                     parentNavigatorKey: rootNavigatorKey,
-                    builder: (context, state) => const AddSubjectsScreen(isEditMode: true),
+                    pageBuilder: (context, state) => AppPageTransition.containerPage(
+                        state, const AddSubjectsScreen(isEditMode: true)),
                   ),
                   GoRoute(
                     path: 'timetable',
                     parentNavigatorKey: rootNavigatorKey,
-                    builder: (context, state) => const TimetableSetupScreen(isEditMode: true),
+                    pageBuilder: (context, state) => AppPageTransition.containerPage(
+                        state, const TimetableSetupScreen(isEditMode: true)),
                   ),
                   GoRoute(
                     path: 'criteria',
                     parentNavigatorKey: rootNavigatorKey,
-                    builder: (context, state) => const AttendanceCriteriaScreen(isEditMode: true),
+                    pageBuilder: (context, state) => AppPageTransition.containerPage(
+                        state, const AttendanceCriteriaScreen(isEditMode: true)),
                   ),
                   GoRoute(
                     path: 'report',
                     parentNavigatorKey: rootNavigatorKey,
-                    builder: (context, state) => const ReportScreen(),
+                    pageBuilder: (context, state) =>
+                        AppPageTransition.containerPage(state, const ReportScreen()),
                   ),
                   GoRoute(
                     path: 'refresh-pdf',
                     parentNavigatorKey: rootNavigatorKey,
-                    builder: (context, state) => const RefreshPdfScreen(),
+                    pageBuilder: (context, state) =>
+                        AppPageTransition.containerPage(state, const RefreshPdfScreen()),
                   ),
                   GoRoute(
                     path: 'account',
                     parentNavigatorKey: rootNavigatorKey,
-                    builder: (context, state) => const AccountSettingsScreen(),
+                    pageBuilder: (context, state) => AppPageTransition.containerPage(
+                        state, const AccountSettingsScreen()),
                   ),
                   GoRoute(
                     path: 'bug-report',
                     parentNavigatorKey: rootNavigatorKey,
-                    builder: (context, state) => const BugReportScreen(),
+                    pageBuilder: (context, state) =>
+                        AppPageTransition.containerPage(state, const BugReportScreen()),
                   ),
                 ],
               ),
@@ -259,11 +270,13 @@ class AppRouter {
       ),
       GoRoute(
         path: '/signup',
-        builder: (context, state) => const SignupScreen(),
+        pageBuilder: (context, state) =>
+            AppPageTransition.containerPage(state, const SignupScreen()),
       ),
       GoRoute(
         path: '/forgot-password',
-        builder: (context, state) => const ForgotPasswordScreen(),
+        pageBuilder: (context, state) =>
+            AppPageTransition.containerPage(state, const ForgotPasswordScreen()),
       ),
       
       // Setup Flow (Now as fully linkable routes)
@@ -273,13 +286,17 @@ class AppRouter {
         routes: [
           GoRoute(
             path: 'upload',
-            builder: (context, state) => const UploadPdfScreen(),
+            pageBuilder: (context, state) =>
+                AppPageTransition.containerPage(state, const UploadPdfScreen()),
           ),
           GoRoute(
             path: 'basic',
             pageBuilder: (context, state) {
               final extra = state.extra as Map<String, dynamic>?;
-              return AppPageTransition.page(state, BasicInfoScreen(
+              // Reached two ways: tapping the "Manual Configuration" card
+              // (container transform) or continuing after a PDF upload
+              // (no anchor → falls back to fade + slide).
+              return AppPageTransition.containerPage(state, BasicInfoScreen(
                 isEditMode: false,
                 prefilledData: extra,
               ));

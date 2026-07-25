@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'firebase_options.dart';
@@ -21,6 +22,16 @@ void main() async {
   // ☁️ INITIALIZE FIREBASE
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
+  // Pre-warm the liquid-glass shaders used by the bottom nav bar. Without
+  // this the bar flashes white the first time it paints. Non-fatal: if the
+  // renderer can't compile them the widgets fall back to a plainer blur, so a
+  // failure here must not stop the app from starting.
+  try {
+    await LiquidGlassWidgets.initialize();
+  } catch (error) {
+    debugPrint('Liquid glass shader warm-up skipped: $error');
+  }
+
   // Read the saved theme mode BEFORE the app starts!
   // Defaults to 'system' if the user has never changed it.
   final prefs = await SharedPreferences.getInstance();
@@ -29,13 +40,13 @@ void main() async {
 
   // Disable orientation limitations on web to prevent startup crashes
   if (kIsWeb) {
-    runApp(const AttendEaseApp());
+    runApp(LiquidGlassWidgets.wrap(child: const AttendEaseApp()));
   } else {
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]).then((_) {
-      runApp(const AttendEaseApp());
+      runApp(LiquidGlassWidgets.wrap(child: const AttendEaseApp()));
     });
   }
 }

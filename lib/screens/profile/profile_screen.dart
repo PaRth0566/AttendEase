@@ -11,7 +11,9 @@ import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../services/update_service.dart';
 import '../../theme/app_dimens.dart';
+import '../../theme/container_transform.dart';
 import '../../theme/theme_provider.dart'; // ✅ NEW IMPORT
+import '../../widgets/app_overlays.dart';
 import '../../widgets/backup_sync_card.dart';
 import '../../widgets/fade_slide_in.dart';
 import '../../widgets/pressable.dart';
@@ -146,7 +148,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _handleLogout() async {
     final rootContext = context; // capture before dialog opens
-    showDialog(
+    showAppDialog(
       context: rootContext,
       barrierDismissible: false,
       builder: (dialogCtx) => AlertDialog(
@@ -165,7 +167,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               Navigator.pop(dialogCtx); // close confirmation dialog
 
               // Show full-screen loading on root context
-              showDialog(
+              showAppDialog(
                 context: rootContext,
                 barrierDismissible: false,
                 builder: (_) => const Center(
@@ -216,9 +218,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   onRefresh: _syncAndReload,
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: MediaQuery.of(context).size.width > 600 ? 32 : 16,
-                      vertical: 16,
+                    padding: EdgeInsets.fromLTRB(
+                      MediaQuery.of(context).size.width > 600 ? 32 : 16,
+                      16,
+                      MediaQuery.of(context).size.width > 600 ? 32 : 16,
+                      // Clears the floating glass nav bar (Scaffold reports its
+                      // height as bottom padding under extendBody).
+                      16 + MediaQuery.paddingOf(context).bottom,
                     ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -513,40 +519,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
       index: index,
       child: Padding(
         padding: const EdgeInsets.only(bottom: AppDimens.space12),
-        child: Pressable(
-          onTap: enabled ? onTap : null,
-          borderRadius: AppDimens.brMd,
-          child: Card(
-            elevation: 0,
-            margin: EdgeInsets.zero,
-            color: isRedAlert
-                ? (isDark ? Colors.red.withAlpha(38) : Colors.red.shade50)
-                : theme.cardColor,
-            shape: RoundedRectangleBorder(
-              borderRadius: AppDimens.brMd,
-              side: BorderSide(
-                color: isRedAlert ? Colors.red.withAlpha(76) : theme.dividerColor,
-              ),
-            ),
-            child: ListTile(
-              leading: Icon(
-                icon,
-                color: isRedAlert ? Colors.red : theme.colorScheme.primary,
-              ),
-              title: Text(
-                title,
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: isRedAlert ? Colors.red : theme.textTheme.bodyLarge?.color,
+        child: ContainerTransformAnchor(
+          borderRadius: AppDimens.radiusMd,
+          enabled: enabled,
+          child: Pressable(
+            onTap: enabled ? onTap : null,
+            borderRadius: AppDimens.brMd,
+            child: Card(
+              elevation: 0,
+              margin: EdgeInsets.zero,
+              color: isRedAlert
+                  ? (isDark ? Colors.red.withAlpha(38) : Colors.red.shade50)
+                  : theme.cardColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: AppDimens.brMd,
+                side: BorderSide(
+                  color: isRedAlert ? Colors.red.withAlpha(76) : theme.dividerColor,
                 ),
               ),
-              trailing: trailing ??
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    size: 16,
-                    color: isRedAlert ? Colors.red : Colors.grey,
+              child: ListTile(
+                leading: Icon(
+                  icon,
+                  color: isRedAlert ? Colors.red : theme.colorScheme.primary,
+                ),
+                title: Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: isRedAlert ? Colors.red : theme.textTheme.bodyLarge?.color,
                   ),
-              enabled: enabled,
+                ),
+                trailing: trailing ??
+                    Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: isRedAlert ? Colors.red : Colors.grey,
+                    ),
+                enabled: enabled,
+              ),
             ),
           ),
         ),

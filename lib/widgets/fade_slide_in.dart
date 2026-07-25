@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import '../theme/app_motion.dart';
 
-/// A one-shot fade + upward-slide entrance, optionally staggered by [index].
+/// A one-shot fade-in entrance, optionally staggered by [index].
 ///
 /// Replaces the copy-pasted `TweenAnimationBuilder` translate+opacity blocks
 /// that appeared in the dashboard and calendar. Honors reduced-motion (renders
-/// the child immediately with no transform when animations are disabled).
+/// the child immediately when animations are disabled).
+///
+/// The upward slide this used to pair with the fade is gone, along with the
+/// `offsetY` that controlled it. It was the most visible motion on a tab
+/// switch: the shell rebuilds each tab's page on selection, so every card
+/// replayed its entrance every time you came back to a tab, staggered.
 class FadeSlideIn extends StatefulWidget {
   const FadeSlideIn({
     super.key,
@@ -13,14 +18,12 @@ class FadeSlideIn extends StatefulWidget {
     this.index = 0,
     this.duration,
     this.staggerStep = const Duration(milliseconds: 55),
-    this.offsetY = 16,
   });
 
   final Widget child;
   final int index;
   final Duration? duration;
   final Duration staggerStep;
-  final double offsetY;
 
   @override
   State<FadeSlideIn> createState() => _FadeSlideInState();
@@ -66,13 +69,7 @@ class _FadeSlideInState extends State<FadeSlideIn>
     return AnimatedBuilder(
       animation: _curved,
       builder: (context, child) {
-        return Opacity(
-          opacity: _curved.value,
-          child: Transform.translate(
-            offset: Offset(0, (1 - _curved.value) * widget.offsetY),
-            child: child,
-          ),
-        );
+        return Opacity(opacity: _curved.value, child: child);
       },
       child: widget.child,
     );

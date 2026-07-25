@@ -12,6 +12,7 @@ import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
 import '../../models/subject.dart';
 import '../../theme/app_colors.dart';
+import '../../widgets/app_overlays.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -151,7 +152,7 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   void _showExportOptions() {
-    showModalBottomSheet(
+    showAppModalSheet(
       context: context,
       backgroundColor: Theme.of(context).cardColor,
       shape: const RoundedRectangleBorder(
@@ -222,7 +223,7 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Future<void> _processExport({required bool isShare}) async {
-    showDialog(
+    showAppDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => const Center(child: CircularProgressIndicator()),

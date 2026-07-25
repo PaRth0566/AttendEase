@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../services/update_service.dart';
+import 'app_overlays.dart';
 
 Future<void> showUpdateBottomSheet(BuildContext context, UpdateInfo info) {
-  return showModalBottomSheet<void>(
+  return showAppModalSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -20,7 +21,7 @@ Future<void> showPatchNotesSheet(
   ReleaseNotes notes, {
   bool markViewed = false,
 }) async {
-  await showModalBottomSheet<void>(
+  await showAppModalSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -33,7 +34,7 @@ Future<void> showPatchNotesSheet(
 Future<void> showPatchNotesHistory(BuildContext context) async {
   final history = await UpdateService.instance.patchNotesHistory();
   if (!context.mounted) return;
-  await showModalBottomSheet<void>(
+  await showAppModalSheet<void>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
