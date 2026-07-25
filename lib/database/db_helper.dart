@@ -28,10 +28,10 @@ class DBHelper {
       return await factory.openDatabase(
         'attendease.db',
         options: OpenDatabaseOptions(
-          version: 4, // ✅ UPGRADED TO VERSION 4
+          version: 6,
           onConfigure: _onConfigure,
           onCreate: _onCreate,
-          onUpgrade: _onUpgrade, // ✅ ADDED UPGRADE LOGIC
+          onUpgrade: _onUpgrade,
         ),
       );
     }
@@ -41,10 +41,10 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 4, // ✅ UPGRADED TO VERSION 4
+      version: 6,
       onConfigure: _onConfigure,
       onCreate: _onCreate,
-      onUpgrade: _onUpgrade, // ✅ ADDED UPGRADE LOGIC
+      onUpgrade: _onUpgrade,
     );
   }
 
@@ -80,6 +80,24 @@ class DBHelper {
       ''');
       await db.execute('DROP TABLE _ar_old');
     }
+    if (oldVersion < 5) {
+      await db.execute(
+        "ALTER TABLE attendance_records ADD COLUMN source TEXT NOT NULL DEFAULT 'pdf'",
+      );
+    }
+    if (oldVersion < 6) {
+      // Track the original PDF-reported status for each record. "Manual" is
+      // derived as (status != original_status), so editing a value back to
+      // what the PDF said clears the tag automatically, and only records the
+      // PDF reported as NU can be reverted to NU.
+      await db.execute(
+        'ALTER TABLE attendance_records ADD COLUMN original_status TEXT',
+      );
+      // Backfill: existing rows are treated as un-edited (baseline = current).
+      await db.execute(
+        'UPDATE attendance_records SET original_status = status WHERE original_status IS NULL',
+      );
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -111,6 +129,8 @@ class DBHelper {
         timetable_entry_id INTEGER NOT NULL,
         date TEXT NOT NULL,
         status TEXT CHECK(status IN ('P','A','NU')) NOT NULL,
+        source TEXT NOT NULL DEFAULT 'pdf',
+        original_status TEXT,
         UNIQUE(timetable_entry_id, date),
         FOREIGN KEY (timetable_entry_id)
           REFERENCES timetable(id)

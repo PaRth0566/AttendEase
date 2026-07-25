@@ -1,11 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
+import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_dimens.dart';
+import '../../theme/app_motion.dart';
+import '../../utils/calculation_utils.dart';
+import '../../widgets/callout_box.dart';
+import '../../widgets/empty_state.dart';
+import '../../widgets/fade_slide_in.dart';
+import '../../widgets/pressable.dart';
+import '../../widgets/skeleton.dart';
 
 class DashboardScreen extends StatefulWidget {
   final List<Subject>? overrideSubjects;
@@ -20,6 +31,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final SubjectDao _subjectDao = SubjectDao();
   final AttendanceDao _attendanceDao = AttendanceDao();
+  final TimetableDao _timetableDao = TimetableDao();
 
   List<Subject> _subjects = [];
   Map<int, Map<String, int>> _attendanceStats = {};
@@ -30,8 +42,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   int _totalAttendedOverall = 0;
   int _totalLecturesOverall = 0;
-
   int _currentStreak = 0;
+
+  List<SkippableDay> _skippableDays = [];
+
+  // The pie-ring sweep should play only once per app launch, not every time
+  // the user returns to the Dashboard tab. This static flag persists across
+  // the State recreations that happen on tab switches.
+  static bool _ringAnimatedOnce = false;
 
   bool _loading = true;
 
@@ -53,8 +71,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _currentStreak = 0;
       } else {
         _subjects = await _subjectDao.getSubjectsBySemester(_activeSemester);
-
-
         _attendanceStats = await _attendanceDao.getAttendanceStats(_activeSemester);
         _currentStreak = await _attendanceDao.getCurrentStreak(_activeSemester);
       }
@@ -72,17 +88,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ? 0
           : (_totalAttendedOverall / _totalLecturesOverall) * 100;
 
+      // Which whole upcoming days can be fully skipped while staying on target.
+      // Skipped when using override stats (web preview) — no timetable there.
+      if (widget.overrideSubjects == null) {
+        try {
+          final weekly = await _timetableDao.getWeeklyTimetable(_activeSemester);
+          _skippableDays = computeSkippableDays(
+            subjectStats: _attendanceStats,
+            subjectRequired: {
+              for (final s in _subjects)
+                if (s.id != null) s.id!: s.requiredPercent,
+            },
+            weeklyTimetable: weekly,
+            overallRequired: _requiredTarget,
+            today: DateTime.now(),
+          );
+        } catch (e) {
+          debugPrint('Skippable-days calc error: $e');
+          _skippableDays = [];
+        }
+      } else {
+        _skippableDays = [];
+      }
+
       _subjects.sort((a, b) {
         final statA = _attendanceStats[a.id] ?? {'attended': 0, 'total': 0};
         final statB = _attendanceStats[b.id] ?? {'attended': 0, 'total': 0};
-
         final double percentA = statA['total'] == 0
             ? 0.0
             : (statA['attended']! / statA['total']!) * 100;
         final double percentB = statB['total'] == 0
             ? 0.0
             : (statB['attended']! / statB['total']!) * 100;
-
         int comparison = percentA.compareTo(percentB);
         if (comparison == 0) return a.name.compareTo(b.name);
         return comparison;
@@ -94,44 +131,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  /// Pull-to-refresh: bidirectional cloud sync then reload
   Future<void> _syncAndReload() async {
     await CloudSyncService().syncBidirectional();
     await _loadDashboardData();
   }
 
-  Map<String, dynamic> _getPredictiveInsight(
-    int attended,
-    int total,
-    double requiredPercent,
-  ) {
-    if (total == 0) {
-      return {'text': 'No classes recorded yet.', 'isSafe': true, 'skips': 0};
-    }
-
+  Map<String, dynamic> _getPredictiveInsight(int attended, int total, double requiredPercent) {
+    if (total == 0) return {'text': 'No classes recorded yet.', 'isSafe': true, 'skips': 0};
     double reqFrac = requiredPercent / 100;
     double currentPercent = (attended / total) * 100;
-
     if (currentPercent >= requiredPercent) {
       int skips = ((attended / reqFrac) - total).floor();
       if (skips <= 0) {
-        return {
-          'text': 'On track, but you cannot skip the next lecture.',
-          'isSafe': true,
-          'skips': 0,
-        };
+        return {'text': 'On track, but you cannot skip the next lecture.', 'isSafe': true, 'skips': 0};
       }
       return {
-        'text':
-            'You can safely skip the next $skips lecture${skips > 1 ? 's' : ''}.',
+        'text': 'You can safely skip the next $skips lecture${skips > 1 ? 's' : ''}.',
         'isSafe': true,
         'skips': skips,
       };
     } else {
       int attends = (((reqFrac * total) - attended) / (1 - reqFrac)).ceil();
       return {
-        'text':
-            'Attend the next $attends lecture${attends > 1 ? 's' : ''} to reach ${requiredPercent.toStringAsFixed(0)}%.',
+        'text': 'Attend the next $attends lecture${attends > 1 ? 's' : ''} to reach ${requiredPercent.toStringAsFixed(0)}%.',
         'isSafe': false,
         'attends': attends,
       };
@@ -141,20 +163,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final c = context.appColors;
 
     if (_loading) {
       return Scaffold(
         backgroundColor: theme.scaffoldBackgroundColor,
-        body: Center(
-          child: CircularProgressIndicator(color: theme.colorScheme.primary),
-        ),
+        appBar: AppBar(title: const Text('Dashboard')),
+        body: const SkeletonList(count: 4, padding: EdgeInsets.all(AppDimens.space16)),
       );
     }
 
-    bool isSafe = _currentOverall >= _requiredTarget;
-    Color statusColor = isSafe ? Colors.green : Colors.red;
-    IconData statusIcon = isSafe ? Icons.check_rounded : Icons.close_rounded;
+    final bool isSafe = _currentOverall >= _requiredTarget;
+    final Color statusColor = isSafe ? c.success : c.danger;
     final overallInsight = _getPredictiveInsight(
       _totalAttendedOverall,
       _totalLecturesOverall,
@@ -165,31 +185,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: Text(
-          'Dashboard',
-          style: TextStyle(
-            color: theme.textTheme.bodyLarge?.color,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        elevation: 0,
+        title: Text('Dashboard', style: theme.textTheme.headlineSmall),
         actions: [
-          // ✅ CHANGED: Only shows up if streak is 3 or more days!
           if (_currentStreak >= 3)
             Padding(
-              padding: const EdgeInsets.only(right: 16.0),
+              padding: const EdgeInsets.only(right: AppDimens.space16),
               child: Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.orange.withAlpha(25)
-                        : Colors.orange.withAlpha(20),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.orange.withAlpha(80)),
+                    color: c.warningContainer,
+                    borderRadius: AppDimens.brXl,
+                    border: Border.all(color: c.warning.withValues(alpha: 0.4)),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -199,9 +206,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: isDark
-                              ? Colors.orange.shade300
-                              : Colors.orange.shade800,
+                          color: c.onWarningContainer,
                         ),
                       ),
                       const SizedBox(width: 4),
@@ -221,443 +226,412 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.symmetric(
-                horizontal: MediaQuery.of(context).size.width > 600 ? 32 : 16,
-                vertical: 16,
-              ),
-            child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Semester $_activeSemester Overview',
-              style: TextStyle(
-                color: theme.textTheme.bodyMedium?.color,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-
-
-            const SizedBox(height: 16),
-
-            Card(
-              color: theme.cardColor,
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: theme.dividerColor),
+                horizontal: MediaQuery.of(context).size.width > 600
+                    ? AppDimens.space32
+                    : AppDimens.space16,
+                vertical: AppDimens.space16,
               ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Overall Attendance',
-                              style: TextStyle(
-                                color: theme.textTheme.bodyMedium?.color,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '${_currentOverall.toStringAsFixed(1)}%',
-                              style: TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.bold,
-                                color: theme.textTheme.bodyLarge?.color,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Target: ${_requiredTarget.toStringAsFixed(1)}%',
-                              style: TextStyle(
-                                color: statusColor,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            SizedBox(
-                              height: 70,
-                              width: 70,
-                              child: TweenAnimationBuilder<double>(
-                                tween: Tween<double>(begin: 0, end: _currentOverall / 100),
-                                duration: const Duration(milliseconds: 1500),
-                                curve: Curves.easeOutCubic,
-                                builder: (context, value, _) => CircularProgressIndicator(
-                                  value: value,
-                                  backgroundColor: theme.dividerColor,
-                                  color: statusColor,
-                                  strokeWidth: 8,
-                                ),
-                              ),
-                            ),
-                            Icon(statusIcon, color: statusColor, size: 34),
-                          ],
-                        ),
-                      ],
+                  FadeSlideIn(
+                    index: 0,
+                    child: Text(
+                      'Semester $_activeSemester Overview',
+                      style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ),
+                  const SizedBox(height: AppDimens.space16),
 
-                  // BUNK PLANNER: OVERALL INSIGHT
-                  if (_totalLecturesOverall > 0)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: overallInsight['isSafe']
-                            ? Colors.green.withAlpha(isDark ? 38 : 25)
-                            : Colors.red.withAlpha(isDark ? 38 : 25),
-                        borderRadius: const BorderRadius.only(
-                          bottomLeft: Radius.circular(16),
-                          bottomRight: Radius.circular(16),
-                        ),
-                      ),
-                      child: Row(
+                  // ── Overall attendance card ──────────────────────────
+                  FadeSlideIn(
+                    index: 1,
+                    child: Card(
+                      child: Column(
                         children: [
-                          Icon(
-                            overallInsight['isSafe']
-                                ? Icons.lightbulb_outline
-                                : Icons.warning_amber_rounded,
-                            size: 18,
-                            color: overallInsight['isSafe']
-                                ? (isDark
-                                      ? Colors.green.shade400
-                                      : Colors.green.shade700)
-                                : (isDark
-                                      ? Colors.red.shade400
-                                      : Colors.red.shade700),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              overallInsight['text'],
-                              style: TextStyle(
-                                color: overallInsight['isSafe']
-                                    ? (isDark
-                                          ? Colors.green.shade300
-                                          : Colors.green.shade800)
-                                    : (isDark
-                                          ? Colors.red.shade300
-                                          : Colors.red.shade800),
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
+                          Padding(
+                            padding: const EdgeInsets.all(AppDimens.space20),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Overall Attendance', style: theme.textTheme.bodyMedium),
+                                    const SizedBox(height: AppDimens.space8),
+                                    Text(
+                                      '${_currentOverall.toStringAsFixed(1)}%',
+                                      style: theme.textTheme.displaySmall?.copyWith(
+                                        color: theme.textTheme.bodyLarge?.color,
+                                      ),
+                                    ),
+                                    const SizedBox(height: AppDimens.space8),
+                                    Text(
+                                      'Target: ${_requiredTarget.toStringAsFixed(1)}%',
+                                      style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
+                                    ),
+                                  ],
+                                ),
+                                Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    SizedBox(
+                                      height: 70,
+                                      width: 70,
+                                      child: TweenAnimationBuilder<double>(
+                                        // Sweep from 0 only on the first app-open;
+                                        // afterwards jump straight to the value so
+                                        // it doesn't re-animate on every tab return.
+                                        tween: Tween(
+                                          begin: _ringAnimatedOnce ? _currentOverall / 100 : 0,
+                                          end: _currentOverall / 100,
+                                        ),
+                                        duration: _ringAnimatedOnce
+                                            ? Duration.zero
+                                            : AppMotion.duration(context, AppMotion.slow),
+                                        curve: AppMotion.enter,
+                                        onEnd: () => _ringAnimatedOnce = true,
+                                        builder: (context, value, _) => CircularProgressIndicator(
+                                          value: value,
+                                          backgroundColor: theme.dividerColor,
+                                          color: statusColor,
+                                          strokeWidth: 8,
+                                        ),
+                                      ),
+                                    ),
+                                    Icon(
+                                      isSafe ? Icons.check_rounded : Icons.close_rounded,
+                                      color: statusColor,
+                                      size: 34,
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
+                          if (_totalLecturesOverall > 0)
+                            _InsightFooter(
+                              isSafe: overallInsight['isSafe'] as bool,
+                              text: overallInsight['text'] as String,
+                              roundBottom: _skippableDays.isEmpty,
+                            ),
+                          if (_skippableDays.isNotEmpty)
+                            _SkippableDaysSection(days: _skippableDays),
                         ],
                       ),
                     ),
-                ],
-              ),
-            ),
+                  ),
 
-            const SizedBox(height: 24),
-            Text(
-              'Your Subjects',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: theme.textTheme.bodyLarge?.color,
-              ),
-            ),
-            const SizedBox(height: 12),
+                  const SizedBox(height: AppDimens.space24),
+                  FadeSlideIn(
+                    index: 2,
+                    child: Text('Your Subjects', style: theme.textTheme.titleLarge),
+                  ),
+                  const SizedBox(height: AppDimens.space12),
 
-            // SUBJECT LIST
-            if (_subjects.isEmpty)
-              Container(
-                padding: const EdgeInsets.all(24),
-                alignment: Alignment.center,
-                child: Text(
-                  'No subjects added for this semester yet.',
-                  style: TextStyle(color: theme.textTheme.bodyMedium?.color),
-                ),
-              )
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _subjects.length,
-                itemBuilder: (_, i) {
-                  final subject = _subjects[i];
-                  final stat =
-                      _attendanceStats[subject.id] ??
-                      {'attended': 0, 'total': 0};
-                  final double percent = stat['total'] == 0
-                      ? 0.0
-                      : ((stat['attended']! / stat['total']!) * 100);
-                  return TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0.0, end: 1.0),
-                    duration: Duration(milliseconds: 500 + (i * 100)),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, child) {
-                      return Transform.translate(
-                        offset: Offset(0, 30 * (1 - value)),
-                        child: Opacity(
-                          opacity: value,
-                          child: child,
-                        ),
-                      );
-                    },
-                    child: _subjectCard(
-                      subject,
-                      percent,
-                      stat['attended']!,
-                      stat['total']!,
-                      theme,
-                      isDark,
+                  // ── Subject list ─────────────────────────────────────
+                  if (_subjects.isEmpty)
+                    FadeSlideIn(
+                      index: 3,
+                      child: EmptyState(
+                        icon: Icons.book_outlined,
+                        title: 'No subjects yet',
+                        message: 'No subjects added for this semester yet.',
+                      ),
+                    )
+                  else
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _subjects.length,
+                      itemBuilder: (_, i) {
+                        final subject = _subjects[i];
+                        final stat = _attendanceStats[subject.id] ?? {'attended': 0, 'total': 0};
+                        final double percent = stat['total'] == 0
+                            ? 0.0
+                            : ((stat['attended']! / stat['total']!) * 100);
+                        return FadeSlideIn(
+                          index: i + 3,
+                          child: _SubjectCard(
+                            subject: subject,
+                            percent: percent,
+                            attended: stat['attended']!,
+                            total: stat['total']!,
+                            insight: _getPredictiveInsight(
+                              stat['attended']!,
+                              stat['total']!,
+                              subject.requiredPercent,
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
-              ),
 
-            const SizedBox(height: 24),
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              padding: EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.red.withValues(alpha: 0.08) : Colors.red.shade50,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isDark ? Colors.red.withValues(alpha: 0.25) : Colors.red.shade200,
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.red.withValues(alpha: 0.15)
-                          : Colors.red.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.info_outline_rounded,
-                      size: 18,
-                      color: isDark ? Colors.red.shade400 : Colors.red.shade700,
+                  const SizedBox(height: AppDimens.space24),
+                  FadeSlideIn(
+                    index: _subjects.length + 4,
+                    child: CalloutBox(
+                      kind: CalloutKind.info,
+                      icon: Icons.info_outline_rounded,
+                      title: 'Attendance Disclaimer',
+                      message:
+                          'This app tracks attendance based on your SAP PDF report. '
+                          'Always verify with your official college records. '
+                          'AttendEase is not responsible for any discrepancies.',
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Disclaimer',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: isDark
-                                ? Colors.red.shade300
-                                : Colors.red.shade800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'AttendEase is an automated tool. We are not liable for any '
-                          'calculation inaccuracies or resulting consequences. '
-                          'Please verify your attendance with official\u00A0college\u00A0records.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            height: 1.5,
-                            fontWeight: FontWeight.w400,
-                            color: isDark ? Colors.red.shade200 : Colors.red.shade900,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  const SizedBox(height: AppDimens.space24),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
             ),
           ),
         ),
       ),
     );
   }
+}
 
-  // =========================
-  // SUBJECT CARD
-  // =========================
-  Widget _subjectCard(
-    Subject subject,
-    double percent,
-    int attended,
-    int total,
-    ThemeData theme,
-    bool isDark,
-  ) {
-    Color color = percent >= subject.requiredPercent
-        ? Colors.green
-        : percent >= (subject.requiredPercent - 10)
-        ? Colors.orange
-        : Colors.red;
-    final insight = _getPredictiveInsight(
-      attended,
-      total,
-      subject.requiredPercent,
-    );
+// ── Private widgets ──────────────────────────────────────────────────────────
 
-    return Card(
-      color: theme.cardColor,
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 12),
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: theme.dividerColor),
+class _InsightFooter extends StatelessWidget {
+  const _InsightFooter({required this.isSafe, required this.text, this.roundBottom = true});
+  final bool isSafe;
+  final String text;
+  final bool roundBottom;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.appColors;
+    final color = isSafe ? c.success : c.danger;
+    final bg = isSafe ? c.successContainer : c.dangerContainer;
+    final onBg = isSafe ? c.onSuccessContainer : c.onDangerContainer;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: AppDimens.space20, vertical: AppDimens.space12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: roundBottom
+            ? const BorderRadius.only(
+                bottomLeft: AppDimens.rMd,
+                bottomRight: AppDimens.rMd,
+              )
+            : BorderRadius.zero,
       ),
-      child: InkWell(
-        onTap: () {
-          context.push('/app/dashboard/subject-detail', extra: subject).then((_) {
-            setState(() => _loading = true);
-            _loadDashboardData();
-          });
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Flexible(
-                              child: Hero(
+      child: Row(
+        children: [
+          Icon(
+            isSafe ? Icons.lightbulb_outline : Icons.warning_amber_rounded,
+            size: 18,
+            color: color,
+          ),
+          const SizedBox(width: AppDimens.space8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: onBg, fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Lists upcoming whole days that can be safely skipped, shown under the
+/// overall attendance card.
+class _SkippableDaysSection extends StatelessWidget {
+  const _SkippableDaysSection({required this.days});
+  final List<SkippableDay> days;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final c = context.appColors;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space20,
+        vertical: AppDimens.space12,
+      ),
+      decoration: BoxDecoration(
+        color: c.successContainer,
+        borderRadius: const BorderRadius.only(
+          bottomLeft: AppDimens.rMd,
+          bottomRight: AppDimens.rMd,
+        ),
+        border: Border(top: BorderSide(color: c.success.withValues(alpha: 0.25))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.event_available_rounded, size: 18, color: c.success),
+              const SizedBox(width: AppDimens.space8),
+              Text(
+                'Days you can fully skip',
+                style: TextStyle(
+                  color: c.onSuccessContainer,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimens.space8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: days.map((d) {
+              final label = DateFormat('EEE, MMM d').format(d.date);
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: theme.dividerColor),
+                ),
+                child: Text(
+                  d.lectureCount > 1 ? '$label  ·  ${d.lectureCount} lec' : label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: theme.textTheme.bodyLarge?.color,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SubjectCard extends StatelessWidget {
+  const _SubjectCard({
+    required this.subject,
+    required this.percent,
+    required this.attended,
+    required this.total,
+    required this.insight,
+  });
+
+  final Subject subject;
+  final double percent;
+  final int attended;
+  final int total;
+  final Map<String, dynamic> insight;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final c = context.appColors;
+    final bool isSafe = percent >= subject.requiredPercent;
+    final Color color = isSafe ? c.success : c.danger;
+    final Color bg = isSafe ? c.successContainer : c.dangerContainer;
+    final Color onBg = isSafe ? c.onSuccessContainer : c.onDangerContainer;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDimens.space12),
+      child: Pressable(
+        borderRadius: AppDimens.brMd,
+        onTap: () => context.go('/app/dashboard/subject-detail', extra: subject),
+        child: Card(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(AppDimens.space16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Hero(
                                 tag: 'subject_name_${subject.id}',
                                 child: Material(
                                   type: MaterialType.transparency,
                                   child: Text(
                                     subject.name,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                      color: theme.textTheme.bodyLarge?.color,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.titleSmall,
                                   ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.chevron_right_rounded,
-                              size: 18,
-                              color: theme.dividerColor,
-                            ),
-                          ],
+                              const SizedBox(width: AppDimens.space4),
+                              Icon(Icons.chevron_right_rounded, size: 18, color: theme.dividerColor),
+                            ],
+                          ),
                         ),
-                      ),
-                      Text(
-                        '${percent.toStringAsFixed(1)}%',
-                        style: TextStyle(
-                          color: color,
-                          fontWeight: FontWeight.bold,
+                        Text(
+                          '${percent.toStringAsFixed(1)}%',
+                          style: TextStyle(color: color, fontWeight: FontWeight.bold),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  LinearProgressIndicator(
-                    value: total == 0 ? 0 : percent / 100,
-                    color: color,
-                    backgroundColor: theme.dividerColor,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '$attended/$total lectures',
-                        style: TextStyle(
-                          color: theme.textTheme.bodyMedium?.color,
-                          fontSize: 12,
-                        ),
-                      ),
-                      Text(
-                        percent >= subject.requiredPercent ? 'Safe' : 'Risk',
-                        style: TextStyle(
-                          color: color,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            if (total > 0)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: insight['isSafe']
-                      ? Colors.green.withAlpha(isDark ? 38 : 25)
-                      : Colors.red.withAlpha(isDark ? 38 : 25),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      insight['isSafe']
-                          ? Icons.lightbulb_outline
-                          : Icons.warning_amber_rounded,
-                      size: 14,
-                      color: insight['isSafe']
-                          ? (isDark
-                                ? Colors.green.shade400
-                                : Colors.green.shade700)
-                          : (isDark
-                                ? Colors.red.shade400
-                                : Colors.red.shade700),
+                      ],
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        insight['text'],
-                        style: TextStyle(
-                          color: insight['isSafe']
-                              ? (isDark
-                                    ? Colors.green.shade300
-                                    : Colors.green.shade800)
-                              : (isDark
-                                    ? Colors.red.shade300
-                                    : Colors.red.shade800),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
+                    const SizedBox(height: AppDimens.space12),
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: total == 0 ? 0.0 : percent / 100),
+                      duration: AppMotion.slow,
+                      curve: AppMotion.enter,
+                      builder: (context, value, _) => LinearProgressIndicator(
+                        value: value,
+                        color: color,
+                        backgroundColor: theme.dividerColor,
                       ),
+                    ),
+                    const SizedBox(height: AppDimens.space8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '$attended/$total lectures',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        Text(
+                          isSafe ? 'Safe' : 'Risk',
+                          style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-          ],
+              if (total > 0)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimens.space16,
+                    vertical: AppDimens.space10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: bg,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: AppDimens.rMd,
+                      bottomRight: AppDimens.rMd,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isSafe ? Icons.lightbulb_outline : Icons.warning_amber_rounded,
+                        size: 14,
+                        color: color,
+                      ),
+                      const SizedBox(width: AppDimens.space6),
+                      Expanded(
+                        child: Text(
+                          insight['text'] as String,
+                          style: TextStyle(color: onBg, fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

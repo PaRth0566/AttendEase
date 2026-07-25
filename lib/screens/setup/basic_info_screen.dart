@@ -4,12 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/db_helper.dart';
-import '../../database/subject_dao.dart';
-import '../../database/timetable_dao.dart';
-import '../../database/attendance_dao.dart';
-import '../../models/subject.dart';
-import '../../models/timetable_entry.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../services/pdf_attendance_import_service.dart';
+import '../../widgets/app_buttons.dart';
 
 class BasicInfoScreen extends StatefulWidget {
   final bool isEditMode;
@@ -165,160 +162,11 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
         widget.prefilledData!['subjects'] != null) {
       final List<dynamic> subs = widget.prefilledData!['subjects'];
       if (subs.isNotEmpty) {
-        final db = await DBHelper.instance.database;
-        final subjectDao = SubjectDao();
-        final timetableDao = TimetableDao();
-        final attendanceDao = AttendanceDao();
-
-        // Step 1: Wipe all old data for this semester (clean re-import)
-        await db.rawDelete('''
-          DELETE FROM attendance_records WHERE timetable_entry_id IN (
-            SELECT t.id FROM timetable t
-            INNER JOIN subjects s ON t.subject_id = s.id
-            WHERE s.semester = ?
-          )
-        ''', [_selectedSemester]);
-
-        for (int day = 0; day <= 7; day++) {
-          await timetableDao.deleteEntriesForDay(day, _selectedSemester);
-        }
-
-        final oldSubjects = await subjectDao.getSubjectsBySemester(_selectedSemester);
-        for (final sub in oldSubjects) {
-          await subjectDao.deleteSubject(sub.id!);
-        }
-
-        // Step 2: Insert subjects
-        for (var sub in subs) {
-          final subName = sub.toString().trim();
-          if (subName.isNotEmpty) {
-            await subjectDao.insertSubject(Subject(
-              name: subName,
-              requiredPercent: 75.0,
-              semester: _selectedSemester,
-            ));
-          }
-        }
-
-        // Build name -> id map
-        final Map<String, int> subjectNameToId = {};
-        final insertedSubjects = await subjectDao.getSubjectsBySemester(_selectedSemester);
-        for (var sub in insertedSubjects) {
-          subjectNameToId[sub.name] = sub.id!;
-        }
-
-        // Step 3A: Create seed timetable slots (day=0) for every subject
-        final Map<int, int> subjectIdToSeedEntryId = {};
-        for (final subId in subjectNameToId.values) {
-          final seedId = await timetableDao.ensureSeedEntry(subId);
-          subjectIdToSeedEntryId[subId] = seedId;
-        }
-
-        // Step 3B: Insert real-dated records from AI (populates the calendar)
-        final Map<String, int> insertedP = {};
-        final Map<String, int> insertedA = {};
-
-        final rawRecords = widget.prefilledData!['attendanceRecords'];
-        if (rawRecords != null && rawRecords is List) {
-          for (final rec in rawRecords) {
-            var dateStr = rec['date']?.toString().trim();
-            final subName = rec['subject']?.toString().trim();
-            final status = rec['status']?.toString().toUpperCase();
-
-            if (dateStr == null || subName == null || status == null) continue;
-            if (status != 'P' && status != 'A' && status != 'NU') continue;
-            // The local parser appends '_N' for same-day lectures to prevent DB overwrite
-            final parts = dateStr.split('_');
-            final parsedDate = DateTime.tryParse(parts[0]);
-            if (parsedDate == null) {
-              debugPrint('Skipping invalid date format: "$dateStr"');
-              continue;
-            }
-            
-            // Enforce strict YYYY-MM-DD format for DB/Calendar compatibility
-            final prefix = '${parsedDate.year.toString().padLeft(4, '0')}-${parsedDate.month.toString().padLeft(2, '0')}-${parsedDate.day.toString().padLeft(2, '0')}';
-            dateStr = parts.length > 1 ? '${prefix}_${parts[1]}' : prefix;
-
-            final subId = subjectNameToId[subName];
-            if (subId == null) continue;
-            final seedEntryId = subjectIdToSeedEntryId[subId];
-            if (seedEntryId == null) continue;
-
-            await attendanceDao.upsertAttendance(
-              timetableId: seedEntryId,
-              date: dateStr,
-              status: status,
-            );
-
-            if (status == 'P') {
-              insertedP[subName] = (insertedP[subName] ?? 0) + 1;
-            } else {
-              insertedA[subName] = (insertedA[subName] ?? 0) + 1;
-            }
-          }
-        }
-
-        // Step 3C: Pad with pseudo-dates to match authoritative subjectStats counts
-        // Guarantees accurate stats even if AI underextracted records in Step 3B.
-        final subjectStats = widget.prefilledData!['subjectStats'];
-        if (subjectStats != null && subjectStats is Map) {
-          for (final entry in subjectStats.entries) {
-            final subjectName = entry.key.toString().trim();
-            final stats = entry.value;
-            if (stats == null) continue;
-
-            final int targetP = (stats['attended'] as num?)?.toInt() ?? 0;
-            final int targetTotal = (stats['total'] as num?)?.toInt() ?? 0;
-            final int targetA = targetTotal - targetP;
-
-            final subId = subjectNameToId[subjectName];
-            if (subId == null) continue;
-            final seedEntryId = subjectIdToSeedEntryId[subId];
-            if (seedEntryId == null) continue;
-
-            final int gotP = insertedP[subjectName] ?? 0;
-            final int gotA = insertedA[subjectName] ?? 0;
-            final int needP = (targetP - gotP).clamp(0, 99999);
-            final int needA = (targetA - gotA).clamp(0, 99999);
-
-            for (int i = 0; i < needP; i++) {
-              await attendanceDao.upsertAttendance(
-                timetableId: seedEntryId,
-                date: 'pad_P_${subId}_$i',
-                status: 'P',
-              );
-            }
-            for (int i = 0; i < needA; i++) {
-              await attendanceDao.upsertAttendance(
-                timetableId: seedEntryId,
-                date: 'pad_A_${subId}_$i',
-                status: 'A',
-              );
-            }
-          }
-        }
-        // Step 3D: Insert inferred timetable entries
-        final inferredTimetable = widget.prefilledData!['inferredTimetable'] as Map<String, dynamic>?;
-        if (inferredTimetable != null) {
-          for (final dayEntry in inferredTimetable.entries) {
-            final dayOfWeek = int.tryParse(dayEntry.key);
-            if (dayOfWeek == null) continue;
-            final subjectsForDay = dayEntry.value as List<dynamic>;
-            for (int i = 0; i < subjectsForDay.length; i++) {
-              final subName = subjectsForDay[i].toString();
-              final subId = subjectNameToId[subName];
-              if (subId != null) {
-                await timetableDao.insertEntry(
-                  TimetableEntry(
-                    dayOfWeek: dayOfWeek,
-                    subjectId: subId,
-                    lectureOrder: i,
-                  ),
-                );
-              }
-            }
-          }
-        }
+        await PdfAttendanceImportService().replaceSemesterFromParsedPdf(
+          data: widget.prefilledData!,
+          semester: _selectedSemester,
+          updateSemesterBounds: false,
+        );
       }
     }
 
@@ -436,50 +284,16 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
               ),
               const SizedBox(height: 24),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () {
-                        if (widget.isEditMode) {
-                          Navigator.pop(context);
-                        } else {
-                          context.go('/setup');
-                        }
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        side: BorderSide(color: theme.colorScheme.primary, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: Text(
-                        'Back',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _saveAndNext,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: Text(
-                        widget.isEditMode ? 'Save Changes' : 'Next',
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ],
+              SetupNavButtons(
+                onBack: () {
+                  if (widget.isEditMode) {
+                    Navigator.pop(context);
+                  } else {
+                    context.go('/setup');
+                  }
+                },
+                onNext: _saveAndNext,
+                nextLabel: widget.isEditMode ? 'Save Changes' : 'Next',
               ),
               const SizedBox(height: 24),
             ],

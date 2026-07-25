@@ -45,6 +45,31 @@ class TimetableDao {
     );
   }
 
+  // Returns the recurring weekly timetable for a semester as
+  // weekday (1=Mon … 7=Sun) -> list of subjectIds (one entry per lecture, so a
+  // subject taught twice on a day appears twice). Excludes the day=0 seed slots.
+  Future<Map<int, List<int>>> getWeeklyTimetable(int semester) async {
+    final Database db = await DBHelper.instance.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT t.day_of_week AS day, t.subject_id AS subject_id
+      FROM timetable t
+      INNER JOIN subjects s ON t.subject_id = s.id
+      WHERE t.day_of_week BETWEEN 1 AND 7 AND s.semester = ?
+      ORDER BY t.day_of_week ASC, t.lecture_order ASC
+    ''',
+      [semester],
+    );
+
+    final map = <int, List<int>>{};
+    for (final r in rows) {
+      final day = (r['day'] as num).toInt();
+      final sid = (r['subject_id'] as num).toInt();
+      (map[day] ??= <int>[]).add(sid);
+    }
+    return map;
+  }
+
   // Ensures each subject has a seed timetable slot (day=0) used for storing
   // attendance records when no real timetable is configured.
   // Creates one if it doesn't exist, then returns the entry id.

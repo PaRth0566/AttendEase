@@ -48,11 +48,6 @@ class LocalPdfParser {
     String startDate = '';
     String endDate = '';
 
-    // Data structure to infer timetable: dayOfWeek -> timeInMinutes -> subject -> count
-    final scheduleFreq = <int, Map<int, Map<String, int>>>{
-      1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}
-    };
-
     var text = '';
 
     try {
@@ -195,16 +190,6 @@ class LocalPdfParser {
             stats[courseName]!['attended'] = stats[courseName]!['attended']! + 1;
           }
         }
-
-        // Track frequency for timetable inference (NU counts too — a lecture happened)
-        final dt = DateTime.tryParse(isoDate);
-        if (dt != null) {
-          final day = dt.weekday; // 1 = Monday, 7 = Sunday
-          final timeMinutes = _timeToMinutes(timeStr);
-          scheduleFreq[day] ??= {};
-          scheduleFreq[day]![timeMinutes] ??= {};
-          scheduleFreq[day]![timeMinutes]![courseName] = (scheduleFreq[day]![timeMinutes]![courseName] ?? 0) + 1;
-        }
       }
 
       debugPrint('[Parser] Parsed ${records.length} records, ${subjects.length} subjects');
@@ -216,37 +201,7 @@ class LocalPdfParser {
       document.dispose();
     }
 
-    // Process inferred timetable
-    final inferredTimetable = <String, List<String>>{};
-    for (int day = 1; day <= 7; day++) {
-      final times = scheduleFreq[day]!;
-      if (times.isEmpty) continue;
-      
-      // Sort time slots chronologically
-      final sortedTimes = times.keys.toList()..sort();
-      final daySchedule = <String>[];
-      
-      for (final t in sortedTimes) {
-        final subjectsCounts = times[t]!;
-        var maxSubject = '';
-        var maxCount = 0;
-        for (final entry in subjectsCounts.entries) {
-          if (entry.value > maxCount) {
-            maxCount = entry.value;
-            maxSubject = entry.key;
-          }
-        }
-        // Only include if this subject appeared at least 2 times on this
-        // day+time slot — filters out one-off extra lectures
-        if (maxSubject.isNotEmpty && maxCount >= 2) {
-          daySchedule.add(maxSubject);
-        }
-      }
-      
-      if (daySchedule.isNotEmpty) {
-        inferredTimetable[day.toString()] = daySchedule;
-      }
-    }
+    final inferredTimetable = inferWeeklyTimetable(records);
 
     if (records.isEmpty) {
       throw const FormatException(
@@ -267,6 +222,91 @@ class LocalPdfParser {
       'attendanceRecords': records,
       'inferredTimetable': inferredTimetable,
     };
+  }
+
+  // ── Weekly timetable reconstruction ─────────────────────────────────────
+  //
+  // Reconstructs the CURRENT recurring weekly timetable from raw attendance
+  // rows. This is deliberately robust to timetables that shift partway through
+  // the semester (a class moving from a 9:20 slot to an 11:20 slot, subjects
+  // added/dropped, exam weeks, etc.) — a naïve "merge every week" approach
+  // produces bloated days with overlapping/duplicate lectures.
+  //
+  // For each weekday we keep only subjects that:
+  //   1. genuinely recur — appear on ≥ 2 distinct dates of that weekday, and
+  //   2. are current — appear within the most recent 3 dates of that weekday
+  //      (drops stale early-semester slots that were later rescheduled).
+  // The lecture count per day and the ordering are taken from each subject's
+  // most recent occurrence, so the output mirrors the schedule as it stands
+  // today. NU rows are included here on purpose: an NU still means a lecture
+  // was scheduled.
+  //
+  // `records` items use the same shape produced by the parser:
+  //   {'date': 'yyyy-MM-dd' (optionally with a '_n' suffix), 'subject': ...,
+  //    'time': '9:20:01 AM', 'status': 'P'|'A'|'NU'}
+  static Map<String, List<String>> inferWeeklyTimetable(
+    List<Map<String, String>> records,
+  ) {
+    final dayDates = <int, Set<String>>{};
+    final daySubjectDateCount = <int, Map<String, Map<String, int>>>{};
+    final daySubjectDateStart = <int, Map<String, Map<String, int>>>{};
+
+    for (final r in records) {
+      final subject = (r['subject'] ?? '').trim();
+      if (subject.isEmpty) continue;
+      final baseDate = (r['date'] ?? '').split('_').first;
+      final dt = DateTime.tryParse(baseDate);
+      if (dt == null) continue;
+      final day = dt.weekday; // 1 = Monday … 7 = Sunday
+      final startMin = _timeToMinutes(r['time'] ?? '');
+
+      (dayDates[day] ??= <String>{}).add(baseDate);
+      final dateCounts = (daySubjectDateCount[day] ??= {})
+          .putIfAbsent(subject, () => <String, int>{});
+      dateCounts[baseDate] = (dateCounts[baseDate] ?? 0) + 1;
+      final dateStarts = (daySubjectDateStart[day] ??= {})
+          .putIfAbsent(subject, () => <String, int>{});
+      final existingStart = dateStarts[baseDate];
+      if (existingStart == null || startMin < existingStart) {
+        dateStarts[baseDate] = startMin;
+      }
+    }
+
+    final inferredTimetable = <String, List<String>>{};
+    for (int day = 1; day <= 7; day++) {
+      final dates = (dayDates[day]?.toList() ?? <String>[])..sort();
+      if (dates.isEmpty) continue;
+
+      // The most recent (up to) 3 dates for this weekday define "recent".
+      final recentDates =
+          dates.sublist(dates.length <= 3 ? 0 : dates.length - 3).toSet();
+
+      final subjects = daySubjectDateCount[day] ?? const {};
+      final slots = <({int start, String subject, int count})>[];
+      for (final entry in subjects.entries) {
+        final subject = entry.key;
+        final subjectDates = entry.value.keys.toList()..sort();
+        if (subjectDates.length < 2) continue; // one-off, not a real class
+        if (!subjectDates.any(recentDates.contains)) continue; // stale slot
+        final mostRecent = subjectDates.last;
+        final count = entry.value[mostRecent]!.clamp(1, 8);
+        final start = daySubjectDateStart[day]?[subject]?[mostRecent] ?? 0;
+        slots.add((start: start, subject: subject, count: count));
+      }
+      if (slots.isEmpty) continue;
+
+      slots.sort((a, b) => a.start.compareTo(b.start));
+      final daySchedule = <String>[];
+      for (final slot in slots) {
+        for (int i = 0; i < slot.count; i++) {
+          daySchedule.add(slot.subject);
+        }
+      }
+      if (daySchedule.isNotEmpty) {
+        inferredTimetable[day.toString()] = daySchedule;
+      }
+    }
+    return inferredTimetable;
   }
 
   // ── Date normalisation ────────────────────────────────────────────────

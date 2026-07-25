@@ -183,30 +183,10 @@ class _SignupScreenState extends State<SignupScreen> {
                     TextField(
                       controller: _emailController,
                       keyboardType: TextInputType.emailAddress,
-                      style: TextStyle(
-                        color: theme.textTheme.bodyLarge?.color,
-                      ), // ✅ Typing color
-                      decoration: InputDecoration(
+                      style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+                      decoration: const InputDecoration(
                         labelText: 'Email',
-                        labelStyle: TextStyle(
-                          color: theme.textTheme.bodyMedium?.color,
-                        ),
-                        prefixIcon: const Icon(Icons.email_outlined),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: theme.dividerColor),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: theme.dividerColor),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: theme.colorScheme.primary,
-                            width: 2,
-                          ),
-                        ),
+                        prefixIcon: Icon(Icons.email_outlined),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -214,40 +194,14 @@ class _SignupScreenState extends State<SignupScreen> {
                     TextField(
                       controller: _passwordController,
                       obscureText: _obscurePassword,
-                      style: TextStyle(
-                        color: theme.textTheme.bodyLarge?.color,
-                      ), // ✅ Typing color
+                      style: TextStyle(color: theme.textTheme.bodyLarge?.color),
                       decoration: InputDecoration(
                         labelText: 'Password',
-                        labelStyle: TextStyle(
-                          color: theme.textTheme.bodyMedium?.color,
-                        ),
                         prefixIcon: const Icon(Icons.lock_outline),
                         suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                          ),
+                          icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
                           tooltip: _obscurePassword ? 'Show password' : 'Hide password',
-                          onPressed: () => setState(
-                            () => _obscurePassword = !_obscurePassword,
-                          ),
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: theme.dividerColor),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: theme.dividerColor),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: theme.colorScheme.primary,
-                            width: 2,
-                          ),
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                         ),
                       ),
                     ),
@@ -256,46 +210,19 @@ class _SignupScreenState extends State<SignupScreen> {
                     TextField(
                       controller: _confirmPasswordController,
                       obscureText: _obscureConfirmPassword,
-                      style: TextStyle(
-                        color: theme.textTheme.bodyLarge?.color,
-                      ), // ✅ Typing color
+                      style: TextStyle(color: theme.textTheme.bodyLarge?.color),
                       decoration: InputDecoration(
                         labelText: 'Confirm Password',
-                        labelStyle: TextStyle(
-                          color: theme.textTheme.bodyMedium?.color,
-                        ),
                         prefixIcon: const Icon(Icons.lock_outline),
                         suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscureConfirmPassword
-                                ? Icons.visibility_off
-                                : Icons.visibility,
-                          ),
+                          icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility),
                           tooltip: _obscureConfirmPassword ? 'Show password' : 'Hide password',
-                          onPressed: () => setState(
-                            () => _obscureConfirmPassword =
-                                !_obscureConfirmPassword,
-                          ),
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: theme.dividerColor),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: theme.dividerColor),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: theme.colorScheme.primary,
-                            width: 2,
-                          ),
+                          onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
                         ),
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
@@ -385,14 +312,9 @@ class _SignupScreenState extends State<SignupScreen> {
               ),
             ),
             if (_isLoading)
-              Container(
-                color: theme.scaffoldBackgroundColor.withAlpha(204),
-                child: Center(
-                  child: CircularProgressIndicator(
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-              ),
+              const ModalBarrier(dismissible: false, color: Colors.transparent),
+            if (_isLoading)
+              const Center(child: CircularProgressIndicator()),
           ],
         ),
       ),

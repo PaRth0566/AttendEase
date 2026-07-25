@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
 import '../../models/subject.dart';
+import '../../theme/app_colors.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -106,11 +107,17 @@ class _ReportScreenState extends State<ReportScreen> {
     }
 
     _subjects = await _subjectDao.getSubjectsBySemester(_selectedSemester);
-    _stats = await _attendanceDao.getAttendanceStatsForDateRange(
-      startQuery,
-      endQuery,
-      _selectedSemester,
-    );
+    if (_reportType == 0) {
+      // Semester mode counts every record for the semester — identical to the
+      // Dashboard — so the two screens never disagree.
+      _stats = await _attendanceDao.getAttendanceStats(_selectedSemester);
+    } else {
+      _stats = await _attendanceDao.getAttendanceStatsForDateRange(
+        startQuery,
+        endQuery,
+        _selectedSemester,
+      );
+    }
 
     _totalAttended = 0;
     _totalLectures = 0;
@@ -601,6 +608,7 @@ class _ReportScreenState extends State<ReportScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final c = context.appColors;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -833,9 +841,7 @@ class _ReportScreenState extends State<ReportScreen> {
                               style: TextStyle(
                                 fontSize: 42,
                                 fontWeight: FontWeight.bold,
-                                color: _overallPercent >= 75
-                                    ? Colors.green
-                                    : Colors.red,
+                                color: _overallPercent >= 75 ? c.success : c.danger,
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -881,9 +887,8 @@ class _ReportScreenState extends State<ReportScreen> {
                         final percent = total == 0
                             ? 0.0
                             : (attended / total) * 100;
-                        final color = percent >= sub.requiredPercent
-                            ? Colors.green
-                            : Colors.red;
+                        final color =
+                            percent >= sub.requiredPercent ? c.success : c.danger;
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),

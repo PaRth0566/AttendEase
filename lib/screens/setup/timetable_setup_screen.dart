@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../database/db_helper.dart';
 import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
@@ -78,66 +77,18 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
   }
 
   Future<void> _saveDay() async {
-    final existingEntries = await _timetableDao.getEntriesForDay(
-      _selectedDay,
-      _activeSemester,
-    );
-
-    bool isChanged = false;
-    if (existingEntries.length != _daySubjects.length) {
-      isChanged = true;
-    } else {
-      for (int i = 0; i < existingEntries.length; i++) {
-        if (existingEntries[i].subjectId != _daySubjects[i].id) {
-          isChanged = true;
-          break;
-        }
-      }
-    }
-
-    if (!isChanged) return;
-
-    final db = await DBHelper.instance.database;
+    // Clean approach: delete all entries for this day+semester, then re-insert.
+    // This eliminates subtle ordering bugs from the old index-based comparison.
+    await _timetableDao.deleteEntriesForDay(_selectedDay, _activeSemester);
 
     for (int i = 0; i < _daySubjects.length; i++) {
-      final subjectId = _daySubjects[i].id!;
-      final order = i + 1;
-
-      if (i < existingEntries.length) {
-        final existing = existingEntries[i];
-        if (existing.subjectId != subjectId) {
-          await db.delete(
-            'timetable',
-            where: 'id = ?',
-            whereArgs: [existing.id],
-          );
-          await _timetableDao.insertEntry(
-            TimetableEntry(
-              dayOfWeek: _selectedDay,
-              subjectId: subjectId,
-              lectureOrder: order,
-            ),
-          );
-        }
-      } else {
-        await _timetableDao.insertEntry(
-          TimetableEntry(
-            dayOfWeek: _selectedDay,
-            subjectId: subjectId,
-            lectureOrder: order,
-          ),
-        );
-      }
-    }
-
-    if (existingEntries.length > _daySubjects.length) {
-      for (int i = _daySubjects.length; i < existingEntries.length; i++) {
-        await db.delete(
-          'timetable',
-          where: 'id = ?',
-          whereArgs: [existingEntries[i].id],
-        );
-      }
+      await _timetableDao.insertEntry(
+        TimetableEntry(
+          dayOfWeek: _selectedDay,
+          subjectId: _daySubjects[i].id!,
+          lectureOrder: i + 1,
+        ),
+      );
     }
   }
 
@@ -490,24 +441,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                         flex: 1,
                         child: OutlinedButton(
                           onPressed: () => Navigator.pop(context),
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            side: BorderSide(
-                              color: theme.colorScheme.primary,
-                              width: 1.5,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: Text(
-                            'Back',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.primary,
-                            ),
-                          ),
+                          child: const Text('Back'),
                         ),
                       ),
                       if (!widget.isEditMode) ...[
@@ -516,24 +450,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                           flex: 1,
                           child: OutlinedButton(
                             onPressed: _skipSetup,
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              side: BorderSide(
-                                color: theme.colorScheme.secondary.withValues(alpha: 0.5),
-                                width: 1.5,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            child: Text(
-                              'Skip',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.secondary,
-                              ),
-                            ),
+                            child: const Text('Skip'),
                           ),
                         ),
                       ],
@@ -542,24 +459,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                         flex: 2,
                         child: ElevatedButton(
                           onPressed: _finishSetup,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: theme.colorScheme.primary,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            elevation: 4,
-                            shadowColor: theme.colorScheme.primary.withValues(alpha: 0.4),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: Text(
-                            widget.isEditMode ? 'Save Timetable' : 'Finish Setup',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
+                          child: Text(widget.isEditMode ? 'Save Timetable' : 'Finish Setup'),
                         ),
                       ),
                     ],

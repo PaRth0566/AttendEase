@@ -6,11 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../services/local_pdf_parser.dart';
 import '../../services/cloud_sync_service.dart';
 
-import '../../database/attendance_dao.dart';
-import '../../database/db_helper.dart';
-import '../../database/subject_dao.dart';
-import '../../database/timetable_dao.dart';
-import '../../models/subject.dart';
+import '../../services/pdf_attendance_import_service.dart';
 
 class RefreshPdfScreen extends StatefulWidget {
   const RefreshPdfScreen({super.key});
@@ -128,139 +124,10 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
     // Automatically switch the user to the newly uploaded semester
     await prefs.setInt('semester', targetSemester);
 
-    final subjectDao = SubjectDao();
-    final timetableDao = TimetableDao();
-    final attendanceDao = AttendanceDao();
-
-    // Step 0: Aggressive Wipe of Existing Semester Data
-    // We actively delete the subjects for the TARGET semester. 
-    // Thanks to ON DELETE CASCADE set up in db_helper.dart, this automatically 
-    // annihilates all orphaned timetable and attendance_record rows instantly.
-    final db = await DBHelper.instance.database;
-    await db.delete(
-      'subjects',
-      where: 'semester = ?',
-      whereArgs: [targetSemester],
+    await PdfAttendanceImportService().replaceSemesterFromParsedPdf(
+      data: data,
+      semester: targetSemester,
     );
-
-    // Step 1: Insert new subjects from PDF
-    final List<dynamic> newSubjects = data['subjects'] ?? [];
-    for (var sub in newSubjects) {
-      final subName = sub.toString().trim();
-      if (subName.isNotEmpty) {
-        await subjectDao.insertSubject(
-          Subject(name: subName, requiredPercent: 75.0, semester: targetSemester),
-        );
-      }
-    }
-
-    // Build name → id map
-    final allSubjects = await subjectDao.getSubjectsBySemester(targetSemester);
-    final Map<String, int> subjectNameToId = {
-      for (var s in allSubjects) s.name: s.id!
-    };
-
-    // Step 2: Ensure seed slots (day=0) exist for all subjects
-    final Map<int, int> subjectIdToSeedEntryId = {};
-    for (final subId in subjectNameToId.values) {
-      final seedId = await timetableDao.ensureSeedEntry(subId);
-      subjectIdToSeedEntryId[subId] = seedId;
-    }
-
-    // Step 3A: Insert real-dated records from AI (populates calendar heatmap)
-    final Map<String, int> insertedP = {};
-    final Map<String, int> insertedA = {};
-
-    // Update bounds based on the new PDF if it included them
-    if (data['startDate'] != null && data['startDate'].toString().isNotEmpty &&
-        data['endDate'] != null && data['endDate'].toString().isNotEmpty) {
-      final startStr = data['startDate'].toString();
-      final endStr = data['endDate'].toString();
-      // Only update if they parse successfully
-      if (DateTime.tryParse(startStr) != null && DateTime.tryParse(endStr) != null) {
-        await prefs.setString('semester_start_$targetSemester', startStr);
-        await prefs.setString('semester_end_$targetSemester', endStr);
-        debugPrint('Updated semester bounds from new PDF: $startStr to $endStr');
-      }
-    }
-
-    final List<dynamic> records = data['attendanceRecords'] ?? [];
-    for (final rec in records) {
-      var dateStr = rec['date']?.toString().trim();
-      final subName = rec['subject']?.toString().trim();
-      final status = rec['status']?.toString().toUpperCase();
-
-      if (dateStr == null || subName == null || status == null) continue;
-      if (status != 'P' && status != 'A') continue;
-
-      // Smart Date Parsing, preserving index suffix if any
-      final parts = dateStr.split('_');
-      final parsedDate = DateTime.tryParse(parts[0]);
-      if (parsedDate == null) {
-        debugPrint('Skipping invalid date format: "$dateStr"');
-        continue;
-      }
-      
-      // Enforce strict YYYY-MM-DD format for DB/Calendar compatibility
-      final prefix = '${parsedDate.year.toString().padLeft(4, '0')}-${parsedDate.month.toString().padLeft(2, '0')}-${parsedDate.day.toString().padLeft(2, '0')}';
-      dateStr = parts.length > 1 ? '${prefix}_${parts[1]}' : prefix;
-
-      final subId = subjectNameToId[subName];
-      if (subId == null) continue;
-      final seedEntryId = subjectIdToSeedEntryId[subId];
-      if (seedEntryId == null) continue;
-
-      await attendanceDao.upsertAttendance(
-        timetableId: seedEntryId,
-        date: dateStr,
-        status: status,
-      );
-
-      if (status == 'P') {
-        insertedP[subName] = (insertedP[subName] ?? 0) + 1;
-      } else {
-        insertedA[subName] = (insertedA[subName] ?? 0) + 1;
-      }
-    }
-
-    // Step 3B: (Wiping old pseudo-dates is no longer necessary as Step 0 cleared all records)
-
-    // Step 3C: Pad pseudo-dates to match authoritative subjectStats counts
-    final subjectStats = data['subjectStats'] as Map<String, dynamic>? ?? {};
-    for (final entry in subjectStats.entries) {
-      final subjectName = entry.key.toString().trim();
-      final stats = entry.value;
-      if (stats == null) continue;
-
-      final int targetP = (stats['attended'] as num?)?.toInt() ?? 0;
-      final int targetTotal = (stats['total'] as num?)?.toInt() ?? 0;
-      final int targetA = targetTotal - targetP;
-
-      final subId = subjectNameToId[subjectName];
-      if (subId == null) continue;
-      final seedEntryId = subjectIdToSeedEntryId[subId];
-      if (seedEntryId == null) continue;
-
-      final int gotP = insertedP[subjectName] ?? 0;
-      final int gotA = insertedA[subjectName] ?? 0;
-      final int needP = (targetP - gotP).clamp(0, 99999);
-      final int needA = (targetA - gotA).clamp(0, 99999);
-
-      for (int i = 0; i < needP; i++) {
-        await attendanceDao.upsertAttendance(
-          timetableId: seedEntryId,
-          date: 'pad_P_${subId}_$i',
-          status: 'P',
-        );
-      }
-      for (int i = 0; i < needA; i++) {
-        await attendanceDao.upsertAttendance(
-          timetableId: seedEntryId,
-          date: 'pad_A_${subId}_$i',
-          status: 'A',
-        );
-      }
-    }
   }
 
   void _showError(String msg) {
@@ -340,10 +207,14 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              Text(
-                _statusMessage,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 15, height: 1.6, color: theme.textTheme.bodyMedium?.color),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: Text(
+                  _statusMessage,
+                  key: ValueKey(_statusMessage),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 15, height: 1.6, color: theme.textTheme.bodyMedium?.color),
+                ),
               ),
               const SizedBox(height: 16),
 

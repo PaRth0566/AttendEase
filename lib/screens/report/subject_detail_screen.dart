@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 import '../../database/attendance_dao.dart';
 import '../../models/subject.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../theme/app_colors.dart';
+import '../../utils/calculation_utils.dart';
 
 class SubjectDetailScreen extends StatefulWidget {
   final Subject subject;
@@ -14,7 +16,8 @@ class SubjectDetailScreen extends StatefulWidget {
   State<SubjectDetailScreen> createState() => _SubjectDetailScreenState();
 }
 
-class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
+class _SubjectDetailScreenState extends State<SubjectDetailScreen>
+    with SingleTickerProviderStateMixin {
   final AttendanceDao _attendanceDao = AttendanceDao();
 
   bool _isLoading = true;
@@ -22,10 +25,40 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
   int _attended = 0;
   int _total = 0;
 
+  // Skip calculator state
+  List<DateTime> _skippableDates = [];
+  final Map<DateTime, int> _skippableCounts = {}; // date -> lectures that day
+  int _maxSkips = 0;
+
+  late AnimationController _animController;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
+
   @override
   void initState() {
     super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _fadeAnim = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    );
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    ));
     _loadHistory();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadHistory() async {
@@ -46,6 +79,9 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
       }
     }
 
+    // Calculate skippable dates from this subject's own lecture history
+    _calculateSkippableDates(records, attendedCount, totalCount);
+
     if (!mounted) return;
     setState(() {
       _history = records;
@@ -53,6 +89,31 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
       _attended = attendedCount;
       _isLoading = false;
     });
+    _animController.forward(from: 0);
+  }
+
+  /// Works out how many upcoming lectures of this subject can be skipped while
+  /// staying at or above the required percentage, and — crucially — *which
+  /// days* those are. Delegates to [computeSkipPlan], which derives the
+  /// recurring weekday pattern from this subject's own attendance history, so
+  /// it does not depend on a manually-configured or inferred global timetable.
+  void _calculateSkippableDates(
+    List<Map<String, dynamic>> records,
+    int attended,
+    int total,
+  ) {
+    final plan = computeSkipPlan(
+      history: records,
+      attended: attended,
+      total: total,
+      requiredPercent: widget.subject.requiredPercent,
+      today: DateTime.now(),
+    );
+    _maxSkips = plan.maxSkips;
+    _skippableDates = plan.dates;
+    _skippableCounts
+      ..clear()
+      ..addAll(plan.countPerDate);
   }
 
   // ✅ NEW: Delete Record Logic
@@ -67,35 +128,44 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
     ).showSnackBar(const SnackBar(content: Text('Attendance record deleted')));
   }
 
-  // Toggle Record Logic: NU → P, P → A, A → P
+  // Toggle Record Logic:
+  // pdf source:    P → A → P
+  // manual source: NU → P → A → NU
   Future<void> _toggleStatus(
     int timetableId,
     String date,
     String currentStatus,
+    String source,
   ) async {
     String newStatus;
-    if (currentStatus == 'NU') {
-      newStatus = 'P';
-    } else if (currentStatus == 'P') {
-      newStatus = 'A';
+    if (source == 'manual') {
+      if (currentStatus == 'NU') {
+        newStatus = 'P';
+      } else if (currentStatus == 'P') {
+        newStatus = 'A';
+      } else {
+        newStatus = 'NU';
+      }
     } else {
-      newStatus = 'P';
+      newStatus = currentStatus == 'P' ? 'A' : 'P';
     }
 
     await _attendanceDao.upsertAttendance(
       timetableId: timetableId,
       date: date,
       status: newStatus,
+      source: 'manual',
     );
 
-    _loadHistory(); // Refresh the UI
-    CloudSyncService().backupDataToCloud(); // Auto-sync
+    _loadHistory();
+    CloudSyncService().backupDataToCloud();
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final c = context.appColors;
 
     final percent = _total == 0 ? 0.0 : (_attended / _total) * 100;
     final isSafe = percent >= widget.subject.requiredPercent;
@@ -132,68 +202,210 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                 child: Column(
               children: [
                 // OVERALL STATS CARD
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? theme.colorScheme.primary.withAlpha(25)
-                          : const Color(0xFFF2F4FF),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: theme.colorScheme.primary.withAlpha(76),
+                SlideTransition(
+                  position: _slideAnim,
+                  child: FadeTransition(
+                    opacity: _fadeAnim,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: theme.cardColor,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: theme.dividerColor,
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Current Attendance',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: isDark
+                                    ? Colors.grey.shade400
+                                    : Colors.grey.shade700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '${percent.toStringAsFixed(1)}%',
+                              style: TextStyle(
+                                fontSize: 48,
+                                fontWeight: FontWeight.bold,
+                                color: isSafe ? c.success : c.danger,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '$_attended / $_total Lectures Attended',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: theme.textTheme.bodyLarge?.color,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TweenAnimationBuilder<double>(
+                              tween: Tween(begin: 0, end: _total == 0 ? 0.0 : percent / 100),
+                              duration: const Duration(milliseconds: 1200),
+                              curve: Curves.easeOutCubic,
+                              builder: (context, value, _) => LinearProgressIndicator(
+                                value: value,
+                                color: isSafe ? c.success : c.danger,
+                                backgroundColor: theme.dividerColor,
+                                minHeight: 6,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Required: ${widget.subject.requiredPercent}%',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    child: Column(
-                      children: [
-                        Text(
-                          'Current Attendance',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: isDark
-                                ? Colors.grey.shade400
-                                : Colors.grey.shade700,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${percent.toStringAsFixed(1)}%',
-                          style: TextStyle(
-                            fontSize: 48,
-                            fontWeight: FontWeight.bold,
-                            color: isSafe ? Colors.green : Colors.red,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '$_attended / $_total Lectures Attended',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: theme.textTheme.bodyLarge?.color,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        LinearProgressIndicator(
-                          value: _total == 0 ? 0 : percent / 100,
-                          color: isSafe ? Colors.green : Colors.red,
-                          backgroundColor: theme.dividerColor,
-                          minHeight: 6,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Required: ${widget.subject.requiredPercent}%',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: theme.textTheme.bodyMedium?.color,
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                 ),
+
+                // SKIP CALCULATOR
+                if (_maxSkips > 0)
+                  SlideTransition(
+                    position: _slideAnim,
+                    child: FadeTransition(
+                      opacity: _fadeAnim,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.green.withAlpha(20)
+                                : Colors.green.shade50,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.green.withAlpha(60)
+                                  : Colors.green.shade200,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.event_available_rounded,
+                                    size: 20,
+                                    color: isDark
+                                        ? Colors.green.shade300
+                                        : Colors.green.shade700,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Safe to Skip',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: isDark
+                                          ? Colors.green.shade300
+                                          : Colors.green.shade800,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.green.withAlpha(40)
+                                          : Colors.green.shade100,
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      '$_maxSkips lecture${_maxSkips > 1 ? 's' : ''}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: isDark
+                                            ? Colors.green.shade200
+                                            : Colors.green.shade800,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (_skippableDates.isNotEmpty) ...[
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Upcoming lectures you can miss and still stay above ${widget.subject.requiredPercent.toStringAsFixed(0)}%:',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    height: 1.4,
+                                    color: isDark
+                                        ? Colors.green.shade400
+                                        : Colors.green.shade700,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 6,
+                                  children: _skippableDates.map((date) {
+                                    final count = _skippableCounts[date] ?? 1;
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: theme.cardColor,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: theme.dividerColor,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        count > 1
+                                            ? '${DateFormat('EEE, MMM d').format(date)}  ·  ${count}x'
+                                            : DateFormat('EEE, MMM d').format(date),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: theme.textTheme.bodyLarge?.color,
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ] else ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  'You are $_maxSkips lecture${_maxSkips > 1 ? 's' : ''} ahead of target. Specific dates will appear once this subject has a regular weekly pattern in your report.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    height: 1.4,
+                                    color: isDark
+                                        ? Colors.green.shade400
+                                        : Colors.green.shade700,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
 
                 // TIMELINE HEADER & UX HINT
                 Padding(
@@ -257,6 +469,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
 
                             final isPresent = status == 'P';
                             final isNU = status == 'NU';
+                            final isManual = (record['source'] as String?) == 'manual';
                             final Color colorBg;
                             final Color colorIcon;
                             if (isNU) {
@@ -358,6 +571,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                                     timetableId,
                                     dateStr,
                                     status,
+                                    record['source'] as String? ?? 'pdf',
                                   ),
                                   child: ListTile(
                                     contentPadding: const EdgeInsets.symmetric(
@@ -395,10 +609,34 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen> {
                                               color: Colors.orange.shade400,
                                             ),
                                           )
-                                        : null,
+                                        : isManual
+                                            ? Text(
+                                                'Manually marked',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: theme.textTheme.bodyMedium?.color?.withAlpha(160),
+                                                ),
+                                              )
+                                            : null,
                                     trailing: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
+                                        if (isManual)
+                                          Container(
+                                            margin: const EdgeInsets.only(right: 6),
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: theme.dividerColor.withAlpha(80),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              'Manual',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: theme.textTheme.bodyMedium?.color?.withAlpha(160),
+                                              ),
+                                            ),
+                                          ),
                                         Text(
                                           isNU ? 'Not Updated' : (isPresent ? 'Present' : 'Absent'),
                                           style: TextStyle(

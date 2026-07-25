@@ -9,8 +9,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
+import 'package:intl/intl.dart';
 
 import '../../models/subject.dart';
+import '../../services/local_pdf_parser.dart';
 import 'aura_ai_dashboard.dart';
 
 // ── JS interop: reads globals set by index.html drop handler ────────────────
@@ -274,18 +276,136 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
     }
   }
 
+  /// Routes an uploaded report to the right parser.
+  ///
+  /// SVKM / Mithibai SAP reports are parsed locally with [LocalPdfParser] for
+  /// guaranteed parity with the mobile app (no network round-trip, exact
+  /// counts). Reports from other colleges don't match its strict
+  /// DATE·TIME·TIME·STATUS row pattern, so the parser throws and we fall back
+  /// to the Gemini AI backend.
   Future<void> _processFile(String name, List<int> bytes) async {
-    try {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-        _parsedSubjects = null;
-        _parsedStats = null;
-        _reportMeta = null;
-        _fileName = name;
-      });
-      _startProgressAnimation();
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+      _parsedSubjects = null;
+      _parsedStats = null;
+      _reportMeta = null;
+      _fileName = name;
+    });
+    _startProgressAnimation();
 
+    // ── 1. Deterministic local parse (SVKM / Mithibai SAP reports) ────────
+    try {
+      final localData = await LocalPdfParser.extractAttendanceFromPdf(
+        Uint8List.fromList(bytes),
+      );
+      final built = _buildFromLocalData(localData);
+      if (built != null) {
+        _applyParsedResult(built.$1, built.$2, built.$3);
+        return;
+      }
+    } catch (_) {
+      // Not an SVKM-format report (or local parse failed) — fall through to AI.
+    }
+
+    // ── 2. AI backend fallback (all other colleges) ──────────────────────
+    await _analyzeWithBackend(name, bytes);
+  }
+
+  /// Maps [LocalPdfParser] output onto the (subjects, stats, meta) shape the
+  /// dashboard consumes. Returns null if the parse produced no usable subjects.
+  (List<Subject>, Map<int, Map<String, int>>, Map<String, String>)?
+      _buildFromLocalData(Map<String, dynamic> data) {
+    final subjectNames = data['subjects'];
+    if (subjectNames is! List || subjectNames.isEmpty) return null;
+    final rawStats = data['subjectStats'] is Map
+        ? data['subjectStats'] as Map
+        : const {};
+
+    final subjects = <Subject>[];
+    final stats = <int, Map<String, int>>{};
+    var id = 1;
+    for (final raw in subjectNames) {
+      final name = raw.toString().trim();
+      if (name.isEmpty) continue;
+      final s = rawStats[name];
+      final attended = s is Map ? (s['attended'] as num?)?.toInt() ?? 0 : 0;
+      final total = s is Map ? (s['total'] as num?)?.toInt() ?? 0 : 0;
+      subjects.add(Subject(
+        id: id,
+        name: name,
+        requiredPercent: _subjectTarget,
+        semester: 1,
+      ));
+      stats[id] = {'attended': attended, 'total': total};
+      id++;
+    }
+    if (subjects.isEmpty) return null;
+
+    final meta = <String, String>{
+      'studentName': (data['name'] ?? '').toString(),
+      'semester': _semesterNumber(data['semester']?.toString() ?? ''),
+      'program': (data['course'] ?? '').toString(),
+      'academicYear': (data['year'] ?? '').toString(),
+      'reportStartDate': _prettyDate(data['startDate']?.toString() ?? ''),
+      'reportEndDate': _prettyDate(data['endDate']?.toString() ?? ''),
+    };
+    return (subjects, stats, meta);
+  }
+
+  /// Commits a successfully parsed result (from either source) to state and
+  /// notifies the host, mirroring the AI path's success handling.
+  void _applyParsedResult(
+    List<Subject> subjects,
+    Map<int, Map<String, int>> stats,
+    Map<String, String> meta,
+  ) {
+    if (!mounted) return;
+    setState(() {
+      _parsedSubjects = subjects;
+      _parsedStats = stats;
+      _reportMeta = meta;
+      _isLoading = false;
+    });
+    _stopProgressAnimation();
+    if (widget.onConfigured != null) {
+      widget.onConfigured!(subjects, stats, meta, _overallTarget, _subjectTarget);
+    }
+  }
+
+  /// "Semester V" / "Semester 5" → "5" (the dashboard prefixes "Semester ").
+  String _semesterNumber(String raw) {
+    final arabic = RegExp(r'\d+').firstMatch(raw);
+    if (arabic != null) return arabic.group(0)!;
+    const roman = {
+      'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000,
+    };
+    final m = RegExp(r'\b([IVXLCDM]+)\b').firstMatch(raw.toUpperCase());
+    if (m == null) return raw.trim();
+    final s = m.group(1)!;
+    var total = 0, prev = 0;
+    for (var i = s.length - 1; i >= 0; i--) {
+      final v = roman[s[i]]!;
+      if (v < prev) {
+        total -= v;
+      } else {
+        total += v;
+        prev = v;
+      }
+    }
+    return total > 0 ? total.toString() : raw.trim();
+  }
+
+  /// yyyy-MM-dd → "dd MMM yyyy", matching the AI dashboard's date style.
+  String _prettyDate(String iso) {
+    final dt = DateTime.tryParse(iso);
+    if (dt == null) return iso;
+    return DateFormat('dd MMM yyyy').format(dt);
+  }
+
+  /// Sends the report to the Gemini backend (used for non-SVKM colleges).
+  Future<void> _analyzeWithBackend(String name, List<int> bytes) async {
+    try {
       final request = http.MultipartRequest(
         'POST',
         Uri.parse(

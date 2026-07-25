@@ -10,8 +10,11 @@ import '../../database/subject_dao.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../services/update_service.dart';
+import '../../theme/app_dimens.dart';
 import '../../theme/theme_provider.dart'; // ✅ NEW IMPORT
 import '../../widgets/backup_sync_card.dart';
+import '../../widgets/fade_slide_in.dart';
+import '../../widgets/pressable.dart';
 import '../../widgets/update_dialog.dart';
 
 
@@ -75,7 +78,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final info = await PackageInfo.fromPlatform();
       if (mounted) {
         setState(() {
-          _appVersion = 'v${info.version} (${info.buildNumber})';
+          _appVersion = info.version;
         });
       }
     } catch (_) {}
@@ -220,7 +223,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
+                  FadeSlideIn(
+                    index: 0,
+                    child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -274,10 +279,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                   ),
+                  ),
 
                   const SizedBox(height: 32),
 
-                  Container(
+                  FadeSlideIn(
+                    index: 1,
+                    child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 6,
@@ -329,81 +337,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                   ),
+                  ),
 
-                  _themeToggleTile(),
+                  FadeSlideIn(index: 2, child: _themeToggleTile()),
 
                   _profileTile(
                     icon: Icons.person_rounded,
                     title: 'Edit Profile & Dates',
-                    onTap: () {
-                      context.go('/app/profile/basic');
-                    },
+                    index: 3,
+                    onTap: () => context.go('/app/profile/basic'),
                   ),
 
                   _profileTile(
                     icon: Icons.book_rounded,
                     title: 'Edit Subjects (Sem $semester)',
-                    onTap: () {
-                      context.go('/app/profile/subjects');
-                    },
+                    index: 4,
+                    onTap: () => context.go('/app/profile/subjects'),
                   ),
 
                   _profileTile(
                     icon: Icons.schedule_rounded,
                     title: 'Edit Timetable (Sem $semester)',
-                    onTap: () {
-                      context.go('/app/profile/timetable');
-                    },
+                    index: 5,
+                    onTap: () => context.go('/app/profile/timetable'),
                   ),
 
                   _profileTile(
                     icon: Icons.rule_rounded,
                     title: 'Attendance Preferences',
-                    onTap: () {
-                      context.go('/app/profile/criteria');
-                    },
+                    index: 6,
+                    onTap: () => context.go('/app/profile/criteria'),
                   ),
 
                   _profileTile(
                     icon: Icons.bar_chart_rounded,
                     title: 'Reports & Analytics',
-                    onTap: () {
-                      context.go('/app/profile/report');
-                    },
+                    index: 7,
+                    onTap: () => context.go('/app/profile/report'),
                   ),
 
                   _profileTile(
                     icon: Icons.cloud_sync_rounded,
                     title: 'Sync New Attendance Report',
-                    onTap: () {
-                      context.go('/app/profile/refresh-pdf');
-                    },
+                    index: 8,
+                    onTap: () => context.go('/app/profile/refresh-pdf'),
                   ),
 
                   const SizedBox(height: 8),
-                  BackupSyncCard(onSyncComplete: _loadProfileData),
+                  FadeSlideIn(index: 9, child: BackupSyncCard(onSyncComplete: _loadProfileData)),
                   const SizedBox(height: 8),
 
                   _profileTile(
                     icon: Icons.manage_accounts_rounded,
                     title: 'Account Settings',
-                    onTap: () {
-                      context.go('/app/profile/account');
-                    },
+                    index: 10,
+                    onTap: () => context.go('/app/profile/account'),
                   ),
 
                   _profileTile(
                     icon: Icons.bug_report_rounded,
                     title: 'Report a Bug',
-                    onTap: () {
-                      context.go('/app/profile/bug-report');
-                    },
+                    index: 11,
+                    onTap: () => context.go('/app/profile/bug-report'),
                   ),
 
                   _profileTile(
                     icon: Icons.system_update_rounded,
                     title: _checkingForUpdate ? 'Checking for updates…' : 'Check for Updates',
                     enabled: !_checkingForUpdate,
+                    index: 12,
                     trailing: _checkingForUpdate
                         ? const SizedBox(
                             width: 20,
@@ -415,16 +417,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
 
                   _profileTile(
-                    icon: Icons.article_rounded,
-                    title: 'Patch Notes',
-                    onTap: () => showPatchNotesHistory(context),
-                  ),
-
-                  _profileTile(
                     icon: Icons.logout_rounded,
                     title: 'Log Out',
-                    isRedAlert:
-                        true, // ✅ Uses dynamic styling for the red button
+                    isRedAlert: true,
+                    index: 13,
                     onTap: _handleLogout,
                   ),
 
@@ -432,7 +428,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   if (_appVersion.isNotEmpty)
                     Center(
                       child: Text(
-                        'AttendEase $_appVersion',
+                        'Version $_appVersion',
                         style: TextStyle(
                           color: theme.textTheme.bodyMedium?.color?.withAlpha(150),
                           fontSize: 13,
@@ -479,9 +475,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'Dark Mode',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
-        trailing: Switch.adaptive(
+        trailing: Switch(
           value: isDark,
-          activeThumbColor: theme.colorScheme.primary,
+          // Explicit colors for both states — the adaptive switch's off-track
+          // was blending into the light card, making the toggle look broken.
+          activeThumbColor: Colors.white,
+          activeTrackColor: theme.colorScheme.primary,
+          inactiveThumbColor: Colors.white,
+          inactiveTrackColor: isDark ? const Color(0xFF3A3A3A) : const Color(0xFFCBD5E1),
+          trackOutlineColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? theme.colorScheme.primary
+                : (isDark ? const Color(0xFF3A3A3A) : const Color(0xFF94A3B8)),
+          ),
           onChanged: (bool value) {
             themeProvider.setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
             setState(() {});
@@ -491,7 +497,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // ✅ UPDATED: Dynamically colors the tiles based on Light/Dark Mode
   Widget _profileTile({
     required IconData icon,
     required String title,
@@ -499,46 +504,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
     bool isRedAlert = false,
     bool enabled = true,
     Widget? trailing,
+    int index = 0,
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 12),
-      // If it's the logout button, make it a soft red. Otherwise, use the theme card color.
-      color: isRedAlert
-          ? (isDark ? Colors.red.withAlpha(38) : Colors.red.shade50)
-          : theme.cardColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: isRedAlert ? Colors.red.withAlpha(76) : theme.dividerColor,
-        ),
-      ),
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: isRedAlert ? Colors.red : theme.colorScheme.primary,
-        ),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
+    return FadeSlideIn(
+      index: index,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: AppDimens.space12),
+        child: Pressable(
+          onTap: enabled ? onTap : null,
+          borderRadius: AppDimens.brMd,
+          child: Card(
+            elevation: 0,
+            margin: EdgeInsets.zero,
             color: isRedAlert
-                ? Colors.red
-                : theme.textTheme.bodyLarge?.color, // ✅ Dynamic Text Color
+                ? (isDark ? Colors.red.withAlpha(38) : Colors.red.shade50)
+                : theme.cardColor,
+            shape: RoundedRectangleBorder(
+              borderRadius: AppDimens.brMd,
+              side: BorderSide(
+                color: isRedAlert ? Colors.red.withAlpha(76) : theme.dividerColor,
+              ),
+            ),
+            child: ListTile(
+              leading: Icon(
+                icon,
+                color: isRedAlert ? Colors.red : theme.colorScheme.primary,
+              ),
+              title: Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: isRedAlert ? Colors.red : theme.textTheme.bodyLarge?.color,
+                ),
+              ),
+              trailing: trailing ??
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: isRedAlert ? Colors.red : Colors.grey,
+                  ),
+              enabled: enabled,
+            ),
           ),
         ),
-        trailing:
-            trailing ??
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 16,
-              color: isRedAlert ? Colors.red : Colors.grey,
-            ),
-        enabled: enabled,
-        onTap: enabled ? onTap : null,
       ),
     );
   }

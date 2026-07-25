@@ -147,35 +147,32 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
           },
           child: _buildPage(_currentIndex),
         ),
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (index) {
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (index) {
             if (widget.navigationShell != null) {
               widget.navigationShell!.goBranch(index);
             } else {
               setState(() {
                 _currentIndex = index;
-                // Force rebuild on every tab switch to pick up latest data
                 _pageRebuildKey++;
               });
             }
           },
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: theme.scaffoldBackgroundColor,
-          selectedItemColor: theme.colorScheme.primary,
-          unselectedItemColor: theme.textTheme.bodyMedium?.color?.withAlpha(153),
-          showUnselectedLabels: true,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard_rounded),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.dashboard_outlined),
+              selectedIcon: Icon(Icons.dashboard_rounded),
               label: 'Dashboard',
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.calendar_month_rounded),
+            NavigationDestination(
+              icon: Icon(Icons.calendar_month_outlined),
+              selectedIcon: Icon(Icons.calendar_month_rounded),
               label: 'Calendar',
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_rounded),
+            NavigationDestination(
+              icon: Icon(Icons.person_outline_rounded),
+              selectedIcon: Icon(Icons.person_rounded),
               label: 'Profile',
             ),
           ],
