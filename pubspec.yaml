@@ -46,6 +46,22 @@ dependencies:
   http_parser: ^4.1.0
   liquid_glass_widgets: ^0.18.4
 
+# A vendored copy of liquid_glass_widgets 0.18.4, patched in one place.
+#
+# The nav bar's selection pill deformed the wrong way as it travelled: the
+# package squashes the indicator *along* its direction of motion and stretches
+# it across, so on the full-width Dashboard->Profile trip the pill necked down
+# to roughly half its width and sprang back on arrival, which reads as it
+# vanishing and reappearing rather than sliding. The two constants that drive
+# it are literals inside the package with no parameter reaching them, so the
+# only way to change it is to own the source.
+#
+# The delta is small and marked with `AttendEase patch:` comments — see
+# third_party/liquid_glass_widgets/README.attendease.md before upgrading.
+dependency_overrides:
+  liquid_glass_widgets:
+    path: third_party/liquid_glass_widgets
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
@@ -8,6 +10,7 @@ import '../../theme/glass_nav_theme.dart';
 import '../calendar/calender_screen.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../profile/profile_screen.dart';
+import 'tab_page_state.dart';
 
 class RootScreen extends StatefulWidget {
   final StatefulNavigationShell? navigationShell;
@@ -21,8 +24,23 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   bool _isSyncing = kIsWeb; // Only sync on start for Web
 
-  // Use a key to force-rebuild pages when data changes
-  int _pageRebuildKey = 0;
+  /// Handles onto the three live tab pages, so a tab change can ask the page it
+  /// reveals to refresh itself instead of replacing it. See [_buildBody].
+  final GlobalKey<TabPageState> _dashboardKey = GlobalKey<TabPageState>();
+  final GlobalKey<TabPageState> _calendarKey = GlobalKey<TabPageState>();
+  final GlobalKey<TabPageState> _profileKey = GlobalKey<TabPageState>();
+
+  /// Defers the revealed page's data reload until the selection pill has landed.
+  ///
+  /// The reload itself is off the UI thread, but the `setState` that lands its
+  /// results is not: on the dashboard it rebuilds every subject card at once,
+  /// which is easily a dropped frame. Holding it until the pill is parked keeps
+  /// that cost out of the one window where a dropped frame is visible as a
+  /// stutter in the slide.
+  Timer? _reloadTimer;
+
+  /// [GlassTabBar]'s pill travels on a 350 ms spring; this clears its tail.
+  static const Duration _pillSettleDelay = Duration(milliseconds: 420);
 
   @override
   void initState() {
@@ -44,16 +62,16 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     if (kIsWeb) {
       await CloudSyncService().restoreDataFromCloud();
       if (mounted) {
-        setState(() {
-          _isSyncing = false;
-          _pageRebuildKey++; // Force fresh pages after sync
-        });
+        // No page refresh needed: `_isSyncing` gates the body, so the pages
+        // are built for the first time here, after the restore has landed.
+        setState(() => _isSyncing = false);
       }
     }
   }
 
   @override
   void dispose() {
+    _reloadTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -77,28 +95,67 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     final result = await CloudSyncService().syncBidirectional();
     if (result == 'restored') {
       debugPrint('☁️ Data updated from cloud! Refreshing UI...');
-      if (mounted) {
-        setState(() {
-          _pageRebuildKey++;
-        });
+      if (!mounted) return;
+      // Every page, not just the visible one — they are all mounted now, and a
+      // restore can have moved data under any of them.
+      for (int i = 0; i < 3; i++) {
+        _pageState(i)?.reloadData();
       }
     }
   }
 
-  /// Build the page for the given index. Uses _pageRebuildKey as a ValueKey
-  /// to force Flutter to recreate the widget (and fire initState) whenever
-  /// data is synced or the tab is re-selected.
+  /// Build the page for the given index.
+  ///
+  /// Keyed by [GlobalKey] rather than the old `ValueKey('dashboard_$n')`: the
+  /// pages are no longer replaced to refresh them, they are asked to reload in
+  /// place, and the key is the handle that asking goes through.
   Widget _buildPage(int index) {
     switch (index) {
-      case 0:
-        return DashboardScreen(key: ValueKey('dashboard_$_pageRebuildKey'));
       case 1:
-        return CalendarScreen(key: ValueKey('calendar_$_pageRebuildKey'));
+        return CalendarScreen(key: _calendarKey);
       case 2:
-        return ProfileScreen(key: ValueKey('profile_$_pageRebuildKey'));
+        return ProfileScreen(key: _profileKey);
       default:
-        return DashboardScreen(key: ValueKey('dashboard_$_pageRebuildKey'));
+        return DashboardScreen(key: _dashboardKey);
     }
+  }
+
+  /// The live state of the page at [index], or null before its first build.
+  TabPageState? _pageState(int index) => switch (index) {
+        1 => _calendarKey.currentState,
+        2 => _profileKey.currentState,
+        _ => _dashboardKey.currentState,
+      };
+
+  /// All three tabs, alive at once, with only the selected one painting.
+  ///
+  /// The body used to be a single `_buildPage(_currentIndex)`, so every tab
+  /// change tore one screen out of the tree and built the other from scratch —
+  /// `initState`, its database read, and the `setState` that rebuilds the whole
+  /// page when that read lands. All of that fell inside the 350 ms the
+  /// selection pill spends travelling, and it ate the window whole: recording
+  /// the bar frame by frame, a Dashboard→Profile switch painted the pill at its
+  /// origin, once about 5% along, and then already parked at its destination.
+  /// Three positions is not a slide, which is exactly why it read as a jump.
+  ///
+  /// An [IndexedStack] costs a repaint and nothing else, so the spring gets
+  /// every frame. It also drops the skeleton flash that used to greet you on
+  /// every return to a tab, since the page you come back to is the one you
+  /// left. Freshness is preserved by [_onTabSelected] instead — it asks the
+  /// revealed page to reload once the pill has landed.
+  ///
+  /// [TickerMode] is what stops the hidden pages from costing anything:
+  /// [IndexedStack] keeps its children mounted but does not silence their
+  /// tickers, so without it the dashboard's progress sweeps would keep
+  /// animating — and driving layout — from behind the calendar.
+  Widget _buildBody() {
+    return IndexedStack(
+      index: _currentIndex,
+      children: <Widget>[
+        for (int i = 0; i < 3; i++)
+          TickerMode(enabled: _currentIndex == i, child: _buildPage(i)),
+      ],
+    );
   }
 
   @override
@@ -133,7 +190,15 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
           context.go('/web/home');
         }
       },
-      child: AdaptiveLiquidGlassLayer(
+      // [GlassNavTheme]'s material, carried on the package's documented page
+      // root rather than a bare `AdaptiveLiquidGlassLayer`.
+      //
+      // The layer renders, but it is *only* the renderer — it carries no
+      // `LiquidGlassScope`, so `GlassBackgroundSource` has no capture key to
+      // find and colour absorption is off entirely. `GlassPage` supplies that
+      // scope and forwards `settings` to the same layer underneath, so the
+      // glass stays the tuned one below while the sampling path is wired.
+      child: GlassPage(
         settings: glassSettings,
         child: Scaffold(
           // The glass has to have something to refract. With the default
@@ -149,19 +214,16 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
           // slide is gone. The pill is already animating during the same
           // window and is the better carrier of the change; the page under it
           // just needs to be there.
-          body: _buildPage(_currentIndex),
+          body: _buildBody(),
+          // The bar is [GlassNavTheme]'s — its proportions, its material, its
+          // per-theme content colours. The *pill* is the package's, left as the
+          // upstream demo renders it.
           bottomNavigationBar: GlassTabBar.bottom(
             selectedIndex: _currentIndex,
             onTabSelected: _onTabSelected,
             settings: glassSettings,
 
             // Proportions — a floating object, not a full-width toolbar.
-            // The metaball blend that stretches the pill toward the bar's edges
-            // as it moves. It is the single biggest source of the "liquid"
-            // read, and it costs a shared-layer composite every frame of the
-            // move. Off: the pill is a rounded rect that slides.
-            enableBlend: false,
-
             barHeight: GlassNavTheme.barHeight,
             barBorderRadius: GlassNavTheme.barRadius,
             horizontalPadding: GlassNavTheme.horizontalInset,
@@ -169,19 +231,38 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
             iconSize: GlassNavTheme.iconSize,
             iconLabelSpacing: 3,
 
-            // A brighter glass lens riding on the bar's glass.
-            indicatorColor: GlassNavTheme.selectionTint(brightness),
-            indicatorSettings: GlassNavTheme.selectionSettings(brightness),
-            indicatorBorderRadius: GlassNavTheme.barRadius - 6,
-            indicatorExpansion:
-                const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+            // ── The pill: the demo's look, this app's motion ──────────
+            //
+            // Look is upstream's. `indicatorSettings` is gone — that was the
+            // blur-0 / index-1.0 material that made the pill a flat tinted
+            // chip instead of a glass lens — so the pill takes the package's
+            // own material, tinted and masked exactly as the demo does it.
+            // `indicatorBorderRadius` and `indicatorExpansion` are unset for
+            // the same reason: the demo sets neither, and both were hand-fitted
+            // off [GlassNavTheme.barRadius].
+            indicatorColor: Colors.blue.withValues(alpha: 0.2),
+            maskingQuality: MaskingQuality.high,
 
-            // The pill just travels. The package layers three separate
-            // deformations on top of that glide — a concave lens pinch, an
-            // icon scale-up, and a press bounce — and with only three tabs the
-            // trip is short enough that they all fire at once and read as the
-            // pill wobbling rather than moving. Neutralised so the motion is
-            // one thing: position.
+            // Motion is unchanged from what this app already had.
+            //
+            // The package layers three deformations on top of the glide — a
+            // concave lens pinch, an icon scale-up, and a press bounce — and
+            // with only three tabs the trip is short enough that they all fire
+            // at once and read as the pill wobbling rather than moving. The
+            // metaball blend that stretches it toward the bar's edges is the
+            // fourth, and it costs a shared-layer composite every frame of the
+            // move. All four stay neutralised, so the motion is one thing:
+            // position.
+            //
+            // The one deformation kept is the jelly stretch, because it is the
+            // only one that describes the travel rather than decorating it: the
+            // pill elongates along its path and contracts on arrival, holding
+            // its area throughout. Upstream has that backwards — it squashes
+            // *along* the direction of motion, which took the pill to 0.6x
+            // width on the Dashboard↔Profile trip and read as it receding
+            // rather than accelerating. Fixed in the vendored copy of the
+            // package; see third_party/liquid_glass_widgets/README.attendease.md.
+            enableBlend: false,
             indicatorPinchStrength: 0,
             magnification: 1.0,
             pressScale: 1.0,
@@ -224,13 +305,19 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   }
 
   void _onTabSelected(int index) {
+    if (index == _currentIndex) return;
+
     if (widget.navigationShell != null) {
       widget.navigationShell!.goBranch(index);
     } else {
-      setState(() {
-        _currentIndex = index;
-        _pageRebuildKey++;
-      });
+      setState(() => _currentIndex = index);
     }
+
+    // The page is already on screen with the data it had when you left it;
+    // this catches it up. Held until the pill has parked — see [_reloadTimer].
+    _reloadTimer?.cancel();
+    _reloadTimer = Timer(_pillSettleDelay, () {
+      if (mounted) _pageState(index)?.reloadData();
+    });
   }
 }

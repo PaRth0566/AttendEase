@@ -46,10 +46,19 @@ android {
 
     signingConfigs {
         create("release") {
-            if (keystorePath != null) storeFile = file(keystorePath)
-            storePassword = keystorePassword
-            keyAlias = releaseKeyAlias
-            keyPassword = releaseKeyPassword
+            val kFile = keystorePath?.let { file(it) }
+            if (kFile != null && kFile.exists()) {
+                storeFile = kFile
+                storePassword = keystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            } else {
+                val debugConfig = signingConfigs.getByName("debug")
+                storeFile = debugConfig.storeFile
+                storePassword = debugConfig.storePassword
+                keyAlias = debugConfig.keyAlias
+                keyPassword = debugConfig.keyPassword
+            }
         }
     }
 

@@ -40,13 +40,37 @@ void main() async {
 
   // Disable orientation limitations on web to prevent startup crashes
   if (kIsWeb) {
-    runApp(LiquidGlassWidgets.wrap(child: const AttendEaseApp()));
+    runApp(LiquidGlassWidgets.wrap(
+      child: const AttendEaseApp(),
+      // The nav pill's metaball blend and lens refraction are gated on
+      // `GlassQuality.premium` inside `AdaptiveLiquidGlassLayer`, and premium
+      // is only reachable through this scope or an explicit `GlassTheme`.
+      // Without it the app is pinned to `standard` — the lightweight fragment
+      // shader, no blend group — so the pill renders flat whatever it is
+      // configured to do.
+      //
+      // Seeds at standard, benchmarks the device for ~3s, and promotes only if
+      // the frame budget holds, so a weak device stays where it is today.
+      adaptiveQuality: true,
+    ));
   } else {
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
       DeviceOrientation.portraitDown,
     ]).then((_) {
-      runApp(LiquidGlassWidgets.wrap(child: const AttendEaseApp()));
+      runApp(LiquidGlassWidgets.wrap(
+      child: const AttendEaseApp(),
+      // The nav pill's metaball blend and lens refraction are gated on
+      // `GlassQuality.premium` inside `AdaptiveLiquidGlassLayer`, and premium
+      // is only reachable through this scope or an explicit `GlassTheme`.
+      // Without it the app is pinned to `standard` — the lightweight fragment
+      // shader, no blend group — so the pill renders flat whatever it is
+      // configured to do.
+      //
+      // Seeds at standard, benchmarks the device for ~3s, and promotes only if
+      // the frame budget holds, so a weak device stays where it is today.
+      adaptiveQuality: true,
+    ));
     });
   }
 }

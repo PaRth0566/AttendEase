@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 
 /// Motion tokens for the whole app.
@@ -22,6 +23,27 @@ class AppMotion {
   /// makes dismissing feel clipped rather than snappy.
   static const Duration morphOpen = Duration(milliseconds: 450);
   static const Duration morphClose = Duration(milliseconds: 400);
+
+  /// The card→page container transform specifically.
+  ///
+  /// One duration for both directions — `OpenContainer` has a single
+  /// `transitionDuration`, and splitting it (450 open / 400 close) made the pop
+  /// read as a different, hastier animation than the push.
+  ///
+  /// Quicker than the budget app's 400ms (475ms on iOS): that pace is tuned for
+  /// its full-width settings rows, and on a card that travels most of the screen
+  /// it lingers. iOS keeps a little more room, matching its slower system
+  /// transitions.
+  static Duration get morphContainer =>
+      defaultTargetPlatform == TargetPlatform.iOS
+          ? const Duration(milliseconds: 340)
+          : const Duration(milliseconds: 300);
+
+  /// Easing for [morphContainer]. `OpenContainer` drives its geometry with
+  /// `fastOutSlowIn` (and `fastOutSlowIn.flipped` in reverse), not M3's
+  /// emphasized [morph] — the two settle onto the tile quite differently, and
+  /// fastOutSlowIn is the one that leaves the tile gently.
+  static const Curve morphContainerCurve = Curves.fastOutSlowIn;
 
   // ── Curves ────────────────────────────────────────────────
   static const Curve enter = Curves.easeOutCubic;

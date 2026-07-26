@@ -118,6 +118,45 @@ void main() {
     });
   }
 
+  // The active tab icon is meant to be the same blue as every other icon in
+  // the app (profile tiles, list leading icons — all colorScheme.primary,
+  // which is AppTheme.primaryBlue in both themes). Light mode can use it
+  // outright; dark mode has to lift it off the 3:1 floor.
+  group('the active icon is the app-wide blue', () {
+    const Color brand = Color(0xFF2563EB);
+
+    test('light mode uses brand blue exactly', () {
+      expect(GlassNavTheme.selectedIcon(Brightness.light), brand);
+    });
+
+    test('dark mode changes lightness and nothing else', () {
+      final HSLColor b = HSLColor.fromColor(brand);
+      final HSLColor icon =
+          HSLColor.fromColor(GlassNavTheme.selectedIcon(Brightness.dark));
+
+      // Hue and saturation are what make it "the same blue". Saturation used
+      // to be pinned at 1.0, above brand's own — more vivid than anything else
+      // on screen, which reads as a different colour just as surely as a
+      // different hue would.
+      expect(icon.hue, closeTo(b.hue, 0.5));
+      expect(icon.saturation, closeTo(b.saturation, 0.01));
+      expect(icon.lightness, greaterThan(b.lightness));
+    });
+
+    test('dark mode lifts no further than the 3:1 floor requires', () {
+      // Guards the other direction: a brighter icon is an easier test to pass
+      // and a worse match. One HSL step down must fail, or the lift has slack
+      // that should be given back.
+      final Color bg = GlassNavTheme.selectionSubstrate(Brightness.dark);
+      final HSLColor icon =
+          HSLColor.fromColor(GlassNavTheme.selectedIcon(Brightness.dark));
+
+      final Color dimmer = icon.withLightness(icon.lightness - 0.01).toColor();
+      expect(_contrast(Color.alphaBlend(dimmer, bg), bg), lessThan(3.0),
+          reason: 'the icon could sit closer to brand blue and still pass');
+    });
+  });
+
   test('why the selected label is not just AppTheme.primaryBlue', () {
     // Regression anchor. Brand blue at full strength fails the 4.5:1 text
     // threshold on *both* pills — it is too dark on the dark one and, because

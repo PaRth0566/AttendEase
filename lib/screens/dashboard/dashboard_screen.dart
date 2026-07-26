@@ -13,11 +13,26 @@ import '../../theme/app_dimens.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/container_transform.dart';
 import '../../utils/calculation_utils.dart';
+import '../root/tab_page_state.dart';
 import '../../widgets/callout_box.dart';
 import '../../widgets/empty_state.dart';
-import '../../widgets/fade_slide_in.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/skeleton.dart';
+
+/// Whether the dashboard's progress sweeps — the overall ring and every subject
+/// bar — have already played in this process.
+///
+/// They are a "here is where you stand" flourish, which only reads as one on a
+/// cold launch. The shell rebuilds each tab's page on selection, so without
+/// this every bar re-filled from zero each time the Dashboard tab came back,
+/// and again after every data reload. A library-level flag (rather than State
+/// fields) survives those State recreations and is shared by the ring and the
+/// cards, which are separate widgets; it dies with the process, so the sweep
+/// returns on the next launch after the app is killed.
+///
+/// Flipped by the ring's `onEnd` — it and the bars start on the same frame with
+/// the same duration, so one owner covers both.
+bool _sweepsPlayed = false;
 
 class DashboardScreen extends StatefulWidget {
   final List<Subject>? overrideSubjects;
@@ -26,10 +41,10 @@ class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.overrideSubjects, this.overrideStats});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  State<DashboardScreen> createState() => DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class DashboardScreenState extends TabPageState<DashboardScreen> {
   final SubjectDao _subjectDao = SubjectDao();
   final AttendanceDao _attendanceDao = AttendanceDao();
   final TimetableDao _timetableDao = TimetableDao();
@@ -47,11 +62,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   List<SkippableDay> _skippableDays = [];
 
-  // The pie-ring sweep should play only once per app launch, not every time
-  // the user returns to the Dashboard tab. This static flag persists across
-  // the State recreations that happen on tab switches.
-  static bool _ringAnimatedOnce = false;
-
   bool _loading = true;
 
   @override
@@ -59,6 +69,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _loadDashboardData();
   }
+
+  @override
+  Future<void> reloadData() => _loadDashboardData();
 
   Future<void> _loadDashboardData() async {
     try {
@@ -242,110 +255,98 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  FadeSlideIn(
-                    index: 0,
-                    child: Text(
-                      'Semester $_activeSemester Overview',
-                      style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
-                    ),
+                  Text(
+                    'Semester $_activeSemester Overview',
+                    style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: AppDimens.space16),
 
                   // ── Overall attendance card ──────────────────────────
-                  FadeSlideIn(
-                    index: 1,
-                    child: Card(
-                      child: Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.all(AppDimens.space20),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Overall Attendance', style: theme.textTheme.bodyMedium),
-                                    const SizedBox(height: AppDimens.space8),
-                                    Text(
-                                      '${_currentOverall.toStringAsFixed(1)}%',
-                                      style: theme.textTheme.displaySmall?.copyWith(
-                                        color: theme.textTheme.bodyLarge?.color,
+                  Card(
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(AppDimens.space20),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Overall Attendance', style: theme.textTheme.bodyMedium),
+                                  const SizedBox(height: AppDimens.space8),
+                                  Text(
+                                    '${_currentOverall.toStringAsFixed(1)}%',
+                                    style: theme.textTheme.displaySmall?.copyWith(
+                                      color: theme.textTheme.bodyLarge?.color,
+                                    ),
+                                  ),
+                                  const SizedBox(height: AppDimens.space8),
+                                  Text(
+                                    'Target: ${_requiredTarget.toStringAsFixed(1)}%',
+                                    style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                              Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  SizedBox(
+                                    height: 70,
+                                    width: 70,
+                                    child: TweenAnimationBuilder<double>(
+                                      // Sweep from 0 only on the first app-open;
+                                      // afterwards jump straight to the value so
+                                      // it doesn't re-animate on every tab return.
+                                      tween: Tween(
+                                        begin: _sweepsPlayed ? _currentOverall / 100 : 0,
+                                        end: _currentOverall / 100,
+                                      ),
+                                      duration: _sweepsPlayed
+                                          ? Duration.zero
+                                          : AppMotion.duration(context, AppMotion.slow),
+                                      curve: AppMotion.enter,
+                                      onEnd: () => _sweepsPlayed = true,
+                                      builder: (context, value, _) => CircularProgressIndicator(
+                                        value: value,
+                                        backgroundColor: theme.dividerColor,
+                                        color: statusColor,
+                                        strokeWidth: 8,
                                       ),
                                     ),
-                                    const SizedBox(height: AppDimens.space8),
-                                    Text(
-                                      'Target: ${_requiredTarget.toStringAsFixed(1)}%',
-                                      style: TextStyle(color: statusColor, fontWeight: FontWeight.w600),
-                                    ),
-                                  ],
-                                ),
-                                Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    SizedBox(
-                                      height: 70,
-                                      width: 70,
-                                      child: TweenAnimationBuilder<double>(
-                                        // Sweep from 0 only on the first app-open;
-                                        // afterwards jump straight to the value so
-                                        // it doesn't re-animate on every tab return.
-                                        tween: Tween(
-                                          begin: _ringAnimatedOnce ? _currentOverall / 100 : 0,
-                                          end: _currentOverall / 100,
-                                        ),
-                                        duration: _ringAnimatedOnce
-                                            ? Duration.zero
-                                            : AppMotion.duration(context, AppMotion.slow),
-                                        curve: AppMotion.enter,
-                                        onEnd: () => _ringAnimatedOnce = true,
-                                        builder: (context, value, _) => CircularProgressIndicator(
-                                          value: value,
-                                          backgroundColor: theme.dividerColor,
-                                          color: statusColor,
-                                          strokeWidth: 8,
-                                        ),
-                                      ),
-                                    ),
-                                    Icon(
-                                      isSafe ? Icons.check_rounded : Icons.close_rounded,
-                                      color: statusColor,
-                                      size: 34,
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                                  ),
+                                  Icon(
+                                    isSafe ? Icons.check_rounded : Icons.close_rounded,
+                                    color: statusColor,
+                                    size: 34,
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                          if (_totalLecturesOverall > 0)
-                            _InsightFooter(
-                              isSafe: overallInsight['isSafe'] as bool,
-                              text: overallInsight['text'] as String,
-                              roundBottom: _skippableDays.isEmpty,
-                            ),
-                          if (_skippableDays.isNotEmpty)
-                            _SkippableDaysSection(days: _skippableDays),
-                        ],
-                      ),
+                        ),
+                        if (_totalLecturesOverall > 0)
+                          _InsightFooter(
+                            isSafe: overallInsight['isSafe'] as bool,
+                            text: overallInsight['text'] as String,
+                            roundBottom: _skippableDays.isEmpty,
+                          ),
+                        if (_skippableDays.isNotEmpty)
+                          _SkippableDaysSection(days: _skippableDays),
+                      ],
                     ),
                   ),
 
                   const SizedBox(height: AppDimens.space24),
-                  FadeSlideIn(
-                    index: 2,
-                    child: Text('Your Subjects', style: theme.textTheme.titleLarge),
-                  ),
+                  Text('Your Subjects', style: theme.textTheme.titleLarge),
                   const SizedBox(height: AppDimens.space12),
 
                   // ── Subject list ─────────────────────────────────────
                   if (_subjects.isEmpty)
-                    FadeSlideIn(
-                      index: 3,
-                      child: EmptyState(
-                        icon: Icons.book_outlined,
-                        title: 'No subjects yet',
-                        message: 'No subjects added for this semester yet.',
-                      ),
+                    EmptyState(
+                      icon: Icons.book_outlined,
+                      title: 'No subjects yet',
+                      message: 'No subjects added for this semester yet.',
                     )
                   else
                     ListView.builder(
@@ -358,35 +359,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         final double percent = stat['total'] == 0
                             ? 0.0
                             : ((stat['attended']! / stat['total']!) * 100);
-                        return FadeSlideIn(
-                          index: i + 3,
-                          child: _SubjectCard(
-                            subject: subject,
-                            percent: percent,
-                            attended: stat['attended']!,
-                            total: stat['total']!,
-                            insight: _getPredictiveInsight(
-                              stat['attended']!,
-                              stat['total']!,
-                              subject.requiredPercent,
-                            ),
+                        return _SubjectCard(
+                          subject: subject,
+                          percent: percent,
+                          attended: stat['attended']!,
+                          total: stat['total']!,
+                          insight: _getPredictiveInsight(
+                            stat['attended']!,
+                            stat['total']!,
+                            subject.requiredPercent,
                           ),
                         );
                       },
                     ),
 
                   const SizedBox(height: AppDimens.space24),
-                  FadeSlideIn(
-                    index: _subjects.length + 4,
-                    child: CalloutBox(
-                      kind: CalloutKind.info,
-                      icon: Icons.info_outline_rounded,
-                      title: 'Attendance Disclaimer',
-                      message:
-                          'This app tracks attendance based on your SAP PDF report. '
-                          'Always verify with your official college records. '
-                          'AttendEase is not responsible for any discrepancies.',
-                    ),
+                  CalloutBox(
+                    kind: CalloutKind.info,
+                    icon: Icons.info_outline_rounded,
+                    title: 'Attendance Disclaimer',
+                    message:
+                        'This app tracks attendance based on your SAP PDF report. '
+                        'Always verify with your official college records. '
+                        'AttendEase is not responsible for any discrepancies.',
                   ),
                   const SizedBox(height: AppDimens.space24),
                 ],
@@ -536,6 +531,7 @@ class _SubjectCard extends StatelessWidget {
     final theme = Theme.of(context);
     final c = context.appColors;
     final bool isSafe = percent >= subject.requiredPercent;
+    final double fraction = total == 0 ? 0.0 : percent / 100;
     final Color color = isSafe ? c.success : c.danger;
     final Color bg = isSafe ? c.successContainer : c.dangerContainer;
     final Color onBg = isSafe ? c.onSuccessContainer : c.onDangerContainer;
@@ -581,13 +577,23 @@ class _SubjectCard extends StatelessWidget {
                       ),
                       const SizedBox(height: AppDimens.space12),
                       TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0, end: total == 0 ? 0.0 : percent / 100),
-                        duration: AppMotion.slow,
+                        // Fills from empty only on a cold launch — see
+                        // [_sweepsPlayed]. On a tab return or a reload the bar
+                        // is already at its value on the first frame.
+                        tween: Tween(
+                          begin: _sweepsPlayed ? fraction : 0.0,
+                          end: fraction,
+                        ),
+                        duration: _sweepsPlayed
+                            ? Duration.zero
+                            : AppMotion.duration(context, AppMotion.slow),
                         curve: AppMotion.enter,
                         builder: (context, value, _) => LinearProgressIndicator(
                           value: value,
                           color: color,
                           backgroundColor: theme.dividerColor,
+                          minHeight: AppDimens.space8,
+                          borderRadius: BorderRadius.circular(AppDimens.space8 / 2),
                         ),
                       ),
                       const SizedBox(height: AppDimens.space8),

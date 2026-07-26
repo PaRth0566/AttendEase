@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../theme/app_dimens.dart';
-import 'fade_slide_in.dart';
 
 /// A single, consistent empty-state block (icon + message + optional action).
 ///
@@ -29,44 +28,42 @@ class EmptyState extends StatelessWidget {
     final muted = theme.textTheme.bodyMedium?.color;
 
     return Center(
-      child: FadeSlideIn(
-        child: Padding(
-          padding: const EdgeInsets.all(AppDimens.space32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: EdgeInsets.all(compact ? AppDimens.space16 : AppDimens.space20),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  icon,
-                  size: compact ? 32 : 48,
-                  color: theme.colorScheme.primary,
-                ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppDimens.space32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: EdgeInsets.all(compact ? AppDimens.space16 : AppDimens.space20),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
               ),
-              const SizedBox(height: AppDimens.space16),
-              if (title != null) ...[
-                Text(
-                  title!,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.titleMedium,
-                ),
-                const SizedBox(height: AppDimens.space8),
-              ],
+              child: Icon(
+                icon,
+                size: compact ? 32 : 48,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: AppDimens.space16),
+            if (title != null) ...[
               Text(
-                message,
+                title!,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: muted, height: 1.4),
+                style: theme.textTheme.titleMedium,
               ),
-              if (action != null) ...[
-                const SizedBox(height: AppDimens.space20),
-                action!,
-              ],
+              const SizedBox(height: AppDimens.space8),
             ],
-          ),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: muted, height: 1.4),
+            ),
+            if (action != null) ...[
+              const SizedBox(height: AppDimens.space20),
+              action!,
+            ],
+          ],
         ),
       ),
     );

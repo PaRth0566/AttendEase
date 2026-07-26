@@ -118,14 +118,30 @@ class GlassNavTheme {
   ///
   /// It used to refract — blur 6 over a 1.45 index, a second full blur pass
   /// compositing every frame the pill was in motion, on top of the bar's own.
-  /// Refraction is also the part that has to resolve as the pill travels,
-  /// which is what made a 350 ms move look like it took longer.
-  ///
-  /// [selectionTint] is doing the real work of marking the selection, so the
-  /// pill stays just as findable without it — and the contrast relationships
-  /// asserted in the tests are unchanged, since they read the tint, not this.
   /// `lightIntensity` is kept up so the rim highlight still separates the pill
   /// from the bar; a chip with no edge reads as a smudge.
+  ///
+  /// ## Why the tint goes in at full alpha here and 0.16 next door
+  ///
+  /// These settings only ever describe the pill **in motion**. The bar paints
+  /// the pill twice: at rest it is `indicatorColor` — [selectionTint], alpha
+  /// and all — as a plain rectangle, and the moment it starts travelling that
+  /// rectangle is cross-faded out and the glass pass takes over for the trip.
+  /// The two have to look the same or the handover reads as the pill blinking
+  /// out and back, which is indistinguishable from it teleporting.
+  ///
+  /// The catch is that alpha means something different on each. On
+  /// `indicatorColor` it is opacity. Here it is the mix factor on the shader's
+  /// tint lift, and the moving body's opacity is pinned at 0.70 by the package
+  /// regardless — so passing [selectionTint]'s own 0.16 reads as "barely tint
+  /// this at all" and the pill crosses the bar as an empty outline. At full
+  /// alpha the lift lands within a couple of points of the resting chip's 16%,
+  /// and the two ends of the cross-fade match.
+  ///
+  /// Dark mode is the case that matches cleanly, because the lift is additive
+  /// and the chip is white. Light mode's chip *darkens* — a shader that can
+  /// only add cannot reproduce that — so there the travelling pill reads as a
+  /// faint blue brightening rather than a blue chip.
   static LiquidGlassSettings selectionSettings(Brightness brightness) {
     return LiquidGlassSettings(
       thickness: 8,
@@ -133,7 +149,7 @@ class GlassNavTheme {
       refractiveIndex: 1.0,
       saturation: 1.0,
       lightIntensity: 0.6,
-      glassColor: selectionTint(brightness),
+      glassColor: selectionTint(brightness).withValues(alpha: 1.0),
     );
   }
 
@@ -149,21 +165,34 @@ class GlassNavTheme {
   ///
   /// Dark mode brightens in HSL rather than by lerping toward white. Lerping
   /// pulls chroma out along with the darkness, which lands on a pale
-  /// periwinkle; raising lightness while holding saturation keeps it reading
-  /// as a *blue* that happens to be bright.
+  /// periwinkle; raising lightness while holding hue and saturation keeps it
+  /// reading as a *blue* that happens to be bright.
   ///
-  /// Lightness sits at 0.62, not the 0.72 it used to. Saturation was already
-  /// pinned at 1.0, so lightness was the only chroma left to spend: in sRGB
-  /// chroma peaks at L=0.5 and falls off toward white, and 0.72 was far enough
-  /// up that slope to cost 36% of it. Coming down to 0.62 buys that back and
-  /// still measures 3.6:1 on the pill, clear of the 3:1 icon floor.
+  /// ## Why the lift is as small as it is
   ///
-  /// Going further is possible but tight — L=0.58 is 3.08:1, which passes on
-  /// paper and leaves nothing for the pill tint to drift.
+  /// Every other blue icon in the app — the profile tiles especially, which
+  /// sit directly above this bar — is `colorScheme.primary`, i.e.
+  /// [AppTheme.primaryBlue] unmodified in both themes. Light mode returns that
+  /// value, so the two already match there. Dark mode cannot: brand blue on
+  /// the selection pill measures 2.68:1, under the 3:1 floor.
+  ///
+  /// So the *only* thing changed is lightness, and only by as much as the
+  /// floor demands. Saturation used to be pinned at 1.0, above brand's own
+  /// 0.832 — that made the nav blue more vivid than every other blue on
+  /// screen, which is a second way to not match. Inheriting brand's saturation
+  /// leaves lightness as the single axis of difference.
+  ///
+  /// L=0.57 is the lowest step that clears the floor, at 3.07:1. The margin is
+  /// thin by construction: anything wider is a blue further from the one the
+  /// rest of the app uses. It is deterministic — these are constants, not
+  /// runtime values — and the contrast test recomputes it, so a drift in the
+  /// pill tint fails there rather than shipping.
+  static const double _darkIconLightness = 0.57;
+
   static Color selectedIcon(Brightness brightness) {
     if (brightness == Brightness.light) return AppTheme.primaryBlue;
     final HSLColor brand = HSLColor.fromColor(AppTheme.primaryBlue);
-    return brand.withLightness(0.62).withSaturation(1.0).toColor();
+    return brand.withLightness(_darkIconLightness).toColor();
   }
 
   /// Selected tab label — the same blue held to the stricter 4.5:1 text

@@ -17,15 +17,16 @@ import '../../theme/glass_nav_theme.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/glass_action_button.dart';
 import '../../widgets/app_overlays.dart';
+import '../root/tab_page_state.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
 
   @override
-  State<CalendarScreen> createState() => _CalendarScreenState();
+  State<CalendarScreen> createState() => CalendarScreenState();
 }
 
-class _CalendarScreenState extends State<CalendarScreen> {
+class CalendarScreenState extends TabPageState<CalendarScreen> {
   final AttendanceDao _attendanceDao = AttendanceDao();
   final SubjectDao _subjectDao = SubjectDao();
   final TimetableDao _timetableDao = TimetableDao();
@@ -178,6 +179,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     if (!mounted) return;
     setState(() => _monthStatuses = newStatuses);
+  }
+
+  /// Re-reads the month heatmap and, if a day is open, that day's schedule.
+  ///
+  /// Deliberately not `_initCalendarDates`: the semester bounds and the day the
+  /// user has scrolled to are view state, not data, and re-deriving them would
+  /// throw you back to today every time you crossed the nav bar.
+  @override
+  Future<void> reloadData() async {
+    await _fetchMonthData(_focusedDay);
+    final DateTime? selected = _selectedDay;
+    if (selected != null && mounted) await _loadForDate(selected);
   }
 
   /// Loads the full day schedule: every lecture the weekly timetable expects
@@ -561,6 +574,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(title: const Text('Calendar'), elevation: 0),
+      // The pill appears and disappears as the selection moves between valid
+      // days, and Scaffold's default animator scale-rotates it in every time.
+      // That made day-tapping feel like it was launching something rather than
+      // just selecting; the pill now cuts straight in and out.
+      floatingActionButtonAnimator: FloatingActionButtonAnimator.noAnimation,
       floatingActionButton: canAddRecord
           // The shell Scaffold sets extendBody, so this inner Scaffold's
           // bottom edge is the screen edge and endFloat drops the FAB right

@@ -54,8 +54,8 @@ class AppPageTransition {
     return CustomTransitionPage(
       key: state.pageKey,
       child: child,
-      transitionDuration: AppMotion.morphOpen,
-      reverseTransitionDuration: AppMotion.morphClose,
+      transitionDuration: AppMotion.morphContainer,
+      reverseTransitionDuration: AppMotion.morphContainer,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final origin = ContainerTransformOrigin.claim(state.pageKey);
         if (origin == null) return buildTransition(context, animation, child);

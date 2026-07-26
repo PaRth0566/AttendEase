@@ -15,19 +15,19 @@ import '../../theme/container_transform.dart';
 import '../../theme/theme_provider.dart'; // ✅ NEW IMPORT
 import '../../widgets/app_overlays.dart';
 import '../../widgets/backup_sync_card.dart';
-import '../../widgets/fade_slide_in.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/update_dialog.dart';
+import '../root/tab_page_state.dart';
 
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  State<ProfileScreen> createState() => ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class ProfileScreenState extends TabPageState<ProfileScreen> {
   final AttendanceDao _attendanceDao = AttendanceDao();
   final SubjectDao _subjectDao = SubjectDao();
 
@@ -47,6 +47,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _loadProfileData();
   }
+
+  @override
+  Future<void> reloadData() => _loadProfileData();
 
   Future<void> _loadProfileData() async {
     final prefs = await SharedPreferences.getInstance();
@@ -229,9 +232,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  FadeSlideIn(
-                    index: 0,
-                    child: Container(
+                  Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -285,13 +286,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                   ),
-                  ),
 
                   const SizedBox(height: 32),
 
-                  FadeSlideIn(
-                    index: 1,
-                    child: Container(
+                  Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 6,
@@ -343,67 +341,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                   ),
-                  ),
 
-                  FadeSlideIn(index: 2, child: _themeToggleTile()),
+                  _themeToggleTile(),
 
                   _profileTile(
                     icon: Icons.person_rounded,
                     title: 'Edit Profile & Dates',
-                    index: 3,
                     onTap: () => context.go('/app/profile/basic'),
                   ),
 
                   _profileTile(
                     icon: Icons.book_rounded,
                     title: 'Edit Subjects (Sem $semester)',
-                    index: 4,
                     onTap: () => context.go('/app/profile/subjects'),
                   ),
 
                   _profileTile(
                     icon: Icons.schedule_rounded,
                     title: 'Edit Timetable (Sem $semester)',
-                    index: 5,
                     onTap: () => context.go('/app/profile/timetable'),
                   ),
 
                   _profileTile(
                     icon: Icons.rule_rounded,
                     title: 'Attendance Preferences',
-                    index: 6,
                     onTap: () => context.go('/app/profile/criteria'),
                   ),
 
                   _profileTile(
                     icon: Icons.bar_chart_rounded,
                     title: 'Reports & Analytics',
-                    index: 7,
                     onTap: () => context.go('/app/profile/report'),
                   ),
 
                   _profileTile(
                     icon: Icons.cloud_sync_rounded,
                     title: 'Sync New Attendance Report',
-                    index: 8,
                     onTap: () => context.go('/app/profile/refresh-pdf'),
                   ),
 
                   const SizedBox(height: 8),
-                  FadeSlideIn(index: 9, child: BackupSyncCard(onSyncComplete: _loadProfileData)),
+                  BackupSyncCard(onSyncComplete: _loadProfileData),
                   const SizedBox(height: 8),
 
                   _profileTile(
                     icon: Icons.manage_accounts_rounded,
                     title: 'Account Settings',
-                    index: 10,
                     onTap: () => context.go('/app/profile/account'),
                   ),
 
                   _profileTile(
                     icon: Icons.bug_report_rounded,
                     title: 'Report a Bug',
-                    index: 11,
                     onTap: () => context.go('/app/profile/bug-report'),
                   ),
 
@@ -411,7 +400,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     icon: Icons.system_update_rounded,
                     title: _checkingForUpdate ? 'Checking for updates…' : 'Check for Updates',
                     enabled: !_checkingForUpdate,
-                    index: 12,
                     trailing: _checkingForUpdate
                         ? const SizedBox(
                             width: 20,
@@ -426,7 +414,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     icon: Icons.logout_rounded,
                     title: 'Log Out',
                     isRedAlert: true,
-                    index: 13,
                     onTap: _handleLogout,
                   ),
 
@@ -510,53 +497,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
     bool isRedAlert = false,
     bool enabled = true,
     Widget? trailing,
-    int index = 0,
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return FadeSlideIn(
-      index: index,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: AppDimens.space12),
-        child: ContainerTransformAnchor(
-          borderRadius: AppDimens.radiusMd,
-          enabled: enabled,
-          child: Pressable(
-            onTap: enabled ? onTap : null,
-            borderRadius: AppDimens.brMd,
-            child: Card(
-              elevation: 0,
-              margin: EdgeInsets.zero,
-              color: isRedAlert
-                  ? (isDark ? Colors.red.withAlpha(38) : Colors.red.shade50)
-                  : theme.cardColor,
-              shape: RoundedRectangleBorder(
-                borderRadius: AppDimens.brMd,
-                side: BorderSide(
-                  color: isRedAlert ? Colors.red.withAlpha(76) : theme.dividerColor,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDimens.space12),
+      child: ContainerTransformAnchor(
+        borderRadius: AppDimens.radiusMd,
+        enabled: enabled,
+        child: Pressable(
+          onTap: enabled ? onTap : null,
+          borderRadius: AppDimens.brMd,
+          child: Card(
+            elevation: 0,
+            margin: EdgeInsets.zero,
+            color: isRedAlert
+                ? (isDark ? Colors.red.withAlpha(38) : Colors.red.shade50)
+                : theme.cardColor,
+            shape: RoundedRectangleBorder(
+              borderRadius: AppDimens.brMd,
+              side: BorderSide(
+                color: isRedAlert ? Colors.red.withAlpha(76) : theme.dividerColor,
+              ),
+            ),
+            child: ListTile(
+              leading: Icon(
+                icon,
+                color: isRedAlert ? Colors.red : theme.colorScheme.primary,
+              ),
+              title: Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: isRedAlert ? Colors.red : theme.textTheme.bodyLarge?.color,
                 ),
               ),
-              child: ListTile(
-                leading: Icon(
-                  icon,
-                  color: isRedAlert ? Colors.red : theme.colorScheme.primary,
-                ),
-                title: Text(
-                  title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    color: isRedAlert ? Colors.red : theme.textTheme.bodyLarge?.color,
+              trailing: trailing ??
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: isRedAlert ? Colors.red : Colors.grey,
                   ),
-                ),
-                trailing: trailing ??
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 16,
-                      color: isRedAlert ? Colors.red : Colors.grey,
-                    ),
-                enabled: enabled,
-              ),
+              enabled: enabled,
             ),
           ),
         ),
