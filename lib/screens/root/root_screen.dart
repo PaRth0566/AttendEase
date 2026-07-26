@@ -240,7 +240,34 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
             // `indicatorBorderRadius` and `indicatorExpansion` are unset for
             // the same reason: the demo sets neither, and both were hand-fitted
             // off [GlassNavTheme.barRadius].
-            indicatorColor: Colors.blue.withValues(alpha: 0.2),
+            // Neutral frosted chip rather than a blue tint; the selected
+            // icon/label colours below are untouched.
+            //
+            // The tint has to invert with the theme, because the pill is a step
+            // in brightness away from the bar and the bar's glass sits at
+            // opposite ends in the two themes. White at 0.12 is a visible lift
+            // on dark glass and *nothing at all* on light glass — which is what
+            // made the light-mode pill disappear — so light mode darkens by the
+            // same idea instead.
+            indicatorColor: brightness == Brightness.dark
+                ? Colors.white.withValues(alpha: 0.12)
+                : const Color(0xFF1F2126).withValues(alpha: 0.10),
+
+            // The *travelling* pill, light mode only.
+            //
+            // `indicatorColor` above is only the resting chip. The moment the
+            // pill starts moving it cross-fades to the package's glass lens,
+            // whose default material is a near-transparent white — a lift, on a
+            // bar that is already the brightest thing on a light screen. That
+            // is the pill going faint mid-trip: not the chip's colour, the
+            // lens's. Light mode swaps in a flat chip that matches the resting
+            // one, so the cross-fade has nothing to give away.
+            //
+            // Dark mode passes null and keeps the package lens untouched — the
+            // default lift works there precisely because the bar is dark.
+            indicatorSettings: brightness == Brightness.dark
+                ? null
+                : GlassNavTheme.travellingPill(brightness),
             maskingQuality: MaskingQuality.high,
 
             // Motion is unchanged from what this app already had.

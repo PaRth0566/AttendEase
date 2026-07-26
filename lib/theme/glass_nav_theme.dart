@@ -83,7 +83,14 @@ class GlassNavTheme {
       lightIntensity: 0.5,
       glassColor: isDark
           ? const Color(0xFF11131A).withValues(alpha: 0.24)
-          : Colors.white.withValues(alpha: 0.22),
+          // Light mode carries more tint than dark. Dark glass gets its edge for
+          // free — anything lighter than the page reads as a surface — but on a
+          // white page a 0.22 white veil is indistinguishable from the
+          // background, so the bar had no visible body and the tab content
+          // floated loose on the page. 0.36 is enough to seat it without
+          // turning the glass opaque — and 0.30 is the ceiling the "glass stays
+          // glass" test holds both themes to, so this sits right on it.
+          : Colors.white.withValues(alpha: 0.30),
       // iOS 26's "legibility veil", ungated in both themes.
       //
       // Light mode used to gate it, on the theory that lifting only bright
@@ -150,6 +157,48 @@ class GlassNavTheme {
       saturation: 1.0,
       lightIntensity: 0.6,
       glassColor: selectionTint(brightness).withValues(alpha: 1.0),
+    );
+  }
+
+  /// The material the pill wears **while it travels**, for light mode.
+  ///
+  /// The material the pill wears **while it travels**, for light mode.
+  ///
+  /// The package's default indicator material is a near-transparent white lift,
+  /// invisible over light glass, so on a light bar the pill vanished for the
+  /// length of every trip and reappeared on arrival. This changes the tint and
+  /// *only* the tint.
+  ///
+  /// That is what the single field buys. `AnimatedGlassIndicator` merges these
+  /// settings over its own `baseIndicatorSettings` and treats any field left at
+  /// the `LiquidGlassSettings()` constructor default as "not overridden", so
+  /// everything the rim is made of — `lightIntensity`, `lightAngle`,
+  /// `refractiveIndex`, `chromaticAberration`, thickness — comes through from
+  /// the base untouched, which is the same base dark mode gets by passing null.
+  /// The two themes' pills therefore have an identical edge by construction
+  /// rather than by two sets of numbers that have to be kept in sync. An
+  /// earlier version spelled out a flat chip here (index 1.0, lightIntensity
+  /// 0.6) and lost the rim highlight and the iridescent fringe with it.
+  ///
+  /// The tint goes in at full alpha deliberately. Here alpha is the shader's
+  /// mix factor, not opacity, and the travelling body's opacity is pinned at
+  /// 0.70 by the package regardless — so handing it the resting chip's own 0.10
+  /// would read as "barely tint this" and the pill would cross as an outline.
+  ///
+  /// Dark mode deliberately has no equivalent: the package lens already lifts
+  /// off dark glass correctly, so [GlassTabBar.indicatorSettings] is left null
+  /// there rather than given a value that happens to match.
+  static LiquidGlassSettings travellingPill(Brightness brightness) {
+    assert(brightness == Brightness.light,
+        'Dark mode keeps the package indicator material; pass null instead.');
+    // `thickness` is the width of the rim band: the base's 20 is the whole
+    // reason the edge reads as a fat bevel. 3 keeps the same highlight and
+    // fringe, drawn as a hairline. It is the one field deliberately *not* inherited
+    // from the base — a dark bar can carry a wide bevel, a white one shows
+    // every pixel of it.
+    return const LiquidGlassSettings(
+      glassColor: Color(0xFF1F2126),
+      thickness: 3,
     );
   }
 
