@@ -571,10 +571,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
+            // The barrier stays — it is what stops a second tap while the
+            // request is in flight — but it no longer carries a spinner of its
+            // own. There were two: this one and the button's. Centred in the
+            // stack, this one landed on top of the Log In button and drew a
+            // theme-coloured indicator over a primary-coloured fill, which is
+            // the smear in the middle of the button. The button's own white
+            // spinner already says the same thing, in the place you just
+            // pressed.
             if (_isLoading)
               const ModalBarrier(dismissible: false, color: Colors.transparent),
-            if (_isLoading)
-              const Center(child: CircularProgressIndicator()),
           ],
         ),
       ),

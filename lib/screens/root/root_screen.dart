@@ -149,13 +149,50 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   /// tickers, so without it the dashboard's progress sweeps would keep
   /// animating — and driving layout — from behind the calendar.
   Widget _buildBody() {
-    return IndexedStack(
-      index: _currentIndex,
-      children: <Widget>[
-        for (int i = 0; i < 3; i++)
-          TickerMode(enabled: _currentIndex == i, child: _buildPage(i)),
-      ],
+    return GestureDetector(
+      // Horizontal fling anywhere on the page walks the tabs in bar order:
+      // Dashboard → Calendar → Profile. It ends on [_onTabSelected], so a swipe
+      // and a tap are the same event downstream — same pill spring, same
+      // deferred reload, same GoRouter branch.
+      //
+      // A [GestureDetector] rather than swapping the [IndexedStack] for a
+      // [PageView], because the stack is load-bearing here: it is what keeps
+      // all three pages mounted so the pill gets every frame of its 350 ms
+      // spring (see the doc above). A PageView would rebuild the incoming page
+      // mid-slide and put the stutter straight back.
+      //
+      // Nothing is passed for the drag start/update callbacks, so this
+      // recognizer stays a plain fling detector and loses the arena to any
+      // horizontally scrollable child — the calendar's own month swipe keeps
+      // working rather than being shadowed by a tab change.
+      onHorizontalDragEnd: _onHorizontalDragEnd,
+      behavior: HitTestBehavior.translucent,
+      child: IndexedStack(
+        index: _currentIndex,
+        children: <Widget>[
+          for (int i = 0; i < 3; i++)
+            TickerMode(enabled: _currentIndex == i, child: _buildPage(i)),
+        ],
+      ),
     );
+  }
+
+  /// Minimum fling speed, in logical pixels per second, that counts as a tab
+  /// swipe. Below this a horizontal drag is far more likely to be a slipped
+  /// vertical scroll or a stray thumb than an intent to leave the page — and
+  /// leaving the page is not a cheap thing to do by accident, since the tab you
+  /// land on reloads its data.
+  static const double _swipeVelocityThreshold = 300;
+
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    final double velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < _swipeVelocityThreshold) return;
+
+    // Swiping left (negative velocity) pulls the next tab in from the right.
+    final int next = velocity < 0 ? _currentIndex + 1 : _currentIndex - 1;
+    if (next < 0 || next > 2) return;
+
+    _onTabSelected(next);
   }
 
   @override
