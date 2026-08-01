@@ -48,6 +48,7 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
     final prefs = await SharedPreferences.getInstance();
     final rawTime = prefs.getString('last_sync_time') ?? "Never";
 
+    if (!mounted) return;
     setState(() {
       _lastSyncTime = _formatTime(rawTime);
     });
@@ -58,6 +59,7 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
   /// - If local has newer data → pushes it up (backup)
   /// This ensures changes made on web show up in app and vice versa.
   Future<void> _handleSync() async {
+    if (_isLoading) return;
     setState(() => _isLoading = true);
 
     try {
@@ -75,6 +77,14 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
           break;
         case 'no_network':
           message = 'No internet connection. Connect to sync.';
+          break;
+        case 'guest':
+          message =
+              'Cloud backup needs an account. Link a Google account in '
+              'Account Settings to sync.';
+          break;
+        case 'syncing':
+          message = 'A sync is already in progress.';
           break;
         case 'no_user':
           message = 'You must be logged in to sync.';
@@ -124,35 +134,46 @@ class _BackupSyncCardState extends State<BackupSyncCard> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.cloud_sync_rounded,
-                      color: Color(0xFF2563EB),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      "Cloud Backup",
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.cloud_sync_rounded,
+                        color: Color(0xFF2563EB),
+                      ),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Text(
+                          "Cloud Backup",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Theme.of(context).textTheme.bodyLarge?.color,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 36.0),
+                    child: Text(
+                      "Last sync: $_lastSyncTime",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                        fontSize: 12,
+                        color: Theme.of(context).textTheme.bodySmall?.color,
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Padding(
-                  padding: const EdgeInsets.only(left: 36.0),
-                  child: Text(
-                    "Last sync: $_lastSyncTime",
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
             _isLoading
                 ? const Padding(

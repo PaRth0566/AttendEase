@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../database/db_helper.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../services/pdf_attendance_import_service.dart';
+import '../../theme/app_breakpoints.dart';
 import '../../widgets/app_buttons.dart';
 
 class BasicInfoScreen extends StatefulWidget {
@@ -26,6 +27,11 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
   int _selectedSemester = 1;
   DateTime? _startDate;
   DateTime? _endDate;
+
+  /// True while [_saveAndNext] is writing prefs and importing the PDF. Drives
+  /// the Next button's spinner and blocks a second submit — a fast double-tap
+  /// previously fired the import twice and double-wrote rows.
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -122,6 +128,10 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
   }
 
   Future<void> _saveAndNext() async {
+    // Block re-entry: the import below is the slow, side-effecting part and a
+    // double-tap must not run it twice.
+    if (_isSaving) return;
+
     if (_nameController.text.trim().isEmpty ||
         _courseController.text.trim().isEmpty ||
         _yearController.text.trim().isEmpty ||
@@ -135,6 +145,15 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
       return;
     }
 
+    setState(() => _isSaving = true);
+    try {
+      await _persistAndImport();
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _persistAndImport() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('full_name', _nameController.text.trim());
     await prefs.setString('course', _courseController.text.trim());
@@ -200,7 +219,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
             constraints: const BoxConstraints(maxWidth: 540),
             child: SingleChildScrollView(
           padding: EdgeInsets.symmetric(
-            horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 24,
+            horizontal: AppBreakpoints.isMobile(context) ? 24 : 40,
             vertical: 16,
           ),
           child: Column(
@@ -272,6 +291,8 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                     Expanded(
                       child: Text(
                         "Attendance history is STRICTLY bound by these dates. Classes occurring outside this timeframe are ignored! Ensure they match your report.",
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontSize: 12,
                           height: 1.4,
@@ -294,6 +315,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                 },
                 onNext: _saveAndNext,
                 nextLabel: widget.isEditMode ? 'Save Changes' : 'Next',
+                nextLoading: _isSaving,
               ),
               const SizedBox(height: 24),
             ],
@@ -335,6 +357,8 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
             Expanded(
               child: Text(
                 date == null ? label : DateFormat('dd MMM yyyy').format(date),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: date == null ? Colors.grey : theme.textTheme.bodyLarge?.color,
                   fontWeight: FontWeight.w500,

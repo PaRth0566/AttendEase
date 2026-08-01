@@ -9,7 +9,8 @@ class AttendanceDao {
   Future<Map<int, Map<String, int>>> getAttendanceStats(int semester) async {
     final db = await DBHelper.instance.database;
 
-    final result = await db.rawQuery('''
+    final result = await db.rawQuery(
+      '''
       SELECT t.subject_id,
              SUM(CASE WHEN a.status = 'P' THEN 1 ELSE 0 END) AS attended,
              COUNT(a.id) AS total
@@ -18,9 +19,11 @@ class AttendanceDao {
       JOIN subjects s ON t.subject_id = s.id
       WHERE s.semester = ?
         AND a.date NOT LIKE 'pad_%'
-        AND a.status != 'NU'
+        AND a.status IN ('P', 'A')
       GROUP BY t.subject_id
-    ''', [semester]);
+    ''',
+      [semester],
+    );
 
     final Map<int, Map<String, int>> stats = {};
 
@@ -29,7 +32,9 @@ class AttendanceDao {
           ? (row['subject_id'] as num).toInt()
           : row['subject_id'] as int;
       stats[subjectId] = {
-        'attended': row['attended'] is num ? (row['attended'] as num).toInt() : 0,
+        'attended': row['attended'] is num
+            ? (row['attended'] as num).toInt()
+            : 0,
         'total': row['total'] is num ? (row['total'] as num).toInt() : 0,
       };
     }
@@ -53,10 +58,34 @@ class AttendanceDao {
     String? originalStatus,
   }) async {
     final db = await DBHelper.instance.database;
+    await upsertAttendanceWith(
+      db,
+      timetableId: timetableId,
+      date: date,
+      status: status,
+      source: source,
+      originalStatus: originalStatus,
+    );
+  }
 
+  /// Transaction-aware variant of [upsertAttendance].
+  ///
+  /// Takes a [DatabaseExecutor] so a caller importing a whole report can run
+  /// the upserts inside a single `db.transaction` rather than one implicit
+  /// transaction per row — the per-row fsync is what made a several-hundred-row
+  /// first upload feel hung. Pass `await DBHelper.instance.database` for the
+  /// non-batched path.
+  Future<void> upsertAttendanceWith(
+    DatabaseExecutor executor, {
+    required int timetableId,
+    required String date,
+    required String status,
+    String source = 'pdf',
+    String? originalStatus,
+  }) async {
     String? baseline = originalStatus;
     if (baseline == null) {
-      final existing = await db.query(
+      final existing = await executor.query(
         'attendance_records',
         columns: ['original_status'],
         where: 'timetable_entry_id = ? AND date = ?',
@@ -72,7 +101,7 @@ class AttendanceDao {
       }
     }
 
-    await db.insert('attendance_records', {
+    await executor.insert('attendance_records', {
       'timetable_entry_id': timetableId,
       'date': date,
       'status': status,
@@ -92,6 +121,41 @@ class AttendanceDao {
       where: 'timetable_entry_id = ? AND date = ?',
       whereArgs: [timetableId, date],
     );
+  }
+
+  Future<void> replaceImportedReportDates(
+    int semester,
+    Iterable<String> dates,
+  ) async {
+    final db = await DBHelper.instance.database;
+    await db.transaction((txn) async {
+      await txn.delete(
+        'imported_report_dates',
+        where: 'semester = ?',
+        whereArgs: [semester],
+      );
+      for (final date in dates) {
+        await txn.insert('imported_report_dates', {
+          'semester': semester,
+          'date': date,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+    });
+  }
+
+  Future<void> addImportedReportDates(
+    int semester,
+    Iterable<String> dates,
+  ) async {
+    final db = await DBHelper.instance.database;
+    await db.transaction((txn) async {
+      for (final date in dates) {
+        await txn.insert('imported_report_dates', {
+          'semester': semester,
+          'date': date,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+    });
   }
 
   // ================================
@@ -139,7 +203,7 @@ class AttendanceDao {
       WHERE s.semester = ?
         AND a.date NOT LIKE 'pad_%'
         AND substr(a.date, 1, 10) >= ? AND substr(a.date, 1, 10) <= ?
-        AND a.status != 'NU'
+        AND a.status IN ('P', 'A')
       GROUP BY t.subject_id
     ''',
       [semester, startDate, endDate],
@@ -178,6 +242,122 @@ class AttendanceDao {
     return maps;
   }
 
+  /// Returns all real attendance records for a semester, including NU and NC.
+  /// Callers use the records themselves to derive date-specific behaviour; the
+  /// recurring timetable is not part of this read path.
+  Future<Map<int, List<Map<String, dynamic>>>> getAttendanceHistoryForSemester(
+    int semester,
+  ) async {
+    final db = await DBHelper.instance.database;
+    final rows = await db.rawQuery(
+      '''
+      SELECT t.subject_id, a.date, a.status
+      FROM attendance_records a
+      INNER JOIN timetable t ON a.timetable_entry_id = t.id
+      INNER JOIN subjects s ON t.subject_id = s.id
+      WHERE s.semester = ? AND a.date NOT LIKE 'pad_%'
+      ORDER BY a.date ASC
+      ''',
+      [semester],
+    );
+    final history = <int, List<Map<String, dynamic>>>{};
+    for (final row in rows) {
+      final subjectId = (row['subject_id'] as num).toInt();
+      (history[subjectId] ??= []).add(Map<String, dynamic>.from(row));
+    }
+    return history;
+  }
+
+  /// Materializes planned slots missing from an imported teaching day as NC.
+  /// Actual imported/manual rows are never removed or remapped, and the weekly
+  /// timetable remains a reusable plan for future weeks.
+  Future<void> reconcileNotConductedLectures(int semester) async {
+    final db = await DBHelper.instance.database;
+    await db.transaction((txn) async {
+      final teachingDates = await txn.rawQuery(
+        '''
+        SELECT DISTINCT substr(a.date, 1, 10) AS date
+        FROM attendance_records a
+        INNER JOIN timetable t ON a.timetable_entry_id = t.id
+        INNER JOIN subjects s ON t.subject_id = s.id
+        WHERE s.semester = ?
+          AND a.source = 'pdf'
+          AND a.status IN ('P', 'A', 'NU')
+          AND a.date NOT LIKE 'pad_%'
+        ''',
+        [semester],
+      );
+
+      for (final dateRow in teachingDates) {
+        final date = dateRow['date'] as String;
+        final weekday = DateTime.parse(date).weekday;
+        final planned = await txn.rawQuery(
+          '''
+          SELECT t.subject_id, COUNT(*) AS lecture_count
+          FROM timetable t
+          INNER JOIN subjects s ON t.subject_id = s.id
+          WHERE s.semester = ? AND t.day_of_week = ?
+          GROUP BY t.subject_id
+          ''',
+          [semester, weekday],
+        );
+
+        for (final slot in planned) {
+          final subjectId = (slot['subject_id'] as num).toInt();
+          final plannedCount = (slot['lecture_count'] as num).toInt();
+          final representedCountResult = await txn.rawQuery(
+            '''
+            SELECT COUNT(*) AS lecture_count
+            FROM attendance_records a
+            INNER JOIN timetable t ON a.timetable_entry_id = t.id
+            WHERE t.subject_id = ?
+              AND substr(a.date, 1, 10) = ?
+            ''',
+            [subjectId, date],
+          );
+          final representedCount =
+              (representedCountResult.first['lecture_count'] as num).toInt();
+          final missing = plannedCount - representedCount;
+          if (missing <= 0) continue;
+
+          final seedRows = await txn.query(
+            'timetable',
+            columns: ['id'],
+            where: 'day_of_week = 0 AND subject_id = ?',
+            whereArgs: [subjectId],
+            limit: 1,
+          );
+          if (seedRows.isEmpty) continue;
+          final seedId = seedRows.first['id'] as int;
+          final existingRows = await txn.query(
+            'attendance_records',
+            columns: ['date'],
+            where: 'timetable_entry_id = ? AND date LIKE ?',
+            whereArgs: [seedId, '$date%'],
+          );
+          final used = existingRows.map((row) => row['date'] as String).toSet();
+          var suffix = 1;
+          for (var i = 0; i < missing; i++) {
+            var key = suffix == 1 ? date : '${date}_$suffix';
+            while (used.contains(key)) {
+              suffix++;
+              key = '${date}_$suffix';
+            }
+            used.add(key);
+            suffix++;
+            await txn.insert('attendance_records', {
+              'timetable_entry_id': seedId,
+              'date': key,
+              'status': 'NC',
+              'source': 'schedule',
+              'original_status': 'NC',
+            });
+          }
+        }
+      }
+    });
+  }
+
   // ================================
   // FETCH ATTENDANCE STATUSES FOR A SPECIFIC DATE RANGE (CALENDAR HEATMAP)
   // ================================
@@ -193,8 +373,10 @@ class AttendanceDao {
       FROM attendance_records a
       INNER JOIN timetable t ON a.timetable_entry_id = t.id
       INNER JOIN subjects s ON t.subject_id = s.id
-      WHERE s.semester = ? AND a.date >= ? AND a.date <= ?
+      WHERE s.semester = ?
         AND a.date NOT LIKE 'pad_%'
+        AND substr(a.date, 1, 10) >= ?
+        AND substr(a.date, 1, 10) <= ?
     ''',
       [semester, startDate, endDate],
     );
@@ -202,7 +384,9 @@ class AttendanceDao {
     final Map<String, List<String>> dateStatuses = {};
     for (final row in result) {
       final rawDate = row['date'] as String;
-      final date = rawDate.split('_')[0]; // Strip suffix to match UI (YYYY-MM-DD)
+      final date = rawDate.split(
+        '_',
+      )[0]; // Strip suffix to match UI (YYYY-MM-DD)
       final status = row['status'] as String;
       if (!dateStatuses.containsKey(date)) {
         dateStatuses[date] = [];
@@ -251,12 +435,10 @@ class AttendanceDao {
   // ================================
   // GET FULL DAY SCHEDULE (TIMETABLE-FILLED)
   // ================================
-  // Merges the weekly timetable's expected lectures for [date]'s weekday with
-  // the actually-stored records, so every scheduled lecture appears — even ones
-  // with no record yet (rendered as virtual "Not Updated" rows the user can set).
-  // This makes each weekday show a consistent lecture count (fixes the 4/5/6
-  // Monday inconsistency). Rows are returned in timetable order, with any extra
-  // recorded lectures (beyond the timetable) appended.
+  // Before a date is covered by an imported SAP report, scheduled lectures with
+  // no record appear as virtual "Not Updated" rows. Once SAP coverage includes
+  // the date, only report records are returned: missing scheduled rows were not
+  // conducted, while unscheduled report rows are actual extra/swapped lectures.
   //
   // Each row: record_id (null when virtual), subject_id, subject_name,
   // timetable_entry_id (the day=0 seed id), status, record_date (unique key),
@@ -267,6 +449,14 @@ class AttendanceDao {
   ) async {
     final db = await DBHelper.instance.database;
     final weekday = DateTime.parse(date).weekday; // 1 = Mon … 7 = Sun
+    final importedDate = await db.query(
+      'imported_report_dates',
+      columns: ['id'],
+      where: 'semester = ? AND date = ?',
+      whereArgs: [semester, date],
+      limit: 1,
+    );
+    final hasImportedReport = importedDate.isNotEmpty;
 
     // 1. Expected lectures for this weekday, in slot order.
     final timetableRows = await db.rawQuery(
@@ -316,26 +506,38 @@ class AttendanceDao {
       );
     }
 
-    // Expected lecture count per subject (from the timetable), preserving the
-    // first-seen order of subjects across the day.
+    // For imported dates, persisted records are authoritative. This includes
+    // replacement subjects and reconciled NC rows; the recurring timetable is
+    // only used to fill dates that have no imported coverage.
     final expectedCount = <int, int>{};
     final expectedName = <int, String>{};
     final orderedSubjects = <int>[];
-    for (final row in timetableRows) {
-      final sid = row['subject_id'] as int;
-      if (!expectedCount.containsKey(sid)) {
-        orderedSubjects.add(sid);
-        expectedName[sid] = row['subject_name'] as String;
+    if (hasImportedReport) {
+      for (final row in recordRows) {
+        final sid = row['subject_id'] as int;
+        if (!expectedCount.containsKey(sid)) {
+          orderedSubjects.add(sid);
+          expectedName[sid] = row['subject_name'] as String;
+        }
+        expectedCount[sid] = (expectedCount[sid] ?? 0) + 1;
       }
-      expectedCount[sid] = (expectedCount[sid] ?? 0) + 1;
-    }
-    // Include any subjects that have records but aren't in the timetable
-    // (e.g. manually-added extra lectures) so nothing is ever hidden.
-    for (final sid in recordsBySubject.keys) {
-      if (!expectedCount.containsKey(sid)) {
-        orderedSubjects.add(sid);
-        expectedName[sid] = recordsBySubject[sid]!.first['subject_name'] as String;
-        expectedCount[sid] = 0;
+    } else {
+      for (final row in timetableRows) {
+        final sid = row['subject_id'] as int;
+        if (!expectedCount.containsKey(sid)) {
+          orderedSubjects.add(sid);
+          expectedName[sid] = row['subject_name'] as String;
+        }
+        expectedCount[sid] = (expectedCount[sid] ?? 0) + 1;
+      }
+      // Extra manually-recorded lectures remain visible on uncovered dates.
+      for (final sid in recordsBySubject.keys) {
+        if (!expectedCount.containsKey(sid)) {
+          orderedSubjects.add(sid);
+          expectedName[sid] =
+              recordsBySubject[sid]!.first['subject_name'] as String;
+          expectedCount[sid] = 0;
+        }
       }
     }
 
@@ -345,11 +547,15 @@ class AttendanceDao {
     for (final sid in orderedSubjects) {
       final records = recordsBySubject[sid] ?? const [];
       final expected = expectedCount[sid] ?? 0;
-      final showCount = records.length > expected ? records.length : expected;
+      final showCount = hasImportedReport
+          ? records.length
+          : (records.length > expected ? records.length : expected);
 
       // Track date keys already taken by real records to avoid collisions
       // when generating keys for virtual slots.
-      final usedKeys = <String>{for (final r in records) r['record_date'] as String};
+      final usedKeys = <String>{
+        for (final r in records) r['record_date'] as String,
+      };
       var nextKeyIndex = 0;
       String nextFreeKey() {
         var k = keyForIndex(nextKeyIndex);
@@ -365,7 +571,7 @@ class AttendanceDao {
       for (var i = 0; i < showCount; i++) {
         if (i < records.length) {
           result.add(records[i]);
-        } else {
+        } else if (!hasImportedReport) {
           // Virtual "Not Updated" slot filled from the timetable.
           final seedId = seedBySubject[sid];
           if (seedId == null) continue; // no seed slot -> cannot store; skip
@@ -418,38 +624,4 @@ class AttendanceDao {
     return result.map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
-  // ================================
-  // CALCULATE CURRENT STREAK
-  // ================================
-  Future<int> getCurrentStreak(int semester) async {
-    final db = await DBHelper.instance.database;
-
-    // Groups real-dated records by date, counting P and A per day.
-    // Pseudo-dates (pad_P_, pad_A_) excluded via length(a.date)=10.
-    final result = await db.rawQuery('''
-      SELECT a.date,
-             SUM(CASE WHEN a.status = 'A' THEN 1 ELSE 0 END) as absent_count,
-             SUM(CASE WHEN a.status = 'P' THEN 1 ELSE 0 END) as present_count
-      FROM attendance_records a
-      JOIN timetable t ON a.timetable_entry_id = t.id
-      JOIN subjects s ON t.subject_id = s.id
-      WHERE s.semester = ? AND a.date NOT LIKE 'pad_%'
-        AND a.status != 'NU'
-      GROUP BY substr(a.date, 1, 10)
-      ORDER BY substr(a.date, 1, 10) DESC
-    ''', [semester]);
-
-    int streak = 0;
-    for (final row in result) {
-      int absentCount = row['absent_count'] as int;
-      int presentCount = row['present_count'] as int;
-
-      if (absentCount > 0) {
-        break; // Streak is broken the moment we find an absent record!
-      } else if (presentCount > 0) {
-        streak++; // Perfect day!
-      }
-    }
-    return streak;
-  }
 }

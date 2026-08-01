@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../theme/app_breakpoints.dart';
+import '../../theme/app_dimens.dart';
+import '../../widgets/app_buttons.dart';
+import '../../widgets/callout_box.dart';
+import '../../widgets/pdf_source_widgets.dart';
+
 class BugReportScreen extends StatefulWidget {
   const BugReportScreen({super.key});
 
@@ -63,10 +69,10 @@ class _BugReportScreenState extends State<BugReportScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Report a Bug'),
         backgroundColor: Colors.transparent,
@@ -74,240 +80,99 @@ class _BugReportScreenState extends State<BugReportScreen> {
         foregroundColor: theme.textTheme.bodyLarge?.color,
       ),
       body: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 540),
-            child: Padding(
+            child: SingleChildScrollView(
               padding: EdgeInsets.symmetric(
-                horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 24,
+                horizontal: AppBreakpoints.isMobile(context) ? 24 : 40,
                 vertical: 24,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Icon with gradient glow
-                  Center(
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF6366F1), Color(0xFF3B82F6)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF6366F1).withValues(alpha: 0.35),
-                            blurRadius: 32,
-                            offset: const Offset(0, 12),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.bug_report_rounded,
-                        size: 48,
-                        color: Colors.white,
-                      ),
-                    ),
+                  // Sibling of the Sync / Upload screens (§11): same hero card,
+                  // no step indicator — this is a one-step form.
+                  const PdfSourceHeroCard(
+                    icon: Icons.bug_report_rounded,
+                    title: 'Found a problem?',
+                    subtitle:
+                        "Tell us what went wrong and we'll look into it.",
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: AppDimens.space16),
+
+                  // Only the account id is attached (see _submitBugReport) — do
+                  // not claim device/version details that are not sent.
+                  const CalloutBox(
+                    kind: CalloutKind.info,
+                    title: 'Note:',
+                    message:
+                        'Your account is attached so we can follow up on your '
+                        'report.',
+                  ),
+                  const SizedBox(height: AppDimens.space24),
 
                   Text(
-                    'Found an issue?',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: theme.textTheme.bodyLarge?.color,
-                    ),
+                    'Describe the issue',
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(fontWeight: FontWeight.bold),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Let us know what went wrong, and we\'ll fix it as soon as possible.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.5,
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.55)
-                          : const Color(0xFF64748B),
-                    ),
-                  ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: AppDimens.space16),
 
-                  // Title field
-                  TextField(
-                    controller: _titleController,
-                    style: TextStyle(
-                      color: theme.textTheme.bodyLarge?.color,
-                      fontSize: 15,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: 'Brief Title',
-                      hintText: 'E.g. App crashes on login',
-                      labelStyle: TextStyle(
-                        color: isDark
-                            ? const Color(0xFFA5B4FC)
-                            : const Color(0xFF6366F1),
-                        fontWeight: FontWeight.w500,
-                      ),
-                      hintStyle: TextStyle(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.3)
-                            : const Color(0xFF94A3B8),
-                      ),
-                      filled: true,
-                      fillColor: isDark
-                          ? Colors.white.withValues(alpha: 0.05)
-                          : const Color(0xFFF8FAFC),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : const Color(0xFFE2E8F0),
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : const Color(0xFFE2E8F0),
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF6366F1),
-                          width: 1.5,
-                        ),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Description field
-                  Expanded(
-                    child: TextField(
-                      controller: _descController,
-                      maxLines: null,
-                      expands: true,
-                      textAlignVertical: TextAlignVertical.top,
-                      style: TextStyle(
-                        color: theme.textTheme.bodyLarge?.color,
-                        fontSize: 15,
-                        height: 1.5,
-                      ),
-                      decoration: InputDecoration(
-                        labelText: 'Detailed Description',
-                        hintText: 'Please describe the bug and how to reproduce it...',
-                        labelStyle: TextStyle(
-                          color: isDark
-                              ? const Color(0xFFA5B4FC)
-                              : const Color(0xFF6366F1),
-                          fontWeight: FontWeight.w500,
-                        ),
-                        hintStyle: TextStyle(
-                          color: isDark
-                              ? Colors.white.withValues(alpha: 0.3)
-                              : const Color(0xFF94A3B8),
-                        ),
-                        filled: true,
-                        fillColor: isDark
-                            ? Colors.white.withValues(alpha: 0.05)
-                            : const Color(0xFFF8FAFC),
-                        alignLabelWithHint: true,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : const Color(0xFFE2E8F0),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : const Color(0xFFE2E8F0),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF6366F1),
-                            width: 1.5,
-                          ),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 14,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Submit button with gradient
                   Container(
+                    padding: const EdgeInsets.all(AppDimens.space16),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF6366F1), Color(0xFF3B82F6)],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF6366F1).withValues(alpha: 0.4),
-                          blurRadius: 24,
-                          offset: const Offset(0, 10),
+                      color: theme.cardColor,
+                      borderRadius: BorderRadius.circular(AppDimens.radiusLg),
+                      border: Border.all(color: theme.dividerColor),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _fieldLabel('Brief Title', theme),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _titleController,
+                          maxLength: 200,
+                          textInputAction: TextInputAction.next,
+                          decoration: _fieldDecoration(
+                            theme,
+                            hint: 'E.g. App crashes on login',
+                          ),
+                        ),
+                        const SizedBox(height: AppDimens.space12),
+                        _fieldLabel('Detailed Description', theme),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: _descController,
+                          minLines: 4,
+                          maxLines: 6,
+                          maxLength: 5000,
+                          textInputAction: TextInputAction.newline,
+                          decoration: _fieldDecoration(
+                            theme,
+                            hint:
+                                'Please describe the bug and how to reproduce '
+                                'it...',
+                          ),
                         ),
                       ],
                     ),
-                    child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : _submitBugReport,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        foregroundColor: Colors.white,
-                        shadowColor: Colors.transparent,
-                        disabledBackgroundColor: Colors.transparent,
-                        disabledForegroundColor: Colors.white70,
-                        padding: const EdgeInsets.symmetric(vertical: 18),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.send_rounded, size: 20),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Submit Bug Report',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
+                  ),
+                  const SizedBox(height: AppDimens.space24),
+
+                  PrimaryButton(
+                    label: 'Submit Bug Report',
+                    icon: Icons.send_rounded,
+                    loading: _isSubmitting,
+                    onPressed: _submitBugReport,
+                  ),
+                  const SizedBox(height: AppDimens.space24),
+
+                  const ReassuranceCard(
+                    title: 'We only receive what you type here.',
+                    subtitle: 'No screenshots or files are sent automatically.',
                   ),
                 ],
               ),
@@ -315,6 +180,34 @@ class _BugReportScreenState extends State<BugReportScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _fieldLabel(String text, ThemeData theme) {
+    return Text(
+      text,
+      style: theme.textTheme.labelLarge?.copyWith(
+        fontWeight: FontWeight.w600,
+        color: theme.textTheme.bodyMedium?.color,
+      ),
+    );
+  }
+
+  InputDecoration _fieldDecoration(ThemeData theme, {required String hint}) {
+    OutlineInputBorder border(Color color, [double width = 1]) =>
+        OutlineInputBorder(
+          borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+          borderSide: BorderSide(color: color, width: width),
+        );
+    return InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: theme.scaffoldBackgroundColor,
+      border: border(theme.dividerColor),
+      enabledBorder: border(theme.dividerColor),
+      focusedBorder: border(theme.colorScheme.primary, 1.5),
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     );
   }
 }

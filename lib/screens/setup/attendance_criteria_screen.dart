@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../database/subject_dao.dart';
 import '../../models/subject.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../theme/app_breakpoints.dart';
 import '../../widgets/app_buttons.dart';
 
 class AttendanceCriteriaScreen extends StatefulWidget {
@@ -130,89 +131,120 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 540),
-          child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 24,
-          vertical: 16,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Attendance Requirements',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: theme.textTheme.bodyLarge?.color,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Default values are pre-filled — edit them to match your college requirements.',
-              style: TextStyle(
-                fontSize: 13,
-                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
-                height: 1.4,
-              ),
-            ),
-            const SizedBox(height: 24),
+      // Two text fields with no scroll view could not survive the soft
+      // keyboard. The LayoutBuilder keeps the nav buttons pinned to the bottom
+      // on a tall screen (minHeight + spaceBetween) while letting the whole
+      // column scroll once the keyboard shrinks the viewport — a Spacer cannot
+      // do that job inside a scroll view.
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 540),
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppBreakpoints.isMobile(context) ? 24 : 40,
+                  vertical: 16,
+                ),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight - 32,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Attendance Requirements',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Default values are pre-filled — edit them to match your college requirements.',
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withValues(alpha: 0.7),
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
 
-            Text(
-              'Overall Attendance Required (%)',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: theme.textTheme.bodyMedium?.color, // ✅ Dynamic subtitle
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: overallController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              style: TextStyle(
-                color: theme.textTheme.bodyLarge?.color,
-              ),
-              decoration: _inputStyle('e.g. 75 (default)', theme),
-            ),
+                          Text(
+                            'Overall Attendance Required (%)',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: theme.textTheme.bodyMedium?.color,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: overallController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            style: TextStyle(
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
+                            decoration: _inputStyle('e.g. 75 (default)', theme),
+                          ),
 
-            const SizedBox(height: 24),
+                          const SizedBox(height: 24),
 
-            Text(
-              'Minimum Attendance Per Subject (%)',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: theme.textTheme.bodyMedium?.color, // ✅ Dynamic subtitle
+                          Text(
+                            'Minimum Attendance Per Subject (%)',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: theme.textTheme.bodyMedium?.color,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: subjectController,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            style: TextStyle(
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
+                            decoration: _inputStyle('e.g. 70 (default)', theme),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      Column(
+                        children: [
+                          SetupNavButtons(
+                            onBack: () => Navigator.pop(context),
+                            onNext: _saveData,
+                            nextLabel: widget.isEditMode
+                                ? 'Save Changes'
+                                : 'Next',
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: subjectController,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              style: TextStyle(
-                color: theme.textTheme.bodyLarge?.color,
-              ),
-              decoration: _inputStyle('e.g. 70 (default)', theme),
-            ),
-
-            const Spacer(),
-
-            SetupNavButtons(
-              onBack: () => Navigator.pop(context),
-              onNext: _saveData,
-              nextLabel: widget.isEditMode ? 'Save Changes' : 'Next',
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
+          ),
         ),
       ),
     );

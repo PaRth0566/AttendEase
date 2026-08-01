@@ -31,9 +31,19 @@ class PrimaryButton extends StatelessWidget {
         : (icon != null
             ? Row(
                 mainAxisSize: MainAxisSize.min,
-                children: [Icon(icon, size: 18), const SizedBox(width: 8), Text(label)],
+                children: [
+                  Icon(icon, size: 18),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               )
-            : Text(label));
+            : Text(label, maxLines: 1, overflow: TextOverflow.ellipsis));
 
     final button = ElevatedButton(
       onPressed: loading ? null : onPressed,
@@ -65,9 +75,12 @@ class SecondaryButton extends StatelessWidget {
         ? OutlinedButton.icon(
             onPressed: onPressed,
             icon: Icon(icon, size: 18),
-            label: Text(label),
+            label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
           )
-        : OutlinedButton(onPressed: onPressed, child: Text(label));
+        : OutlinedButton(
+            onPressed: onPressed,
+            child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+          );
     return expanded ? SizedBox(width: double.infinity, child: button) : button;
   }
 }
@@ -96,7 +109,10 @@ class SetupNavButtons extends StatelessWidget {
       children: [
         if (onBack != null) ...[
           Expanded(
-            child: OutlinedButton(onPressed: onBack, child: Text(backLabel)),
+            child: OutlinedButton(
+              onPressed: onBack,
+              child: Text(backLabel, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
           ),
           const SizedBox(width: 12),
         ],

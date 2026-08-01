@@ -57,6 +57,8 @@ class EmptyState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(color: muted, height: 1.4),
             ),
             if (action != null) ...[

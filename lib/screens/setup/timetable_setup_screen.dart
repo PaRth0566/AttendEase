@@ -7,6 +7,7 @@ import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
 import '../../models/timetable_entry.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../theme/app_breakpoints.dart';
 
 class TimetableSetupScreen extends StatefulWidget {
   final bool isEditMode;
@@ -109,14 +110,6 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
     }
   }
 
-  Future<void> _skipSetup() async {
-    if (widget.isEditMode) {
-      Navigator.pop(context);
-      return;
-    }
-    await _completeSetupAndNavigate();
-  }
-
   Future<void> _completeSetupAndNavigate() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_setup_complete', true);
@@ -139,14 +132,15 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 24,
-              vertical: 10,
-            ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppBreakpoints.isMobile(context) ? 24 : 40,
+                vertical: 10,
+              ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -167,7 +161,9 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     height: 1.4,
-                    color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+                    color: theme.textTheme.bodyMedium?.color?.withValues(
+                      alpha: 0.7,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -189,8 +185,12 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                             selectedColor: theme.colorScheme.primary,
                             backgroundColor: isDark
                                 ? theme.cardColor
-                                : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                : theme.colorScheme.surfaceContainerHighest
+                                      .withValues(alpha: 0.5),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                               side: BorderSide(
@@ -203,7 +203,9 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                               color: isSelected
                                   ? Colors.white
                                   : theme.textTheme.bodyLarge?.color,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.w600,
                               fontSize: 15,
                             ),
                             onSelected: (_) async {
@@ -244,11 +246,15 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                             color: theme.textTheme.bodyLarge?.color,
                             fontWeight: FontWeight.w600,
                           ),
-                          icon: Icon(Icons.keyboard_arrow_down_rounded, color: theme.colorScheme.primary),
+                          icon: Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            color: theme.colorScheme.primary,
+                          ),
                           decoration: InputDecoration(
                             hintText: 'Select subject',
                             hintStyle: TextStyle(
-                              color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                              color: theme.textTheme.bodyMedium?.color
+                                  ?.withValues(alpha: 0.6),
                               fontWeight: FontWeight.normal,
                             ),
                             contentPadding: const EdgeInsets.symmetric(
@@ -270,7 +276,9 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
                               borderSide: BorderSide(
-                                color: theme.colorScheme.primary.withValues(alpha: 0.5),
+                                color: theme.colorScheme.primary.withValues(
+                                  alpha: 0.5,
+                                ),
                                 width: 2,
                               ),
                             ),
@@ -279,11 +287,16 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                               .map(
                                 (s) => DropdownMenuItem(
                                   value: s,
-                                  child: Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  child: Text(
+                                    s.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                               )
                               .toList(),
-                          onChanged: (v) => setState(() => _selectedSubject = v),
+                          onChanged: (v) =>
+                              setState(() => _selectedSubject = v),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -291,7 +304,9 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                         decoration: BoxDecoration(
                           boxShadow: [
                             BoxShadow(
-                              color: theme.colorScheme.primary.withValues(alpha: 0.3),
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.3,
+                              ),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),
@@ -332,13 +347,17 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                               Container(
                                 padding: const EdgeInsets.all(24),
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                                  color: theme.colorScheme.primary.withValues(
+                                    alpha: 0.1,
+                                  ),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   Icons.calendar_today_rounded,
                                   size: 48,
-                                  color: theme.colorScheme.primary.withValues(alpha: 0.6),
+                                  color: theme.colorScheme.primary.withValues(
+                                    alpha: 0.6,
+                                  ),
                                 ),
                               ),
                               const SizedBox(height: 20),
@@ -354,9 +373,12 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                               Text(
                                 'We couldn\'t find any consistent classes for this day in your PDF report (or you just don\'t have any!).\n\nIf you do have classes today, please add them manually above.',
                                 textAlign: TextAlign.center,
+                                maxLines: 6,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   fontSize: 14,
-                                  color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+                                  color: theme.textTheme.bodyMedium?.color
+                                      ?.withValues(alpha: 0.7),
                                 ),
                               ),
                             ],
@@ -365,23 +387,28 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                       : ListView.separated(
                           physics: const BouncingScrollPhysics(),
                           itemCount: _daySubjects.length,
-                          separatorBuilder: (_, _) => const SizedBox(height: 12),
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 12),
                           itemBuilder: (_, i) {
                             return Container(
                               decoration: BoxDecoration(
                                 color: isDark ? theme.cardColor : Colors.white,
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
-                                  color: theme.dividerColor.withValues(alpha: 0.5),
+                                  color: theme.dividerColor.withValues(
+                                    alpha: 0.5,
+                                  ),
                                 ),
                                 boxShadow: isDark
                                     ? []
                                     : [
                                         BoxShadow(
-                                          color: Colors.black.withValues(alpha: 0.03),
+                                          color: Colors.black.withValues(
+                                            alpha: 0.03,
+                                          ),
                                           blurRadius: 10,
                                           offset: const Offset(0, 4),
-                                        )
+                                        ),
                                       ],
                               ),
                               child: ListTile(
@@ -393,16 +420,22 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                                   width: 40,
                                   height: 40,
                                   decoration: BoxDecoration(
-                                    color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                                    color: theme.colorScheme.primary.withValues(
+                                      alpha: 0.15,
+                                    ),
                                     shape: BoxShape.circle,
                                   ),
                                   child: Center(
-                                    child: Text(
-                                      '${i + 1}',
-                                      style: TextStyle(
-                                        color: theme.colorScheme.primary,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        '${i + 1}',
+                                        maxLines: 1,
+                                        style: TextStyle(
+                                          color: theme.colorScheme.primary,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -419,8 +452,11 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 trailing: IconButton(
-                                  icon: Icon(Icons.delete_outline_rounded,
-                                      color: Colors.red.shade400, size: 24),
+                                  icon: Icon(
+                                    Icons.delete_outline_rounded,
+                                    color: Colors.red.shade400,
+                                    size: 24,
+                                  ),
                                   onPressed: () =>
                                       setState(() => _daySubjects.removeAt(i)),
                                   tooltip: 'Remove Lecture',
@@ -444,22 +480,16 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                           child: const Text('Back'),
                         ),
                       ),
-                      if (!widget.isEditMode) ...[
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 1,
-                          child: OutlinedButton(
-                            onPressed: _skipSetup,
-                            child: const Text('Skip'),
-                          ),
-                        ),
-                      ],
                       const SizedBox(width: 12),
                       Expanded(
                         flex: 2,
                         child: ElevatedButton(
                           onPressed: _finishSetup,
-                          child: Text(widget.isEditMode ? 'Save Timetable' : 'Finish Setup'),
+                          child: Text(
+                            widget.isEditMode
+                                ? 'Save Timetable'
+                                : 'Finish Setup',
+                          ),
                         ),
                       ),
                     ],
@@ -469,6 +499,7 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }

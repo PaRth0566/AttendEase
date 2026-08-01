@@ -164,6 +164,8 @@ class SetupChoiceScreen extends StatelessWidget {
                         children: [
                           Text(
                             title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
@@ -173,6 +175,8 @@ class SetupChoiceScreen extends StatelessWidget {
                           const SizedBox(height: 6),
                           Text(
                             subtitle,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 14,
                               height: 1.4,

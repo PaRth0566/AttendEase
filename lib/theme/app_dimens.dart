@@ -21,6 +21,13 @@ class AppDimens {
   static const double space32 = 32;
   static const double space48 = 48;
 
+  /// Gap between a tab screen's AppBar and its first content row.
+  ///
+  /// One value for Dashboard, Calendar and Profile so the three tabs line up
+  /// when you slide between them — an uneven gap here reads as content jumping
+  /// as it crosses.
+  static const double headerContentGap = space4;
+
   // ── Corner radius scale ───────────────────────────────────
   static const double radiusSm = 8;
   static const double radiusMd = 12;

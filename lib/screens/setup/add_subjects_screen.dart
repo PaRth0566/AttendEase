@@ -6,6 +6,7 @@ import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../theme/app_breakpoints.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_overlays.dart';
 
@@ -193,12 +194,13 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
         elevation: 0,
         automaticallyImplyLeading: false,
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
-          child: Padding(
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Padding(
         padding: EdgeInsets.symmetric(
-          horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 24,
+          horizontal: AppBreakpoints.isMobile(context) ? 24 : 40,
           vertical: 16,
         ),
         child: Column(
@@ -290,6 +292,8 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
                     child: ListTile(
                       title: Text(
                         subject.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
                           color: theme
@@ -321,6 +325,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
         ),
       ),
         ),
+      ),
       ),
     );
   }

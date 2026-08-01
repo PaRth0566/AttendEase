@@ -131,6 +131,8 @@ You are a precise attendance data extractor. Accuracy is critical — a student'
 I have attached a college attendance PDF report. It contains rows with: Date, Subject, and a status column marked as one of:
 - "P" = Present (student attended)
 - "A" = Absent (student did NOT attend)
+- "NU" = Conducted but attendance was not updated; exclude it from totals
+- "Cancelled" / "Not Conducted" = planned lecture did not happen; exclude it from totals
 
 STEP-BY-STEP INSTRUCTIONS:
 1. First, extract metadata from the report header: student full name, semester, program, academic year, report start date, and report end date.
@@ -138,7 +140,7 @@ STEP-BY-STEP INSTRUCTIONS:
 3. For EACH subject, go through EVERY row belonging to that subject and:
    - Count "P" entries → this is "attended"
    - Count "A" entries → add to total but NOT to attended
-   - SKIP any "Cancelled" entries entirely — do NOT count them in attended OR total
+   - SKIP any "NU", "Cancelled", or "Not Conducted" entries entirely — do NOT count them in attended OR total
    - "total" = number of "P" entries + number of "A" entries (excluding Cancelled)
 4. Double-check your counts by verifying: attended + absent = total for each subject.
 

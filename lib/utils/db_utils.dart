@@ -1,5 +1,3 @@
-
-
 class DbUtils {
   /// Sanitizes a Firestore row for safe SQLite insertion.
   /// Enforces types and basic constraints.
@@ -24,7 +22,9 @@ class DbUtils {
           // Normalize to canonical upper-case form so downstream `status == 'P'`
           // comparisons stay consistent; fall back to 'NU' for unknown values.
           final normalized = value.toUpperCase();
-          value = ['P', 'A', 'NU'].contains(normalized) ? normalized : 'NU';
+          value = ['P', 'A', 'NU', 'NC'].contains(normalized)
+              ? normalized
+              : 'NU';
         }
         // Limit abnormally long strings
         if (value.length > 255) {

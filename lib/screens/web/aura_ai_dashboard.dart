@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../models/subject.dart';
+import '../../theme/app_breakpoints.dart';
 
 class AuraAIDashboard extends StatelessWidget {
   final List<Subject> subjects;
@@ -35,8 +36,7 @@ class AuraAIDashboard extends StatelessWidget {
         ? 0.0 
         : (totalAttended / totalLectures) * 100;
 
-    final w = MediaQuery.of(context).size.width;
-    final isMobile = w < 600;
+    final isMobile = AppBreakpoints.isMobile(context);
 
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -131,8 +131,7 @@ class AuraAIDashboard extends StatelessWidget {
             })(),
     };
 
-    final w = MediaQuery.of(context).size.width;
-    final bool isSmallMobile = w < 600;
+    final bool isSmallMobile = AppBreakpoints.isMobile(context);
     final double cardPadding = isSmallMobile ? 16.0 : 32.0;
 
     Color progressColor;
@@ -186,6 +185,8 @@ class AuraAIDashboard extends StatelessWidget {
                                               true
                                           ? reportMeta!['studentName']!
                                           : 'Julian Drake',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                           fontSize: 20,
                                           fontWeight: FontWeight.w600,
@@ -197,6 +198,8 @@ class AuraAIDashboard extends StatelessWidget {
                                       reportMeta?['program']?.isNotEmpty == true
                                           ? reportMeta!['program']!
                                           : 'Computer Science',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w500,
@@ -207,6 +210,8 @@ class AuraAIDashboard extends StatelessWidget {
                                   const SizedBox(height: 2),
                                   Text(
                                       'Semester ${reportMeta?['semester'] ?? '4'} • ${reportMeta?['academicYear'] ?? '2024'}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
                                           fontSize: isSmallMobile ? 11 : 12,
                                           color: isDark
@@ -224,12 +229,20 @@ class AuraAIDashboard extends StatelessWidget {
                                       children: [
                                         Icon(Icons.access_time_rounded, size: 14, color: isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5)),
                                         const SizedBox(width: 8),
-                                        Text(
-                                          '${reportMeta?['reportStartDate'] ?? '01 Feb 2026'} → ${reportMeta?['reportEndDate'] ?? '01 Apr 2026'}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                                        // Flexible, not a bare Text: a
+                                        // mainAxisSize.min Row cannot shrink an
+                                        // intrinsic child, so a long date range
+                                        // would overflow a narrow card.
+                                        Flexible(
+                                          child: Text(
+                                            '${reportMeta?['reportStartDate'] ?? '01 Feb 2026'} → ${reportMeta?['reportEndDate'] ?? '01 Apr 2026'}',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: isDark ? const Color(0xFFCBD5E1) : const Color(0xFF475569),
+                                            ),
                                           ),
                                         ),
                                       ],
@@ -245,31 +258,44 @@ class AuraAIDashboard extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Overall Attendance', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${overallPercentage.toStringAsFixed(1)}%',
-                                  style: TextStyle(
-                                    fontSize: isSmallMobile ? 40 : 48,
-                                    fontWeight: FontWeight.w800,
-                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
-                                    letterSpacing: -1,
-                                  )
-                                ),
-                                const SizedBox(height: 4),
-                                RichText(
-                                  text: TextSpan(
-                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: progressColor),
-                                    children: [
-                                      TextSpan(text: 'Target: ${overallTarget.toStringAsFixed(0)}%  •  $totalAttended/$totalLectures'),
-                                    ]
-                                  )
-                                ),
-                              ]
+                            // Expanded: the gauge beside this column is a fixed
+                            // 72px, so the text side must be the one that gives.
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Overall Attendance', maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B))),
+                                  const SizedBox(height: 4),
+                                  // The percentage must stay whole, so it scales
+                                  // down rather than ellipsizing.
+                                  FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      '${overallPercentage.toStringAsFixed(1)}%',
+                                      style: TextStyle(
+                                        fontSize: isSmallMobile ? 40 : 48,
+                                        fontWeight: FontWeight.w800,
+                                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                        letterSpacing: -1,
+                                      )
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  RichText(
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    text: TextSpan(
+                                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: progressColor),
+                                      children: [
+                                        TextSpan(text: 'Target: ${overallTarget.toStringAsFixed(0)}%  •  $totalAttended/$totalLectures'),
+                                      ]
+                                    )
+                                  ),
+                                ]
+                              ),
                             ),
+                            const SizedBox(width: 16),
                             Stack(
                               alignment: Alignment.center,
                               children: [
@@ -363,8 +389,7 @@ class AuraAIDashboard extends StatelessWidget {
   }
 
   Widget _buildRightColumn(BuildContext context, bool isDark) {
-    final w = MediaQuery.of(context).size.width;
-    final isMobile = w < 600;
+    final isMobile = AppBreakpoints.isMobile(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,6 +498,8 @@ class AuraAIDashboard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             subject.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
@@ -481,6 +508,7 @@ class AuraAIDashboard extends StatelessWidget {
                             ),
                           ),
                         ),
+                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 6),
@@ -513,25 +541,30 @@ class AuraAIDashboard extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            RichText(
-                              text: TextSpan(
-                                  text: '$attended / $total ',
-                                  style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark
-                                          ? Colors.white
-                                          : const Color(0xFF0F172A)),
-                                  children: [
-                                    TextSpan(
-                                        text: 'Lectures',
-                                        style: TextStyle(
-                                            fontWeight: FontWeight.normal,
-                                            color: isDark
-                                                ? const Color(0xFF94A3B8)
-                                                : const Color(0xFF64748B))),
-                                  ]),
+                            Flexible(
+                              child: RichText(
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                text: TextSpan(
+                                    text: '$attended / $total ',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark
+                                            ? Colors.white
+                                            : const Color(0xFF0F172A)),
+                                    children: [
+                                      TextSpan(
+                                          text: 'Lectures',
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.normal,
+                                              color: isDark
+                                                  ? const Color(0xFF94A3B8)
+                                                  : const Color(0xFF64748B))),
+                                    ]),
+                              ),
                             ),
+                            const SizedBox(width: 8),
                             Text('${percentNumber.toStringAsFixed(0)}%',
                                 style: TextStyle(
                                     fontSize: 16,

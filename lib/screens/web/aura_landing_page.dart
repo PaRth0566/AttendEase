@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/subject.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../theme/app_breakpoints.dart';
 import '../../theme/theme_provider.dart';
 import 'aura_ai_dashboard.dart';
 import 'aura_upload_config.dart';
@@ -242,7 +243,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
           ),
 
           // BottomNavBar (Mobile Only)
-          if (MediaQuery.of(context).size.width < 768)
+          if (AppBreakpoints.isWebMobile(context))
             Positioned(
               bottom: 0,
               left: 0,
@@ -294,8 +295,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
 
   // ── Top Nav Bar ──
   Widget _buildTopNavBar(bool isDark) {
-    final w = MediaQuery.of(context).size.width;
-    final isDesktop = w >= 768;
+    final isDesktop = !AppBreakpoints.isWebMobile(context);
 
     return ClipRRect(
       child: BackdropFilter(
@@ -334,71 +334,82 @@ class _AuraLandingPageState extends State<AuraLandingPage>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               // Left Section: Brand + Nav
-              Row(
-                children: [
-                  // Brand — tapping returns to Home
-                  GestureDetector(
-                    onTap: () => _onNavTap(0),
-                    child: MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: Row(
-                        children: [
-                          Image.asset(
-                            'assets/icon/app_icon2.png',
-                            width: 32,
-                            height: 32,
-                            errorBuilder: (c, e, s) => Icon(
-                              Icons.school,
-                              color: isDark
-                                  ? const Color(0xFFA5B4FC)
-                                  : const Color(0xFF4F46E5),
+              // Flexible: the trailing group is mainAxisSize.min and must stay
+              // fully visible, so the brand/nav side is the one that yields
+              // just above the 768 breakpoint where both groups are widest.
+              Flexible(
+                child: Row(
+                  children: [
+                    // Brand — tapping returns to Home
+                    GestureDetector(
+                      onTap: () => _onNavTap(0),
+                      child: MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: Row(
+                          children: [
+                            Image.asset(
+                              'assets/icon/app_icon2.png',
+                              width: 32,
+                              height: 32,
+                              errorBuilder: (c, e, s) => Icon(
+                                Icons.school,
+                                color: isDark
+                                    ? const Color(0xFFA5B4FC)
+                                    : const Color(0xFF4F46E5),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'AttendEase',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.5,
-                              foreground: Paint()
-                                ..shader =
-                                    LinearGradient(
-                                      colors: isDark
-                                          ? [
-                                              const Color(0xFFA5B4FC),
-                                              const Color(0xFFC7D2FE),
-                                            ]
-                                          : [
-                                              const Color(0xFF4F46E5),
-                                              const Color(0xFF7C3AED),
-                                            ],
-                                    ).createShader(
-                                      const Rect.fromLTWH(0, 0, 150, 40),
-                                    ),
+                            const SizedBox(width: 12),
+                            Flexible(
+                              child: Text(
+                                'AttendEase',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.5,
+                                  foreground: Paint()
+                                    ..shader =
+                                        LinearGradient(
+                                          colors: isDark
+                                              ? [
+                                                  const Color(0xFFA5B4FC),
+                                                  const Color(0xFFC7D2FE),
+                                                ]
+                                              : [
+                                                  const Color(0xFF4F46E5),
+                                                  const Color(0xFF7C3AED),
+                                                ],
+                                        ).createShader(
+                                          const Rect.fromLTWH(0, 0, 150, 40),
+                                        ),
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
 
-                  // Desktop Nav
-                  if (isDesktop) ...[
-                    const SizedBox(width: 48), // Gap between brand and nav
-                    Row(
-                      children: [
-                        _navItem('Home', 0, isDark),
-                        const SizedBox(width: 32),
-                        _navItem('Upload', 1, isDark),
-                        if (_parsedSubjects != null) ...[
-                          const SizedBox(width: 32),
-                          _navItem('Dashboard', 2, isDark),
-                        ],
-                      ],
-                    ),
+                    // Desktop Nav
+                    if (isDesktop) ...[
+                      const SizedBox(width: 48), // Gap between brand and nav
+                      Flexible(
+                        child: Row(
+                          children: [
+                            _navItem('Home', 0, isDark),
+                            const SizedBox(width: 32),
+                            _navItem('Upload', 1, isDark),
+                            if (_parsedSubjects != null) ...[
+                              const SizedBox(width: 32),
+                              _navItem('Dashboard', 2, isDark),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
 
               // Trailing — Desktop: GitHub icon+text, then theme toggle
@@ -660,10 +671,9 @@ class _AuraLandingPageState extends State<AuraLandingPage>
 
   // ── Home Tab ──
   Widget _buildHomeTab(bool isDark) {
-    final w = MediaQuery.of(context).size.width;
-    final isMobile = w < 768;
-    final isTablet = w >= 768 && w < 1024;
-    final isDesktop = w >= 1024;
+    final isMobile = AppBreakpoints.isWebMobile(context);
+    final isTablet = AppBreakpoints.isWebTablet(context);
+    final isDesktop = AppBreakpoints.isWebDesktop(context);
 
     return Column(
       children: [
@@ -721,7 +731,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
               Text(
                 'AttendEase',
                 style: TextStyle(
-                  fontSize: MediaQuery.of(context).size.width < 768 ? 32 : 48,
+                  fontSize: isMobile ? 32 : 48,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -1.5,
                   foreground: Paint()
@@ -1048,12 +1058,14 @@ class _AuraLandingPageState extends State<AuraLandingPage>
     Color accent,
     bool isMobile,
   ) {
-    final w = MediaQuery.of(context).size.width;
+    // Raw width is needed here for the column arithmetic, not just a branch.
+    final w = AppBreakpoints.widthOf(context);
     double cardW = double.infinity;
 
-    if (w >= 1024) {
-      cardW = ((w > 1024 ? 1024 : w) - 120) / 4;
-    } else if (w >= 768) {
+    if (AppBreakpoints.isWebDesktop(context)) {
+      cardW =
+          ((w > AppBreakpoints.tablet ? AppBreakpoints.tablet : w) - 120) / 4;
+    } else if (!AppBreakpoints.isWebMobile(context)) {
       cardW = (w - 72) / 2;
     } else {
       // 2 columns on mobile
@@ -1101,6 +1113,8 @@ class _AuraLandingPageState extends State<AuraLandingPage>
               SizedBox(height: isMobile ? 12 : 16),
               Text(
                 title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: isMobile ? 15 : 17,
                   fontWeight: FontWeight.w800,
@@ -1286,7 +1300,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
 
   /// Empty state shown when user navigates to Dashboard without uploading a PDF.
   Widget _buildDashboardEmptyState(bool isDark) {
-    final isMobile = MediaQuery.of(context).size.width < 768;
+    final isMobile = AppBreakpoints.isWebMobile(context);
     return Center(
       child: Padding(
         padding: EdgeInsets.symmetric(

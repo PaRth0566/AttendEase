@@ -31,7 +31,12 @@ class GlassNavTheme {
   static const double horizontalInset = 32;
   static const double verticalInset = 14;
 
-  static const double iconSize = 22;
+  /// Roomier than the 22 the Material icons sat at. The nav icons are now
+  /// hand-drawn (see `widgets/animated_nav_icons.dart`) and the calendar's is a
+  /// twelve-dot grid on a 2.25-unit pitch in a 24-unit box; at 22px those dots
+  /// land 2.06px apart with a 1.75px diameter and read as a smudge rather than
+  /// as days.
+  static const double iconSize = 26;
   static const double labelSize = 10;
 
   // ── Floating action pill ──────────────────────────────────

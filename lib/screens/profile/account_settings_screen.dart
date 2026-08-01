@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import '../../database/db_helper.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../theme/app_breakpoints.dart';
 import '../../widgets/app_overlays.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
@@ -87,23 +89,25 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: const Text('Confirm Your Identity'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Please enter your current password for ${user.email} to continue.',
-              style: const TextStyle(fontSize: 13, height: 1.5),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: passCtrl,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Current Password',
-                border: OutlineInputBorder(),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Please enter your current password for ${user.email} to continue.',
+                style: const TextStyle(fontSize: 13, height: 1.5),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              TextField(
+                controller: passCtrl,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Current Password',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -173,33 +177,35 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         barrierDismissible: false,
         builder: (ctx) => AlertDialog(
           title: const Text('Set a Password'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Your account was created with Google and has no password yet. '
-                'Set one now to enable email & password login.',
-                style: TextStyle(fontSize: 13, height: 1.5),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: newPassCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'New Password',
-                  border: OutlineInputBorder(),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Your account was created with Google and has no password yet. '
+                  'Set one now to enable email & password login.',
+                  style: TextStyle(fontSize: 13, height: 1.5),
                 ),
-                obscureText: true,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: confirmPassCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Confirm Password',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: newPassCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'New Password',
+                    border: OutlineInputBorder(),
+                  ),
+                  obscureText: true,
                 ),
-                obscureText: true,
-              ),
-            ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirmPassCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Confirm Password',
+                    border: OutlineInputBorder(),
+                  ),
+                  obscureText: true,
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -257,37 +263,93 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   }
 
   Future<void> _linkWithGoogle() async {
+    if (_isLoading) return;
     setState(() => _isLoading = true);
     try {
-      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      // Reuse AuthService's Google flow so the credential handling and the
+      // error-to-message mapping live in exactly one place. It signs the
+      // Google SDK out first, so the account chooser always appears.
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      try {
+        await googleSignIn.signOut();
+      } catch (_) {}
+
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return; // aborted
       }
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
+      if (googleAuth.idToken == null) {
+        _showSnackBar(
+          'Google did not return a sign-in token. '
+          'The app\'s Google configuration is incomplete.',
+        );
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
       final AuthCredential credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
-      await _auth.currentUser?.linkWithCredential(credential);
-      // Successfully linked! Sync local data to the newly upgraded Cloud account.
-      await _syncService.backupDataToCloud();
 
-      _showSnackBar('Successfully linked to Google and synced your data!');
+      final user = _auth.currentUser;
+      if (user == null) {
+        _showSnackBar('You are no longer signed in. Please log in again.');
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      await user.linkWithCredential(credential);
+      // The anonymous account has been upgraded in place, so the UID is
+      // unchanged and the local data is still this user's. Reload so the
+      // screen reflects the new provider/email before we report success.
+      await user.reload();
+
+      // Successfully linked! Sync local data to the newly upgraded Cloud
+      // account. Report the sync result honestly rather than claiming a
+      // sync that did not happen.
+      final bool synced = await _syncService.backupDataToCloud();
+
+      if (!mounted) return;
       setState(() {});
+      _showSnackBar(
+        synced
+            ? 'Successfully linked to Google and synced your data!'
+            : 'Linked to Google. Your data will sync on the next backup.',
+      );
+    } on PlatformException catch (e) {
+      debugPrint('Link Google PlatformException: ${e.code} ${e.message}');
+      if (e.code == '10' ||
+          e.message?.contains('10:') == true ||
+          e.message?.contains('DEVELOPER_ERROR') == true) {
+        _showSnackBar(
+          'Google Sign-In is not configured for this build '
+          '(certificate not registered).',
+        );
+      } else if (e.code == 'network_error') {
+        _showSnackBar('Network error. Check your connection and try again.');
+      } else {
+        _showSnackBar('Could not link your Google account. Please try again.');
+      }
     } on FirebaseAuthException catch (e) {
       if (e.code == 'credential-already-in-use') {
         _showSnackBar(
           'This Google account is already linked to another AttendEase account. Please choose a different Google account.',
         );
+      } else if (e.code == 'provider-already-linked') {
+        _showSnackBar('This account is already linked to Google.');
+      } else if (e.code == 'network-request-failed') {
+        _showSnackBar('Network error. Check your connection and try again.');
       } else {
         _showSnackBar('Could not link your Google account. Please try again.');
       }
     } catch (e) {
+      debugPrint('Link Google error: ${e.runtimeType} $e');
       _showSnackBar('Something went wrong. Please try again.');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -298,22 +360,27 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Account?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'This action is irreversible. All your data will be permanently deleted.',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            const Text('Type "DELETE" below to confirm:'),
-            const SizedBox(height: 8),
-            TextField(
-              controller: deleteController,
-              decoration: const InputDecoration(border: OutlineInputBorder()),
-            ),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'This action is irreversible. All your data will be permanently deleted.',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Type "DELETE" below to confirm:'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: deleteController,
+                decoration: const InputDecoration(border: OutlineInputBorder()),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -351,11 +418,24 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     try {
       final user = _auth.currentUser;
       if (user != null) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .delete();
+        // Delete the auth user FIRST. It is the step that can fail
+        // (`requires-recent-login`), and if it does we must not have already
+        // destroyed the Firestore document — that would leave the user with a
+        // live account and no data and no way to get it back.
         await user.delete();
+
+        // The auth user is gone. Clean up its Firestore document. The security
+        // rules key on request.auth.uid, which is now null, so this delete is
+        // attempted while still holding the old token and may be rejected;
+        // failing here must not abort the local cleanup below.
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .delete();
+        } catch (e) {
+          debugPrint('Cloud document cleanup after delete failed: $e');
+        }
       }
 
       await _authService.signOut();
@@ -367,13 +447,14 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         await db.delete('attendance_records');
         await db.delete('timetable');
         await db.delete('subjects');
+        await db.delete('imported_report_dates');
       }
 
       if (mounted) {
         context.go('/login');
       }
     } on FirebaseAuthException catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       if (e.code == 'requires-recent-login') {
         _showSnackBar(
           'Security requirement: Please log out, log back in, and try deleting your account again.',
@@ -382,7 +463,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         _showSnackBar('Could not delete account. Please try again.');
       }
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       _showSnackBar('Something went wrong. Please try again.');
     }
   }
@@ -395,19 +476,19 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Account Settings')),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 600),
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: MediaQuery.of(context).size.width > 600
-                        ? 32
-                        : 16,
-                    vertical: 16,
-                  ),
+      body: SafeArea(
+        top: false,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 600),
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppBreakpoints.isMobile(context) ? 16 : 32,
+                      vertical: 16,
+                    ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -433,6 +514,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                           isGuest
                               ? 'Guest Account'
                               : (user?.email ?? 'Unknown Email'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: isGuest
                             ? const Text('Temporary session')
@@ -493,6 +576,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 ),
               ),
             ),
+      ),
     );
   }
 
@@ -528,6 +612,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         ),
         subtitle: Text(
           subtitle,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: 12,
             color: isDestructive

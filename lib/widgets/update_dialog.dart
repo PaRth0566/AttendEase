@@ -11,6 +11,10 @@ Future<void> showUpdateBottomSheet(BuildContext context, UpdateInfo info) {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
+    // _SheetFrame applies its own 0.85 height cap and its children rely on a
+    // bounded constraint (Flexible around a scroll view / ListView), which the
+    // helper's default scroll wrapper would remove.
+    selfSizing: true,
     backgroundColor: Colors.transparent,
     builder: (_) => _UpdateSheet(info: info),
   );
@@ -25,6 +29,7 @@ Future<void> showPatchNotesSheet(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
+    selfSizing: true,
     backgroundColor: Colors.transparent,
     builder: (_) => _PatchNotesSheet(notes: notes),
   );
@@ -38,6 +43,7 @@ Future<void> showPatchNotesHistory(BuildContext context) async {
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
+    selfSizing: true,
     backgroundColor: Colors.transparent,
     builder: (_) => _PatchNotesHistorySheet(history: history),
   );
@@ -137,7 +143,7 @@ class _UpdateSheetState extends State<_UpdateSheet> {
               ),
             ),
             const SizedBox(height: 18),
-            Text(widget.info.notes.summary, style: const TextStyle(height: 1.45)),
+            Text(widget.info.notes.summary, style: const TextStyle(height: 1.45), maxLines: 6, overflow: TextOverflow.ellipsis),
             if (_working) ...[
               const SizedBox(height: 20),
               Semantics(
@@ -210,15 +216,35 @@ class _PatchNotesSheet extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("What's New", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-                        Text('Version ${notes.version} • ${DateFormat.yMMMd().format(notes.publishedAt.toLocal())}'),
+                        const Text(
+                          "What's New",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        Text(
+                          'Version ${notes.version} • ${DateFormat.yMMMd().format(notes.publishedAt.toLocal())}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 20),
-              Text(notes.summary, style: const TextStyle(fontWeight: FontWeight.w600, height: 1.45)),
+              Text(
+                notes.summary,
+                maxLines: 6,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  height: 1.45,
+                ),
+              ),
               const SizedBox(height: 16),
               ...notes.changes.map(
                 (change) => Padding(

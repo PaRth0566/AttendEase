@@ -6,7 +6,9 @@ import 'package:go_router/go_router.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../../services/cloud_sync_service.dart';
+import '../../theme/app_motion.dart';
 import '../../theme/glass_nav_theme.dart';
+import '../../widgets/animated_nav_icons.dart';
 import '../calendar/calender_screen.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../profile/profile_screen.dart';
@@ -23,6 +25,15 @@ class RootScreen extends StatefulWidget {
 class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   bool _isSyncing = kIsWeb; // Only sync on start for Web
+
+  /// Owns the physics of the sliding strip.
+  late final PageController _pageController;
+
+  /// Continuous page position: 0.0 Dashboard … 2.0 Profile. Single source of
+  /// truth for both the strip and the pill, so they cannot drift apart.
+  /// Mirrored into State because `PageController.page` is only readable after
+  /// first layout, and the pill needs a value on the very first build.
+  double _pagePosition = 0;
 
   /// Handles onto the three live tab pages, so a tab change can ask the page it
   /// reveals to refresh itself instead of replacing it. See [_buildBody].
@@ -42,19 +53,68 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   /// [GlassTabBar]'s pill travels on a 350 ms spring; this clears its tail.
   static const Duration _pillSettleDelay = Duration(milliseconds: 420);
 
+  /// Incremented every time a tab becomes the arrived one, and again when the
+  /// arrived tab is re-tapped. Handed to the nav icons, which play any epoch
+  /// they have not yet played — the mechanism that survives the package tearing
+  /// a filled icon down and rebuilding it mid-travel. 0 means "no navigation
+  /// yet", so the cold-start tab stays quiet. See `animated_nav_icons.dart`.
+  int _iconEpoch = 0;
+
+  /// Which tab's icon is playing. Tracks [_currentIndex] except across a
+  /// multi-page trip, where it skips the pages passed through.
+  ///
+  /// `PageView.onPageChanged` fires for *every* page the strip crosses, so
+  /// tapping Profile from Dashboard reports Calendar on the way. Driving the
+  /// icons off [_currentIndex] therefore spent the animation on a tab the user
+  /// never asked for, and the destination's own play landed under it — which is
+  /// what "a different tab's icon animates, and I have to tap twice" was.
+  int _iconIndex = 0;
+
+  /// Where a tap or a router change is heading, so [_onPageSettled] can tell
+  /// the destination from the pages crossed to reach it. Null during a drag,
+  /// where every settle is a real destination.
+  int? _navTarget;
+
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.navigationShell?.currentIndex ?? 0;
+    _iconIndex = _currentIndex;
+    _pagePosition = _currentIndex.toDouble();
+    _pageController = PageController(initialPage: _currentIndex);
+    _pageController.addListener(_onPageScroll);
     WidgetsBinding.instance.addObserver(this);
     _initialSync();
+  }
+
+  /// Mirrors the controller's continuous position into [_pagePosition] every
+  /// frame of a drag. The only thing this rebuilds is the bar — the pages live
+  /// inside the PageView's own viewport and are not re-run by this setState —
+  /// so it is the cheap path that buys frame-exact pill tracking.
+  void _onPageScroll() {
+    final double? page = _pageController.page;
+    if (page == null) return;
+    setState(() => _pagePosition = page);
   }
 
   @override
   void didUpdateWidget(RootScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.navigationShell != null) {
-      _currentIndex = widget.navigationShell!.currentIndex;
+    // GoRouter can change the branch from outside (deep link, back button).
+    final int? shellIndex = widget.navigationShell?.currentIndex;
+    if (shellIndex == null || shellIndex == _currentIndex) return;
+    _currentIndex = shellIndex;
+    _navTarget = shellIndex;
+    // Only chase the shell when the strip is not already heading there — during
+    // a drag-settle _onPageSettled has already called goBranch, and animating
+    // again here would restart the motion the user just finished.
+    if (_pageController.hasClients &&
+        _pageController.page?.round() != shellIndex) {
+      _pageController.animateToPage(
+        shellIndex,
+        duration: AppMotion.emphasized,
+        curve: AppMotion.morph,
+      );
     }
   }
 
@@ -71,6 +131,8 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _pageController.removeListener(_onPageScroll);
+    _pageController.dispose();
     _reloadTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
@@ -78,7 +140,8 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       _performSilentBackup();
     } else if (state == AppLifecycleState.resumed) {
       _performSilentSync();
@@ -122,10 +185,10 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
 
   /// The live state of the page at [index], or null before its first build.
   TabPageState? _pageState(int index) => switch (index) {
-        1 => _calendarKey.currentState,
-        2 => _profileKey.currentState,
-        _ => _dashboardKey.currentState,
-      };
+    1 => _calendarKey.currentState,
+    2 => _profileKey.currentState,
+    _ => _dashboardKey.currentState,
+  };
 
   /// All three tabs, alive at once, with only the selected one painting.
   ///
@@ -149,50 +212,47 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   /// tickers, so without it the dashboard's progress sweeps would keep
   /// animating — and driving layout — from behind the calendar.
   Widget _buildBody() {
-    return GestureDetector(
-      // Horizontal fling anywhere on the page walks the tabs in bar order:
-      // Dashboard → Calendar → Profile. It ends on [_onTabSelected], so a swipe
-      // and a tap are the same event downstream — same pill spring, same
-      // deferred reload, same GoRouter branch.
-      //
-      // A [GestureDetector] rather than swapping the [IndexedStack] for a
-      // [PageView], because the stack is load-bearing here: it is what keeps
-      // all three pages mounted so the pill gets every frame of its 350 ms
-      // spring (see the doc above). A PageView would rebuild the incoming page
-      // mid-slide and put the stutter straight back.
-      //
-      // Nothing is passed for the drag start/update callbacks, so this
-      // recognizer stays a plain fling detector and loses the arena to any
-      // horizontally scrollable child — the calendar's own month swipe keeps
-      // working rather than being shadowed by a tab change.
-      onHorizontalDragEnd: _onHorizontalDragEnd,
-      behavior: HitTestBehavior.translucent,
-      child: IndexedStack(
-        index: _currentIndex,
-        children: <Widget>[
-          for (int i = 0; i < 3; i++)
-            TickerMode(enabled: _currentIndex == i, child: _buildPage(i)),
-        ],
+    return PageView.builder(
+      controller: _pageController,
+      itemCount: 3,
+      // Snaps to whole pages, so a half-drag never leaves the strip parked
+      // between two screens.
+      pageSnapping: true,
+      physics: const PageScrollPhysics(parent: ClampingScrollPhysics()),
+      onPageChanged: _onPageSettled,
+      itemBuilder: (context, i) => TickerMode(
+        // Compare against the settled index, not the live position: during a
+        // drag both neighbours must keep painting, and only the one you land on
+        // should resume its tickers.
+        enabled: _currentIndex == i,
+        child: _buildPage(i),
       ),
     );
   }
 
-  /// Minimum fling speed, in logical pixels per second, that counts as a tab
-  /// swipe. Below this a horizontal drag is far more likely to be a slipped
-  /// vertical scroll or a stray thumb than an intent to leave the page — and
-  /// leaving the page is not a cheap thing to do by accident, since the tab you
-  /// land on reloads its data.
-  static const double _swipeVelocityThreshold = 300;
-
-  void _onHorizontalDragEnd(DragEndDetails details) {
-    final double velocity = details.primaryVelocity ?? 0;
-    if (velocity.abs() < _swipeVelocityThreshold) return;
-
-    // Swiping left (negative velocity) pulls the next tab in from the right.
-    final int next = velocity < 0 ? _currentIndex + 1 : _currentIndex - 1;
-    if (next < 0 || next > 2) return;
-
-    _onTabSelected(next);
+  /// Fires when the strip settles on a new page (drag release or tap animation).
+  /// The drag already moved the strip, so this only syncs GoRouter and schedules
+  /// the deferred reload.
+  void _onPageSettled(int index) {
+    if (index == _currentIndex) return;
+    // A page crossed on the way to somewhere else is not an arrival, so it does
+    // not get to drive the icons. Everything else here still runs for it: the
+    // pill, the router branch and the reload are all about where the strip
+    // actually is, and only the animation is about where you meant to go.
+    final bool isDestination = _navTarget == null || _navTarget == index;
+    setState(() {
+      _currentIndex = index;
+      if (isDestination) {
+        _iconIndex = index;
+        _iconEpoch++;
+      }
+    });
+    if (_navTarget == index) _navTarget = null;
+    widget.navigationShell?.goBranch(index);
+    _reloadTimer?.cancel();
+    _reloadTimer = Timer(_pillSettleDelay, () {
+      if (mounted) _pageState(index)?.reloadData();
+    });
   }
 
   @override
@@ -215,7 +275,7 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        
+
         // 1. Try to pop any sub-screens pushed via Navigator.push (e.g., from Profile)
         final bool handledLocally = await Navigator.maybePop(context);
         if (handledLocally || !context.mounted) return;
@@ -257,6 +317,11 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
           // upstream demo renders it.
           bottomNavigationBar: GlassTabBar.bottom(
             selectedIndex: _currentIndex,
+            // Maps page position 0…2 onto the pill's alignment space -1…1 —
+            // same mapping as computeAlignment, on a continuous position.
+            // (pos / (count - 1)) * 2 - 1; 2 is hard-coded to match the three
+            // hard-coded tabs below.
+            alignmentOverride: (_pagePosition / 2).clamp(0.0, 1.0) * 2 - 1,
             onTabSelected: _onTabSelected,
             settings: glassSettings,
 
@@ -342,22 +407,28 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
             // No glowColor on any tab. The package's default halo is 32px blur
             // at 0.6 opacity per tab, which is where the coloured haze across
             // the bar came from.
-            tabs: const [
+            //
+            // One painter per tab in two variants — outline resting, solid
+            // active — replacing the Material outlined/rounded pair. Mixing a
+            // hand-drawn set with Material's would put two icon vocabularies in
+            // one bar. See [_navIcon]: `filled` is the row, `active` is the
+            // animation, and they are not the same axis.
+            tabs: [
               GlassTab(
-                icon: Icon(Icons.dashboard_outlined),
-                activeIcon: Icon(Icons.dashboard_rounded),
+                icon: _navIcon(0, filled: false),
+                activeIcon: _navIcon(0, filled: true),
                 label: 'DASHBOARD',
                 semanticLabel: 'Dashboard',
               ),
               GlassTab(
-                icon: Icon(Icons.calendar_month_outlined),
-                activeIcon: Icon(Icons.calendar_month_rounded),
+                icon: _navIcon(1, filled: false),
+                activeIcon: _navIcon(1, filled: true),
                 label: 'CALENDAR',
                 semanticLabel: 'Calendar',
               ),
               GlassTab(
-                icon: Icon(Icons.person_outline_rounded),
-                activeIcon: Icon(Icons.person_rounded),
+                icon: _navIcon(2, filled: false),
+                activeIcon: _navIcon(2, filled: true),
                 label: 'PROFILE',
                 semanticLabel: 'Profile',
               ),
@@ -368,20 +439,65 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     );
   }
 
-  void _onTabSelected(int index) {
-    if (index == _currentIndex) return;
-
-    if (widget.navigationShell != null) {
-      widget.navigationShell!.goBranch(index);
-    } else {
-      setState(() => _currentIndex = index);
+  /// The animated icon for [index], in its outline or [filled] variant.
+  ///
+  /// Two axes, and they are not the same thing:
+  ///
+  /// * [filled] is which of the bar's two rows this copy belongs to — outline
+  ///   for `icon`, solid for `activeIcon`. The bar draws both rows in full and
+  ///   clips the solid one to the travelling pill, so the fill arrives exactly
+  ///   as the pill sweeps across, with no state of its own.
+  /// * `active` is whether this tab is the current one, and it drives the
+  ///   animation. It has to be passed in because neither row's icon can see it
+  ///   — one row is drawn wholly unselected and the other wholly selected, so
+  ///   no icon ever observes a change. Handing the same flag to both copies is
+  ///   also what keeps them in step: they start on the same setState.
+  ///
+  /// This runs on every frame of a swipe, since [_onPageScroll] rebuilds for
+  /// the pill. That costs a widget and nothing more: the icons restart only
+  /// when `active` or the replay token actually changes.
+  Widget _navIcon(int index, {required bool filled}) {
+    final bool active = _iconIndex == index;
+    switch (index) {
+      case 1:
+        return CalendarDaysIcon(
+          filled: filled,
+          active: active,
+          epoch: _iconEpoch,
+        );
+      case 2:
+        return AvatarLookingAroundIcon(
+          filled: filled,
+          active: active,
+          epoch: _iconEpoch,
+        );
+      default:
+        return DashboardMorphIcon(
+          filled: filled,
+          active: active,
+          epoch: _iconEpoch,
+        );
     }
+  }
 
-    // The page is already on screen with the data it had when you left it;
-    // this catches it up. Held until the pill has parked — see [_reloadTimer].
-    _reloadTimer?.cancel();
-    _reloadTimer = Timer(_pillSettleDelay, () {
-      if (mounted) _pageState(index)?.reloadData();
-    });
+  void _onTabSelected(int index) {
+    if (index == _currentIndex) {
+      // Already here — there is no navigation to do, but the tap should still
+      // get an answer, so bump the epoch to replay the icon.
+      setState(() => _iconEpoch++);
+      return;
+    }
+    // Claim the destination before the strip starts moving, so the pages it
+    // crosses on the way are recognised as crossings rather than arrivals.
+    _navTarget = index;
+    // Not jumpToPage: animating is what makes a tap read as the same motion as
+    // a drag. onPageChanged fires as it settles, so _onPageSettled does the
+    // GoRouter + reload work for both paths. Under "remove animations",
+    // AppMotion.duration collapses to zero, so tap-switching is instant.
+    _pageController.animateToPage(
+      index,
+      duration: AppMotion.duration(context, AppMotion.emphasized),
+      curve: AppMotion.morph,
+    );
   }
 }

@@ -21,6 +21,15 @@ class DBHelper {
     }
   }
 
+  /// Closes and forgets the cached connection so a test can open a fresh
+  /// database. Test-only — production keeps a single long-lived connection.
+  @visibleForTesting
+  static Future<void> resetForTest() async {
+    await _database?.close();
+    _database = null;
+    _databaseFuture = null;
+  }
+
   Future<Database> _initDatabase() async {
     if (kIsWeb) {
       // Use web factory for sqflite on the web
@@ -28,7 +37,7 @@ class DBHelper {
       return await factory.openDatabase(
         'attendease.db',
         options: OpenDatabaseOptions(
-          version: 6,
+          version: 8,
           onConfigure: _onConfigure,
           onCreate: _onCreate,
           onUpgrade: _onUpgrade,
@@ -41,7 +50,7 @@ class DBHelper {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 8,
       onConfigure: _onConfigure,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
@@ -98,6 +107,52 @@ class DBHelper {
         'UPDATE attendance_records SET original_status = status WHERE original_status IS NULL',
       );
     }
+    if (oldVersion < 7) {
+      await db.execute('''
+        CREATE TABLE imported_report_dates (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          semester INTEGER NOT NULL,
+          date TEXT NOT NULL,
+          UNIQUE(semester, date)
+        )
+      ''');
+      await db.execute('''
+        INSERT OR IGNORE INTO imported_report_dates (semester, date)
+        SELECT DISTINCT s.semester, substr(a.date, 1, 10)
+        FROM attendance_records a
+        INNER JOIN timetable t ON a.timetable_entry_id = t.id
+        INNER JOIN subjects s ON t.subject_id = s.id
+        WHERE a.source = 'pdf'
+          AND a.date NOT LIKE 'pad_%'
+          AND length(a.date) >= 10
+      ''');
+    }
+    if (oldVersion < 8) {
+      // NC is a real planned lecture that was not conducted. It is distinct
+      // from NU (conducted, but attendance has not been updated).
+      await db.execute('ALTER TABLE attendance_records RENAME TO _ar_v7');
+      await db.execute('''
+        CREATE TABLE attendance_records (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          timetable_entry_id INTEGER NOT NULL,
+          date TEXT NOT NULL,
+          status TEXT CHECK(status IN ('P','A','NU','NC')) NOT NULL,
+          source TEXT NOT NULL DEFAULT 'pdf',
+          original_status TEXT,
+          UNIQUE(timetable_entry_id, date),
+          FOREIGN KEY (timetable_entry_id)
+            REFERENCES timetable(id)
+            ON DELETE CASCADE
+        )
+      ''');
+      await db.execute('''
+        INSERT INTO attendance_records
+          (id, timetable_entry_id, date, status, source, original_status)
+        SELECT id, timetable_entry_id, date, status, source, original_status
+        FROM _ar_v7
+      ''');
+      await db.execute('DROP TABLE _ar_v7');
+    }
   }
 
   Future<void> _onCreate(Database db, int version) async {
@@ -128,13 +183,22 @@ class DBHelper {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         timetable_entry_id INTEGER NOT NULL,
         date TEXT NOT NULL,
-        status TEXT CHECK(status IN ('P','A','NU')) NOT NULL,
+        status TEXT CHECK(status IN ('P','A','NU','NC')) NOT NULL,
         source TEXT NOT NULL DEFAULT 'pdf',
         original_status TEXT,
         UNIQUE(timetable_entry_id, date),
         FOREIGN KEY (timetable_entry_id)
           REFERENCES timetable(id)
           ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE imported_report_dates (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        semester INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        UNIQUE(semester, date)
       )
     ''');
   }

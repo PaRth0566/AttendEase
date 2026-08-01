@@ -47,34 +47,45 @@ class GlassActionButton extends StatelessWidget {
     // therefore *fills* rather than hugs, and in a Scaffold's FAB slot the
     // offer is the whole screen — which is how this ended up a full-width
     // slab. IntrinsicWidth hands it a tight constraint so it wraps the label.
-    return IntrinsicWidth(
-      child: GlassButton.custom(
-        onTap: onPressed,
-        label: label,
-        height: GlassNavTheme.actionHeight,
-        shape: const LiquidRoundedSuperellipse(
-          borderRadius: GlassNavTheme.actionRadius,
-        ),
-        settings: GlassNavTheme.settings(brightness),
-        // Matches the bar, where the jelly deform and press bounce are both off.
-        // A little scale is kept because this pill has no selected/unselected
-        // state to change on press — without it there is no feedback at all.
-        stretch: 0,
-        interactionScale: 1.03,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: GlassNavTheme.iconSize, color: ink),
-              const SizedBox(width: 10),
-              Text(
-                label.toUpperCase(),
-                style: GlassNavTheme.labelStyle(
-                  selected: true,
-                ).copyWith(fontSize: GlassNavTheme.actionLabelSize, color: ink),
-              ),
-            ],
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 280),
+      child: IntrinsicWidth(
+        child: GlassButton.custom(
+          onTap: onPressed,
+          label: label,
+          height: GlassNavTheme.actionHeight,
+          shape: const LiquidRoundedSuperellipse(
+            borderRadius: GlassNavTheme.actionRadius,
+          ),
+          settings: GlassNavTheme.settings(brightness),
+          // Matches the bar, where the jelly deform and press bounce are both
+          // off. A little scale is kept because this pill has no
+          // selected/unselected state to change on press — without it there is
+          // no feedback at all.
+          stretch: 0,
+          interactionScale: 1.03,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: GlassNavTheme.iconSize, color: ink),
+                const SizedBox(width: 10),
+                // Flexible, not bare Text: the 280px cap above clips a long
+                // label otherwise instead of ellipsizing it.
+                Flexible(
+                  child: Text(
+                    label.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GlassNavTheme.labelStyle(selected: true).copyWith(
+                      fontSize: GlassNavTheme.actionLabelSize,
+                      color: ink,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

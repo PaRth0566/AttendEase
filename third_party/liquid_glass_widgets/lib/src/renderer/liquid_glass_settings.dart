@@ -9,7 +9,7 @@ import 'liquid_glass_renderer.dart';
 import 'liquid_glass_render_scope.dart';
 
 /// Represents the settings for a liquid glass effect.
-class LiquidGlassSettings with EquatableMixin {
+class LiquidGlassSettings with Equatable {
   /// Creates a new [LiquidGlassSettings] with the given settings.
   /// Public constructor — all material glass properties.
   ///

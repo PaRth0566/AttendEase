@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handlePostLogin(User? user) async {
     if (user == null) {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
 
@@ -102,7 +102,8 @@ class _LoginScreenState extends State<LoginScreen> {
             await db.delete('subjects');
           }
         } catch (_) {}
-        
+
+        if (!mounted) return;
         setState(() => _isLoading = false);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -256,8 +257,13 @@ class _LoginScreenState extends State<LoginScreen> {
       _failedAttempts = 0; // Reset on success
       await _handlePostLogin(user);
     } on FirebaseAuthException catch (e) {
-      setState(() => _isLoading = false);
-      _recordFailedAttempt();
+      if (mounted) setState(() => _isLoading = false);
+      // An unverified email is a state, not a bad credential — it must not
+      // count toward the lockout or the user gets locked out of the very
+      // screen that tells them to check their inbox.
+      if (e.code != 'email-not-verified') {
+        _recordFailedAttempt();
+      }
 
       String errorMessage = 'An error occurred. Please try again.';
 
@@ -267,6 +273,13 @@ class _LoginScreenState extends State<LoginScreen> {
         errorMessage = 'Email or password incorrect please verify.';
       } else if (e.code == 'invalid-email') {
         errorMessage = 'The email address is not formatted correctly.';
+      } else if (e.code == 'user-disabled') {
+        errorMessage = 'This account has been disabled.';
+      } else if (e.code == 'too-many-requests') {
+        errorMessage =
+            'Too many attempts. Please wait a few minutes and try again.';
+      } else if (e.code == 'network-request-failed') {
+        errorMessage = 'Network error. Check your connection and try again.';
       } else {
         errorMessage = e.message ?? errorMessage;
       }
@@ -276,13 +289,13 @@ class _LoginScreenState extends State<LoginScreen> {
           SnackBar(
             content: Text(errorMessage),
             backgroundColor: Colors.red.shade600,
-            duration: const Duration(seconds: 4),
+            duration: const Duration(seconds: 5),
           ),
         );
       }
     } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Login failed. Please try again.')),
         );
@@ -291,6 +304,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _loginWithGoogle() async {
+    if (_isLoading) return;
     if (!kIsWeb) {
       final List<ConnectivityResult> connectivityResult = await (Connectivity()
           .checkConnectivity());
@@ -310,9 +324,26 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       User? user = await _authService.signInWithGoogle();
       await _handlePostLogin(user);
-    } catch (e) {
-      setState(() => _isLoading = false);
+    } on AuthFailure catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+      // Dismissing the account chooser is not a failure — say nothing.
+      if (e.code == AuthService.cancelledCode ||
+          e.code == 'sign_in_canceled' ||
+          e.code == 'sign_in_cancelled') {
+        return;
+      }
       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            backgroundColor: Colors.red.shade600,
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Google Sign-In failed. Please try again.'),
@@ -325,6 +356,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // ✅ NEW: Guest Login Logic
   Future<void> _loginAsGuest() async {
+    if (_isLoading) return;
     if (!kIsWeb) {
       final List<ConnectivityResult> connectivityResult = await (Connectivity()
           .checkConnectivity());
@@ -343,10 +375,21 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
     try {
       User? user = await _authService.signInGuest();
+      if (user == null) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Guest Login failed. Please try again.'),
+            ),
+          );
+        }
+        return;
+      }
       await _handlePostLogin(user); // Routes them properly!
     } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Guest Login failed. Please try again.'),
@@ -456,7 +499,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _isLockedOut ? null : _loginWithEmail,
+                        onPressed:
+                            (_isLockedOut || _isLoading) ? null : _loginWithEmail,
                         child: _isLoading
                             ? const SizedBox(
                                 height: 20,
@@ -488,7 +532,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 24),
 
                     OutlinedButton.icon(
-                      onPressed: _loginWithGoogle,
+                      onPressed: _isLoading ? null : _loginWithGoogle,
                       icon: Image.asset(
                         'assets/icon/google_logo.png',
                         height: 24,
@@ -514,7 +558,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     // 🔥 NEW: Continue as Guest Button 🔥
                     OutlinedButton.icon(
-                      onPressed: _loginAsGuest,
+                      onPressed: _isLoading ? null : _loginAsGuest,
                       icon: Icon(
                         Icons.person_outline_rounded,
                         color: theme.colorScheme.primary,

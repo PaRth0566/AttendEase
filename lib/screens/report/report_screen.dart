@@ -432,7 +432,7 @@ class _ReportScreenState extends State<ReportScreen> {
                   pw.Expanded(
                     child: buildSummaryCard(
                       title: "Overall Attendance",
-                      value: "${_overallPercent.toStringAsFixed(1)}%",
+                      value: "${_overallPercent.toStringAsFixed(2)}%",
                       subtitle: "$_totalAttended / $_totalLectures Lectures",
                       valueColor: _overallPercent >= 75 ? successColor : dangerColor,
                       bgColor: bgCard,
@@ -514,7 +514,7 @@ class _ReportScreenState extends State<ReportScreen> {
                         buildDataCell(sub.name, isBold: true),
                         buildDataCell(attended.toString()),
                         buildDataCell(total.toString()),
-                        buildDataCell('${percent.toStringAsFixed(1)}%', 
+                        buildDataCell('${percent.toStringAsFixed(2)}%', 
                           color: isMeeting ? successColor : dangerColor,
                           isBold: true,
                         ),
@@ -634,10 +634,14 @@ class _ReportScreenState extends State<ReportScreen> {
             ),
         ],
       ),
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 700),
-          child: Column(
+      // Pushed screen: AppBar covers the status bar, but the scrolling body
+      // still needs bottom inset protection on gesture-nav devices.
+      body: SafeArea(
+        top: false,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 700),
+            child: Column(
         children: [
           Container(
             padding: const EdgeInsets.all(16),
@@ -693,11 +697,15 @@ class _ReportScreenState extends State<ReportScreen> {
                 if (_reportType == 0)
                   Row(
                     children: [
-                      Text(
-                        'Select Semester: ',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: theme.textTheme.bodyLarge?.color,
+                      Flexible(
+                        child: Text(
+                          'Select Semester: ',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: theme.textTheme.bodyLarge?.color,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -739,6 +747,8 @@ class _ReportScreenState extends State<ReportScreen> {
                                 : DateFormat(
                                     'MMM dd, yyyy',
                                   ).format(_startDate!),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
@@ -755,6 +765,8 @@ class _ReportScreenState extends State<ReportScreen> {
                             _endDate == null
                                 ? 'End Date'
                                 : DateFormat('MMM dd, yyyy').format(_endDate!),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
@@ -837,12 +849,15 @@ class _ReportScreenState extends State<ReportScreen> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            Text(
-                              '${_overallPercent.toStringAsFixed(1)}%',
-                              style: TextStyle(
-                                fontSize: 42,
-                                fontWeight: FontWeight.bold,
-                                color: _overallPercent >= 75 ? c.success : c.danger,
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                '${_overallPercent.toStringAsFixed(2)}%',
+                                style: TextStyle(
+                                  fontSize: 42,
+                                  fontWeight: FontWeight.bold,
+                                  color: _overallPercent >= 75 ? c.success : c.danger,
+                                ),
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -908,16 +923,21 @@ class _ReportScreenState extends State<ReportScreen> {
                                   mainAxisAlignment:
                                       MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(
-                                      sub.name,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                        color: theme.textTheme.bodyLarge?.color,
+                                    Expanded(
+                                      child: Text(
+                                        sub.name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                          color: theme.textTheme.bodyLarge?.color,
+                                        ),
                                       ),
                                     ),
+                                    const SizedBox(width: 8),
                                     Text(
-                                      '${percent.toStringAsFixed(1)}%',
+                                      '${percent.toStringAsFixed(2)}%',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         color: color,
@@ -950,6 +970,7 @@ class _ReportScreenState extends State<ReportScreen> {
           ),
         ],
         ),
+      ),
       ),
       ),
     );

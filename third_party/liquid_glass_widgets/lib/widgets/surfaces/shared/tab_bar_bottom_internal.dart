@@ -368,6 +368,7 @@ class TabIndicator extends StatefulWidget {
     required this.selectedTabBuilder,
     required this.tabIndex,
     required this.tabCount,
+    this.alignmentOverride,
     required this.onTabChanged,
     required this.visible,
     required this.indicatorColor,
@@ -395,6 +396,16 @@ class TabIndicator extends StatefulWidget {
 
   final int tabIndex;
   final int tabCount;
+
+  /// Continuous override for the indicator's horizontal alignment, in [-1, 1].
+  ///
+  /// When non-null this wins over [tabIndex], letting a caller drive the pill
+  /// from a page-scroll position so the bar tracks the screens frame for frame.
+  /// When null the pill behaves exactly as before.
+  ///
+  /// AttendEase patch — see README.attendease.md.
+  final double? alignmentOverride;
+
   final bool visible;
   final Widget childUnselected;
   final Widget Function(BuildContext, double, Alignment) selectedTabBuilder;
@@ -452,7 +463,31 @@ class TabIndicatorState extends State<TabIndicator>
   @override
   int get tabIndex => widget.tabIndex;
   @override
+  double? get alignmentOverride => widget.alignmentOverride;
+  @override
   void notifyTabChanged(int index) => widget.onTabChanged(index);
+
+  /// AttendEase patch — see README.attendease.md ("interactive tab slide").
+  ///
+  /// True while a bar drag owns the pill, i.e. from the drag start through the
+  /// settle that follows release. During that span the pill tracks the finger
+  /// via [tabXAlign] and the page-driven [alignmentOverride] is ignored, then
+  /// control is handed back once the override has caught up (see [build]).
+  ///
+  /// Without this, `alignmentOverride ?? tabXAlign` let the override win the
+  /// moment RootScreen supplied one — which is always — so the drag gesture
+  /// wrote [tabXAlign] into a value nothing read, and the pill sat frozen under
+  /// the finger. Only meaningful when an override is present; a consumer that
+  /// passes none keeps the plain `tabXAlign` path and never sets this.
+  bool _dragOwnsPill = false;
+
+  @override
+  void onBarDragStart(DragStartDetails d) {
+    super.onBarDragStart(d);
+    if (mounted && widget.alignmentOverride != null) {
+      setState(() => _dragOwnsPill = true);
+    }
+  }
 
   // Cache fallback indicator color to avoid allocations
   static const _fallbackIndicatorColor =
@@ -482,7 +517,26 @@ class TabIndicatorState extends State<TabIndicator>
     final indicatorColor = widget.indicatorColor ??
         theme.textTheme.textStyle.color?.withValues(alpha: .1) ??
         _fallbackIndicatorColor;
-    final targetAlignment = computeTabAlignment(widget.tabIndex);
+    // A bar drag in progress (or settling after release) owns the pill; only
+    // otherwise does the page-driven override place it. See [_dragOwnsPill].
+    final bool driveByDrag = _dragOwnsPill;
+    final targetAlignment = driveByDrag
+        ? tabXAlign
+        : (widget.alignmentOverride ?? computeTabAlignment(widget.tabIndex));
+
+    // Hand control back to the override once the page position has caught up to
+    // the tab the drag released on, so the pill does not snap back to the old
+    // tab for the frames before RootScreen's page animation gets moving.
+    if (_dragOwnsPill &&
+        !tabIsDragging &&
+        widget.alignmentOverride != null &&
+        (widget.alignmentOverride! - tabXAlign).abs() < 0.02) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !tabIsDragging) {
+          setState(() => _dragOwnsPill = false);
+        }
+      });
+    }
 
     // AnimatedGlassIndicator multiplies by 2 for the glass superellipse shape,
     // but uses the value directly for the background DecoratedBox.
@@ -538,12 +592,21 @@ class TabIndicatorState extends State<TabIndicator>
                 onTapDown:
                     onBarTapDown, // DX1: makes jelly visible on desktop taps
                 child: VelocitySpringBuilder(
-                  value: tabXAlign,
+                  // An override is already a settled per-frame position from the
+                  // PageController. Feeding it as the spring's *target* (not
+                  // smoothing it) keeps the jelly stretch — which reads
+                  // `velocity` from this builder — while tracking with no lag.
+                  value: driveByDrag
+                      ? tabXAlign
+                      : (widget.alignmentOverride ?? tabXAlign),
                   springWhenActive: GlassSpring.interactive(),
                   springWhenReleased: GlassSpring.snappy(
                     duration: const Duration(milliseconds: 350),
                   ),
-                  active: tabIsDragging,
+                  // An override is a live gesture by definition, so treat it as
+                  // active; this also stops the release spring from fighting the
+                  // controller's own settle animation.
+                  active: tabIsDragging || widget.alignmentOverride != null,
                   builder: (context, value, velocity, child) {
                     final alignment = Alignment(value, 0);
 

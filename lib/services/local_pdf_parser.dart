@@ -16,21 +16,23 @@ class LocalPdfParser {
 
   // ── Pattern: matches the RIGHT side of each attendance row ────────────
   //
-  //   <Month Day, Year>  <H:MM:SS AM/PM>  <H:MM:SS AM/PM>  <P|A|NU>
+  //   <Month Day, Year>  <H:MM:SS AM/PM>  <H:MM:SS AM/PM>  <P|A|AG|NU>
   //
-  // Groups: (1) = full date string, (2) = start time, (3) = status (P, A, or NU)
+  // Groups: (1) = full date string, (2) = start time, (3) = status
   static final _dateTimeStatusRe = RegExp(
     r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\.?\s+\d{1,2},?\s+\d{4})'
     r'\s+(\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M)' // Capture start time
     r'\s+\d{1,2}:\d{2}(?::\d{2})?\s*[AP]M'
-    r'\s+(P|A|NU)\b',
+    r'\s+(P|A|AG|Attendance\s+Granted|NU|Cancelled|Not\s+Conducted)\b',
     caseSensitive: false,
   );
 
   // ── Pattern: finds <number> <course name> at the end of a text chunk ──
   // Course name = letters, spaces, dots, plus, hash, ampersand, parens.
   // Supports names like ".NET", "C++", "C#", "Data Structures & Algorithms".
-  static final _srNoCourseRe = RegExp(r'(\d+)\s+([A-Za-z][A-Za-z .+#&()]*[A-Za-z.+#&)])');
+  static final _srNoCourseRe = RegExp(
+    r'(\d+)\s+([A-Za-z][A-Za-z .+#&()]*[A-Za-z.+#&)])',
+  );
 
   // ── Core parsing ──────────────────────────────────────────────────────
 
@@ -69,19 +71,26 @@ class LocalPdfParser {
       // Collapse all whitespace to single spaces
       text = rawText.replaceAll(RegExp(r'\s+'), ' ').trim();
       debugPrint('[Parser] Collapsed text length: ${text.length}');
-      debugPrint('[Parser] First 500 chars: ${text.substring(0, text.length.clamp(0, 500))}');
+      debugPrint(
+        '[Parser] First 500 chars: ${text.substring(0, text.length.clamp(0, 500))}',
+      );
 
       // ══════════════════════════════════════════════════════════════════
       // Step 2: Extract metadata using VALUE patterns (not label-based)
       // ══════════════════════════════════════════════════════════════════
 
       // Student name: Match between "Attendance Report" and "Student Name"
-      final nameExact = RegExp(r'Attendance Report\s+(.+?)Student Name', caseSensitive: false).firstMatch(text);
+      final nameExact = RegExp(
+        r'Attendance Report\s+(.+?)Student Name',
+        caseSensitive: false,
+      ).firstMatch(text);
       if (nameExact != null) {
         studentName = nameExact.group(1)!.trim();
       } else {
         // Fallback: consecutive UPPERCASE words
-        final nameMatch = RegExp(r'\b([A-Z][A-Z]+(?:\s+[A-Z][A-Z]+)+)\b').firstMatch(text);
+        final nameMatch = RegExp(
+          r'\b([A-Z][A-Z]+(?:\s+[A-Z][A-Z]+)+)\b',
+        ).firstMatch(text);
         if (nameMatch != null) studentName = nameMatch.group(1)!.trim();
       }
 
@@ -90,11 +99,17 @@ class LocalPdfParser {
       if (yearMatch != null) year = yearMatch.group(1)!.replaceAll(' ', '');
 
       // Semester: "Semester IV" / "Semester 4" etc.
-      final semMatch = RegExp(r'Semester\s+([IVX]+|\d+)', caseSensitive: false).firstMatch(text);
+      final semMatch = RegExp(
+        r'Semester\s+([IVX]+|\d+)',
+        caseSensitive: false,
+      ).firstMatch(text);
       if (semMatch != null) semester = 'Semester ${semMatch.group(1)!}';
 
       // Program: Match between "Academic Session" and "Program Name"
-      final progExact = RegExp(r'Academic Session\s+(.+?)Program Name', caseSensitive: false).firstMatch(text);
+      final progExact = RegExp(
+        r'Academic Session\s+(.+?)Program Name',
+        caseSensitive: false,
+      ).firstMatch(text);
       if (progExact != null) {
         course = progExact.group(1)!.trim();
       } else {
@@ -108,14 +123,21 @@ class LocalPdfParser {
       }
 
       // Start / End Date Extract: "From 01.11.2025 to 25.02.2026"
-      final dateSpanMatch = RegExp(r'From\s+(\d{2})[\.\-\/](\d{2})[\.\-\/](\d{4})\s+to\s+(\d{2})[\.\-\/](\d{2})[\.\-\/](\d{4})', caseSensitive: false).firstMatch(text);
+      final dateSpanMatch = RegExp(
+        r'From\s+(\d{2})[\.\-\/](\d{2})[\.\-\/](\d{4})\s+to\s+(\d{2})[\.\-\/](\d{2})[\.\-\/](\d{4})',
+        caseSensitive: false,
+      ).firstMatch(text);
       if (dateSpanMatch != null) {
         // Convert to ISO 8601 (yyyy-mm-dd)
-        startDate = '${dateSpanMatch.group(3)}-${dateSpanMatch.group(2)}-${dateSpanMatch.group(1)}';
-        endDate = '${dateSpanMatch.group(6)}-${dateSpanMatch.group(5)}-${dateSpanMatch.group(4)}';
+        startDate =
+            '${dateSpanMatch.group(3)}-${dateSpanMatch.group(2)}-${dateSpanMatch.group(1)}';
+        endDate =
+            '${dateSpanMatch.group(6)}-${dateSpanMatch.group(5)}-${dateSpanMatch.group(4)}';
       }
 
-      debugPrint('[Parser] Metadata: name="$studentName" year="$year" sem="$semester" course="$course" dates="$startDate to $endDate"');
+      debugPrint(
+        '[Parser] Metadata: name="$studentName" year="$year" sem="$semester" course="$course" dates="$startDate to $endDate"',
+      );
 
       // ══════════════════════════════════════════════════════════════════
       // Step 3: Extract attendance records
@@ -125,7 +147,9 @@ class LocalPdfParser {
       // ══════════════════════════════════════════════════════════════════
 
       final allMatches = _dateTimeStatusRe.allMatches(text).toList();
-      debugPrint('[Parser] Found ${allMatches.length} date+time+status matches');
+      debugPrint(
+        '[Parser] Found ${allMatches.length} date+time+status matches',
+      );
 
       int lastEnd = 0;
       final seenKeys = <String>{};
@@ -134,8 +158,13 @@ class LocalPdfParser {
       for (final m in allMatches) {
         final dateStr = m.group(1)!.trim();
         final timeStr = m.group(2)!.trim();
-        final status = m.group(3)!.toUpperCase();
-        if (status != 'P' && status != 'A' && status != 'NU') continue;
+        final rawStatus = m.group(3)!.toUpperCase();
+        final status = rawStatus == 'AG' || rawStatus == 'ATTENDANCE GRANTED'
+            ? 'P'
+            : rawStatus == 'CANCELLED' || rawStatus == 'NOT CONDUCTED'
+            ? 'NC'
+            : rawStatus;
+        if (!const {'P', 'A', 'NU', 'NC'}.contains(status)) continue;
 
         // Text between previous match end and current match start
         final between = text.substring(lastEnd, m.start).trim();
@@ -145,7 +174,9 @@ class LocalPdfParser {
         // and take the LAST one — that's our Sr No. + Course Name
         final srMatches = _srNoCourseRe.allMatches(between).toList();
         if (srMatches.isEmpty) {
-          debugPrint('[Parser] No course found in between text: "${between.length > 100 ? between.substring(between.length - 100) : between}"');
+          debugPrint(
+            '[Parser] No course found in between text: "${between.length > 100 ? between.substring(between.length - 100) : between}"',
+          );
           continue;
         }
 
@@ -154,8 +185,10 @@ class LocalPdfParser {
 
         // Skip if course name looks like a header fragment
         if (courseName.length < 3) continue;
-        if (RegExp(r'^(Sr|No|Course|Name|Date|Start|End|Time|Attendance|Page|of)$',
-            caseSensitive: false).hasMatch(courseName)) {
+        if (RegExp(
+          r'^(Sr|No|Course|Name|Date|Start|End|Time|Attendance|Page|of)$',
+          caseSensitive: false,
+        ).hasMatch(courseName)) {
           continue;
         }
 
@@ -181,22 +214,29 @@ class LocalPdfParser {
         final finalDate = count > 1 ? '${isoDate}_$count' : isoDate;
 
         subjects.add(courseName);
-        records.add({'date': finalDate, 'subject': courseName, 'status': status, 'time': timeStr});
-        // NU records don't count toward P/A stats
-        if (status != 'NU') {
+        records.add({
+          'date': finalDate,
+          'subject': courseName,
+          'status': status,
+          'time': timeStr,
+        });
+        // Pending and not-conducted records don't count toward P/A stats.
+        if (status == 'P' || status == 'A') {
           stats.putIfAbsent(courseName, () => {'attended': 0, 'total': 0});
           stats[courseName]!['total'] = stats[courseName]!['total']! + 1;
           if (status == 'P') {
-            stats[courseName]!['attended'] = stats[courseName]!['attended']! + 1;
+            stats[courseName]!['attended'] =
+                stats[courseName]!['attended']! + 1;
           }
         }
       }
 
-      debugPrint('[Parser] Parsed ${records.length} records, ${subjects.length} subjects');
+      debugPrint(
+        '[Parser] Parsed ${records.length} records, ${subjects.length} subjects',
+      );
       if (subjects.isNotEmpty) {
         debugPrint('[Parser] Subjects: ${subjects.join(', ')}');
       }
-
     } finally {
       document.dispose();
     }
@@ -239,11 +279,11 @@ class LocalPdfParser {
   // The lecture count per day and the ordering are taken from each subject's
   // most recent occurrence, so the output mirrors the schedule as it stands
   // today. NU rows are included here on purpose: an NU still means a lecture
-  // was scheduled.
+  // occurred. NC rows are excluded because no lecture took place.
   //
   // `records` items use the same shape produced by the parser:
   //   {'date': 'yyyy-MM-dd' (optionally with a '_n' suffix), 'subject': ...,
-  //    'time': '9:20:01 AM', 'status': 'P'|'A'|'NU'}
+  //    'time': '9:20:01 AM', 'status': 'P'|'A'|'NU'|'NC'}
   static Map<String, List<String>> inferWeeklyTimetable(
     List<Map<String, String>> records,
   ) {
@@ -252,6 +292,7 @@ class LocalPdfParser {
     final daySubjectDateStart = <int, Map<String, Map<String, int>>>{};
 
     for (final r in records) {
+      if (r['status'] == 'NC') continue;
       final subject = (r['subject'] ?? '').trim();
       if (subject.isEmpty) continue;
       final baseDate = (r['date'] ?? '').split('_').first;
@@ -261,11 +302,15 @@ class LocalPdfParser {
       final startMin = _timeToMinutes(r['time'] ?? '');
 
       (dayDates[day] ??= <String>{}).add(baseDate);
-      final dateCounts = (daySubjectDateCount[day] ??= {})
-          .putIfAbsent(subject, () => <String, int>{});
+      final dateCounts = (daySubjectDateCount[day] ??= {}).putIfAbsent(
+        subject,
+        () => <String, int>{},
+      );
       dateCounts[baseDate] = (dateCounts[baseDate] ?? 0) + 1;
-      final dateStarts = (daySubjectDateStart[day] ??= {})
-          .putIfAbsent(subject, () => <String, int>{});
+      final dateStarts = (daySubjectDateStart[day] ??= {}).putIfAbsent(
+        subject,
+        () => <String, int>{},
+      );
       final existingStart = dateStarts[baseDate];
       if (existingStart == null || startMin < existingStart) {
         dateStarts[baseDate] = startMin;
@@ -278,8 +323,9 @@ class LocalPdfParser {
       if (dates.isEmpty) continue;
 
       // The most recent (up to) 3 dates for this weekday define "recent".
-      final recentDates =
-          dates.sublist(dates.length <= 3 ? 0 : dates.length - 3).toSet();
+      final recentDates = dates
+          .sublist(dates.length <= 3 ? 0 : dates.length - 3)
+          .toSet();
 
       final subjects = daySubjectDateCount[day] ?? const {};
       final slots = <({int start, String subject, int count})>[];
@@ -312,11 +358,29 @@ class LocalPdfParser {
   // ── Date normalisation ────────────────────────────────────────────────
 
   static const _monthMap = <String, int>{
-    'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
-    'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
-    'january': 1, 'february': 2, 'march': 3, 'april': 4,
-    'june': 6, 'july': 7, 'august': 8, 'september': 9,
-    'october': 10, 'november': 11, 'december': 12,
+    'jan': 1,
+    'feb': 2,
+    'mar': 3,
+    'apr': 4,
+    'may': 5,
+    'jun': 6,
+    'jul': 7,
+    'aug': 8,
+    'sep': 9,
+    'oct': 10,
+    'nov': 11,
+    'dec': 12,
+    'january': 1,
+    'february': 2,
+    'march': 3,
+    'april': 4,
+    'june': 6,
+    'july': 7,
+    'august': 8,
+    'september': 9,
+    'october': 10,
+    'november': 11,
+    'december': 12,
   };
 
   static String? _toIsoDate(String raw) {

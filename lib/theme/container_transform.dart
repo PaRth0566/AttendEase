@@ -212,7 +212,11 @@ class ContainerTransformTransition extends StatelessWidget {
   /// "boxy" part. Easing it in holds most of the card's radius until the box is
   /// nearly home, so it stays a growing rounded card and squares off only as it
   /// becomes the page.
-  static double _cornerCollapse(double t) => Curves.easeInCubic.transform(t);
+  // Called with the raw animation value v (pre-geometry-curve). Corners follow
+  // the box's real screen progress, so the rounding melts continuously instead
+  // of easing on top of an already-eased position (§2).
+  static double _cornerCollapse(double v) =>
+      Curves.easeInOutCubic.transform(v);
 
   /// The page's opacity as it fades in over the card.
   ///
@@ -259,7 +263,7 @@ class ContainerTransformTransition extends StatelessWidget {
             : AppMotion.morphContainerCurve.transform(v);
 
         final Rect rect = Rect.lerp(origin.rect, full, t)!;
-        final double radius = lerpDouble(origin.radius, 0, _cornerCollapse(t))!;
+        final double radius = lerpDouble(origin.radius, 0, _cornerCollapse(v))!;
         final double pageOpacity =
             reversing ? _openOpacityReverse(v) : _openOpacityForward(v);
         final double scrim = _scrimAlpha(t);

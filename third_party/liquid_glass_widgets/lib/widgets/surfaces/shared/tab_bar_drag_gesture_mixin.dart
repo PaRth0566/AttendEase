@@ -32,6 +32,14 @@ mixin TabDragGestureMixin<T extends StatefulWidget> on State<T> {
   /// Index of the currently selected tab.
   int get tabIndex;
 
+  /// Continuous override for the indicator's alignment, in [-1, 1].
+  ///
+  /// AttendEase patch — see README.attendease.md. When non-null the caller owns
+  /// the pill position (driving it from a page-scroll position), and the mixin
+  /// must not recompute it from the discrete [tabIndex]. Defaults to null so
+  /// [SearchableTabIndicatorState] and any other consumer compile unchanged.
+  double? get alignmentOverride => null;
+
   /// Called once per gesture lifecycle when the active tab should change.
   ///
   /// Always invoked unconditionally — callers may use repeat-tap to trigger
@@ -82,6 +90,9 @@ mixin TabDragGestureMixin<T extends StatefulWidget> on State<T> {
 
   /// Call from [didUpdateWidget] when tabIndex or tabCount may have changed.
   void updateTabAlignIfNeeded(int oldTabIndex, int oldTabCount) {
+    // With an override active the caller owns the position; recomputing from
+    // the index here would fight it on the frame the index flips.
+    if (alignmentOverride != null) return;
     if (oldTabIndex != tabIndex || oldTabCount != tabCount) {
       if (mounted) setState(() => tabXAlign = computeTabAlignment(tabIndex));
     }

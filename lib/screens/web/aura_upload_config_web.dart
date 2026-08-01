@@ -7,12 +7,14 @@ import 'package:web/web.dart' as web;
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/subject.dart';
 import '../../services/local_pdf_parser.dart';
+import '../../theme/app_breakpoints.dart';
 import 'aura_ai_dashboard.dart';
 
 // ── JS interop: reads globals set by index.html drop handler ────────────────
@@ -406,12 +408,18 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
   /// Sends the report to the Gemini backend (used for non-SVKM colleges).
   Future<void> _analyzeWithBackend(String name, List<int> bytes) async {
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      final token = await user?.getIdToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('Authentication required');
+      }
       final request = http.MultipartRequest(
         'POST',
         Uri.parse(
           'https://attendease-backend-ndxs.onrender.com/api/analyze-attendance',
         ),
       );
+      request.headers['Authorization'] = 'Bearer $token';
 
       request.files.add(
         http.MultipartFile.fromBytes(
@@ -548,8 +556,8 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
     }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final w = MediaQuery.of(context).size.width;
-    final isMobile = w < 600;
+    final isMobile = AppBreakpoints.isMobile(context);
+    final isWebMobile = AppBreakpoints.isWebMobile(context);
 
     return Padding(
         padding: EdgeInsets.only(
@@ -569,7 +577,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                   'System Initialization',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: isMobile ? 24 : (w < 768 ? 32 : 44),
+                    fontSize: isMobile ? 24 : (isWebMobile ? 32 : 44),
                     fontWeight: FontWeight.w800,
                     letterSpacing: -0.5,
                     foreground: Paint()
@@ -966,6 +974,8 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
       children: [
         Text(
           label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
             fontSize: isMobile ? 10 : 12,
             fontWeight: FontWeight.w600,
@@ -1274,6 +1284,10 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                   SizedBox(height: isMobile ? 12 : 24),
                   Text(
                     _fileName ?? 'Drop your PDF report here',
+                    textAlign: TextAlign.center,
+                    // A long filename has no spaces to wrap on, so cap it.
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: isMobile ? 20 : 24,
                       fontWeight: FontWeight.w600,

@@ -153,6 +153,7 @@ class GlassTabBar extends StatefulWidget {
     LiquidGlassSettings? settings,
     bool showIndicator = true,
     Color? indicatorColor,
+    double? alignmentOverride,
     LiquidGlassSettings? indicatorSettings,
     double indicatorPinchStrength = 0.4,
     Color? selectedIconColor,
@@ -205,6 +206,7 @@ class GlassTabBar extends StatefulWidget {
           settings: settings,
           showIndicator: showIndicator,
           indicatorColor: indicatorColor,
+          alignmentOverride: alignmentOverride,
           indicatorSettings: indicatorSettings,
           indicatorPinchStrength: indicatorPinchStrength,
           selectedIconColor: selectedIconColor,
@@ -380,6 +382,7 @@ class GlassTabBar extends StatefulWidget {
       super.key,
       // Shared styling
       this.indicatorColor,
+      this.alignmentOverride,
       this.selectedIconColor,
       this.unselectedIconColor,
       this.selectedLabelColor,
@@ -455,6 +458,10 @@ class GlassTabBar extends StatefulWidget {
 
   /// Color of the pill indicator.
   final Color? indicatorColor;
+
+  /// Continuous override for the pill's alignment, in [-1, 1]; only wired for
+  /// [GlassTabBar.bottom]. AttendEase patch — see README.attendease.md.
+  final double? alignmentOverride;
 
   /// Icon color for selected tab.
   final Color? selectedIconColor;
@@ -711,6 +718,7 @@ class _GlassTabBarState extends State<GlassTabBar> {
       settings: widget.settings,
       showIndicator: widget.showIndicator,
       indicatorColor: widget.indicatorColor,
+      alignmentOverride: widget.alignmentOverride,
       indicatorSettings: widget.indicatorSettings,
       indicatorPinchStrength: widget.indicatorPinchStrength,
       selectedIconColor: widget.selectedIconColor,

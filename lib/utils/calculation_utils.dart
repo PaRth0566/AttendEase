@@ -34,9 +34,10 @@ class SkipPlan {
 /// when the timetable is empty or approximate.
 ///
 /// [history] items must contain a `date` (`yyyy-MM-dd`, optionally with a `_n`
-/// suffix) and a `status` (`P` / `A` / `NU`). NU rows are ignored for the
+/// suffix) and a `status` (`P` / `A` / `NU` / `NC`). NU rows are ignored for the
 /// pass/total maths (handled by [attended] / [total]) but are still used to
-/// establish the weekly pattern, since an NU means a lecture was scheduled.
+/// establish the weekly pattern, since an NU means a lecture was conducted.
+/// NC rows are excluded because no lecture occurred.
 SkipPlan computeSkipPlan({
   required List<Map<String, dynamic>> history,
   required int attended,
@@ -59,9 +60,11 @@ SkipPlan computeSkipPlan({
 
   // Build the subject's weekly footprint from its history.
   final weekdayDates = <int, Set<String>>{}; // weekday -> distinct base dates
-  final weekdayDateCount = <int, Map<String, int>>{}; // weekday -> date -> count
+  final weekdayDateCount =
+      <int, Map<String, int>>{}; // weekday -> date -> count
   DateTime? latest;
   for (final r in history) {
+    if (r['status'] == 'NC') continue;
     final base = ((r['date'] as String?) ?? '').split('_').first;
     final dt = DateTime.tryParse(base);
     if (dt == null) continue; // ignore any pseudo/padding dates
@@ -71,7 +74,12 @@ SkipPlan computeSkipPlan({
     counts[base] = (counts[base] ?? 0) + 1;
     if (latest == null || dt.isAfter(latest)) latest = dt;
   }
-  if (latest == null) return SkipPlan(maxSkips: maxSkips, dates: const [], countPerDate: const {});
+  if (latest == null)
+    return SkipPlan(
+      maxSkips: maxSkips,
+      dates: const [],
+      countPerDate: const {},
+    );
 
   // A weekday is "active" if the subject recurs there (>= 2 distinct dates) and
   // was seen within the last 3 weeks of history — dropping stale slots from a
@@ -82,21 +90,29 @@ SkipPlan computeSkipPlan({
   weekdayDates.forEach((wd, dates) {
     if (dates.length < 2) return;
     final sorted = dates.toList()..sort();
-    final seenRecently =
-        sorted.any((d) => !DateTime.parse(d).isBefore(recencyCutoff));
+    final seenRecently = sorted.any(
+      (d) => !DateTime.parse(d).isBefore(recencyCutoff),
+    );
     if (!seenRecently) return;
     activeWeekdays[wd] = (weekdayDateCount[wd]?[sorted.last] ?? 1).clamp(1, 8);
   });
   if (activeWeekdays.isEmpty) {
-    return SkipPlan(maxSkips: maxSkips, dates: const [], countPerDate: const {});
+    return SkipPlan(
+      maxSkips: maxSkips,
+      dates: const [],
+      countPerDate: const {},
+    );
   }
 
   // Project forward from tomorrow, banking whole days until the skip budget
   // (in lectures) is spent or we exhaust a sensible horizon.
   final dates = <DateTime>[];
   final countPerDate = <DateTime, int>{};
-  var cursor = DateTime(today.year, today.month, today.day)
-      .add(const Duration(days: 1));
+  var cursor = DateTime(
+    today.year,
+    today.month,
+    today.day,
+  ).add(const Duration(days: 1));
   final horizon = cursor.add(const Duration(days: 70));
   var budget = maxSkips;
   while (budget > 0 && cursor.isBefore(horizon) && dates.length < 20) {
@@ -113,36 +129,185 @@ SkipPlan computeSkipPlan({
   return SkipPlan(maxSkips: maxSkips, dates: dates, countPerDate: countPerDate);
 }
 
-/// A single upcoming day that can be fully skipped.
-class SkippableDay {
-  final DateTime date;
-  final int lectureCount; // how many lectures fall on this day
-  const SkippableDay({required this.date, required this.lectureCount});
+/// Where a single day of the displayed week stands.
+enum SkipVerdict {
+  /// Safe to miss every lecture that day.
+  skippable,
+
+  /// Classes are scheduled, but skipping them drops something below target.
+  unsafe,
+
+  /// Nothing scheduled (e.g. Sunday, or a free weekday).
+  noClasses,
+
+  /// Earlier this week — already happened, so it isn't on offer.
+  past,
 }
 
-/// Works out which upcoming whole days can be safely skipped.
+/// One day of the current-week skip strip.
+class WeekSkipDay {
+  final DateTime date;
+
+  /// How many lectures fall on this day. Kept in the model even though the
+  /// strip doesn't render it — it distinguishes a cheap skip from an expensive
+  /// one, which the summary line may want later.
+  final int lectureCount;
+
+  final SkipVerdict verdict;
+
+  /// For [SkipVerdict.unsafe]: which subject's target the skip would break.
+  /// Null when the *overall* percentage is what fails, or for other verdicts.
+  final int? blockingSubjectId;
+
+  /// True when this verdict was reached only by assuming a not-yet-happened
+  /// day was attended as planned — i.e. it is conditional on the rest of the
+  /// week going as expected, rather than resting purely on recorded facts.
+  final bool dependsOnFuture;
+
+  const WeekSkipDay({
+    required this.date,
+    required this.lectureCount,
+    required this.verdict,
+    this.blockingSubjectId,
+    this.dependsOnFuture = false,
+  });
+}
+
+/// A Monday→Sunday verdict for every day of the displayed week.
+class WeekSkipPlan {
+  /// Monday of the displayed week.
+  final DateTime weekStart;
+
+  /// Always length 7, Mon → Sun.
+  final List<WeekSkipDay> days;
+
+  /// True when the current week was rolled over (Sunday) and this is the
+  /// *coming* week.
+  final bool isNextWeek;
+
+  const WeekSkipPlan({
+    required this.weekStart,
+    required this.days,
+    required this.isNextWeek,
+  });
+
+  Iterable<WeekSkipDay> get skippableDays =>
+      days.where((d) => d.verdict == SkipVerdict.skippable);
+}
+
+/// The inferred weekly footprint: weekday (1=Mon … 7=Sun) -> the subject ids
+/// with a lecture that day, repeated once per lecture.
 ///
-/// A day is "skippable" if being absent for *every* lecture that day — on top
-/// of skipping all earlier listed days — keeps every subject at or above its
-/// own required percentage AND the overall attendance at or above
-/// [overallRequired]. The projection is cumulative and greedy: it walks forward
-/// from tomorrow and stops at the first class day that would drop any subject
-/// (or the overall) below target, since skipping is only "safe" while every
-/// constraint still holds.
+/// Derived purely from conducted history rather than the reusable weekly
+/// timetable, so swaps and replacement lectures stay visible. A weekday slot
+/// counts only when the subject recurs there (≥2 distinct dates) and was seen
+/// within 21 days of that subject's latest record — stale slots from a
+/// schedule that shifted mid-semester drop out. Lectures-per-day comes from the
+/// most recent occurrence, reflecting the current week. `NC` rows are excluded
+/// because no lecture actually happened.
+Map<int, List<int>> _inferWeeklySchedule(
+  Map<int, List<Map<String, dynamic>>> subjectHistory,
+) {
+  final latestBySubject = <int, DateTime>{};
+  final weekdayDates = <int, Map<int, Set<String>>>{};
+  final weekdayCounts = <int, Map<int, Map<String, int>>>{};
+  for (final entry in subjectHistory.entries) {
+    for (final record in entry.value) {
+      if (record['status'] == 'NC') continue;
+      final base = ((record['date'] as String?) ?? '').split('_').first;
+      final date = DateTime.tryParse(base);
+      if (date == null) continue;
+      final sid = entry.key;
+      if (latestBySubject[sid] == null || date.isAfter(latestBySubject[sid]!)) {
+        latestBySubject[sid] = date;
+      }
+      final datesBySubject = weekdayDates[date.weekday] ??=
+          <int, Set<String>>{};
+      (datesBySubject[sid] ??= <String>{}).add(base);
+      final countsBySubject = weekdayCounts[date.weekday] ??=
+          <int, Map<String, int>>{};
+      final counts = countsBySubject[sid] ??= <String, int>{};
+      counts[base] = (counts[base] ?? 0) + 1;
+    }
+  }
+
+  final schedule = <int, List<int>>{};
+  for (final weekdayEntry in weekdayDates.entries) {
+    for (final subjectEntry in weekdayEntry.value.entries) {
+      final latest = latestBySubject[subjectEntry.key];
+      final dates = subjectEntry.value;
+      if (latest == null || dates.length < 2) continue;
+      final recentCutoff = latest.subtract(const Duration(days: 21));
+      if (!dates.any((d) => !DateTime.parse(d).isBefore(recentCutoff))) {
+        continue;
+      }
+      final mostRecent = (dates.toList()..sort()).last;
+      final count =
+          weekdayCounts[weekdayEntry.key]![subjectEntry.key]![mostRecent] ?? 1;
+      schedule
+          .putIfAbsent(weekdayEntry.key, () => <int>[])
+          .addAll(
+            List<int>.filled(count.clamp(1, 8).toInt(), subjectEntry.key),
+          );
+    }
+  }
+  return schedule;
+}
+
+/// Two-digit zero padding for a `yyyy-MM-dd` key.
+String _dateKey(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-'
+    '${d.month.toString().padLeft(2, '0')}-'
+    '${d.day.toString().padLeft(2, '0')}';
+
+/// Builds a Monday→Sunday verdict for every day of the current week.
+///
+/// A day is [SkipVerdict.skippable] if being absent for *every* lecture that
+/// day — on top of skipping all earlier days already marked skippable this
+/// week — keeps every subject at or above its own required percentage AND the
+/// overall attendance at or above [overallRequired].
+///
+/// The accounting is **cumulative**: two green days mean "you can take both
+/// off", not two independent offers that quietly conflict. Unlike the older
+/// forward-running projection, an unsafe day does *not* abort the walk — its
+/// hypothetical is rolled back and the remaining days are still evaluated, so a
+/// cheap Friday can show green after an expensive Wednesday shows red.
+///
+/// Days earlier than [today] are marked [SkipVerdict.past] and not evaluated.
+/// No extra bookkeeping is needed for them: their real outcomes are already
+/// baked into [subjectStats], so a Monday you actually bunked automatically
+/// makes Saturday's verdict harsher.
+///
+/// **Rollover:** on Sunday the whole current week is spent (Sunday is a holiday
+/// in this app), so the *coming* week is returned instead and [
+/// WeekSkipPlan.isNextWeek] is true.
+///
+/// Returns null when no weekly schedule can be inferred at all (a new user with
+/// no history) — there is nothing meaningful to show, as distinct from a week
+/// where simply no day is skippable.
 ///
 /// [subjectStats] maps subjectId -> {'attended', 'total'}.
 /// [subjectRequired] maps subjectId -> required percent (e.g. 75.0).
-/// [weeklyTimetable] maps weekday (1=Mon … 7=Sun) -> list of subjectIds that
-/// occur that weekday (one entry per lecture, so duplicates are expected).
-List<SkippableDay> computeSkippableDays({
+/// [subjectHistory] contains the persisted records for each subject.
+WeekSkipPlan? computeWeekSkipPlan({
   required Map<int, Map<String, int>> subjectStats,
   required Map<int, double> subjectRequired,
-  required Map<int, List<int>> weeklyTimetable,
+  required Map<int, List<Map<String, dynamic>>> subjectHistory,
   required double overallRequired,
   required DateTime today,
-  int horizonDays = 60,
-  int maxDays = 14,
 }) {
+  final schedule = _inferWeeklySchedule(subjectHistory);
+  if (schedule.isEmpty) return null;
+
+  final todayDate = DateTime(today.year, today.month, today.day);
+
+  // Monday of this week; on Sunday roll over to the coming week, since the
+  // current one has nothing left to offer.
+  final isNextWeek = todayDate.weekday == DateTime.sunday;
+  final weekStart = todayDate
+      .subtract(Duration(days: todayDate.weekday - 1))
+      .add(Duration(days: isNextWeek ? 7 : 0));
+
   // Running hypothetical totals (start from the real current state).
   final attended = <int, int>{};
   final total = <int, int>{};
@@ -151,49 +316,117 @@ List<SkippableDay> computeSkippableDays({
     total[entry.key] = entry.value['total'] ?? 0;
   }
 
-  bool subjectOk(int sid) {
-    final t = total[sid] ?? 0;
-    if (t == 0) return true; // nothing recorded yet -> don't block on it
-    final req = subjectRequired[sid] ?? overallRequired;
-    return (attended[sid]! / t) * 100 >= req - 1e-9;
+  /// Subject ids that already have a record for a given date — used so today's
+  /// already-marked lectures aren't counted a second time in the hypothetical.
+  final recordedToday = <int>{};
+  final todayKey = _dateKey(todayDate);
+  for (final entry in subjectHistory.entries) {
+    for (final record in entry.value) {
+      final base = ((record['date'] as String?) ?? '').split('_').first;
+      if (base == todayKey) {
+        recordedToday.add(entry.key);
+        break;
+      }
+    }
   }
 
-  bool overallOk() {
+  /// Returns the offending subject id, or -1 for an overall-percentage
+  /// failure, or null when everything still holds.
+  int? firstBreach(List<int> lectures) {
+    for (final sid in lectures) {
+      final t = total[sid] ?? 0;
+      if (t == 0) continue; // nothing recorded yet -> don't block on it
+      final req = subjectRequired[sid] ?? overallRequired;
+      if ((attended[sid] ?? 0) / t * 100 < req - 1e-9) return sid;
+    }
     var a = 0, t = 0;
     total.forEach((sid, tt) {
       a += attended[sid] ?? 0;
       t += tt;
     });
-    if (t == 0) return true;
-    return (a / t) * 100 >= overallRequired - 1e-9;
+    if (t != 0 && (a / t) * 100 < overallRequired - 1e-9) return -1;
+    return null;
   }
 
-  final result = <SkippableDay>[];
-  var cursor = DateTime(today.year, today.month, today.day)
-      .add(const Duration(days: 1));
-  final horizon = cursor.add(Duration(days: horizonDays));
+  final days = <WeekSkipDay>[];
+  // Once a not-yet-happened day has been banked into the running totals, every
+  // later verdict is conditional on that day going as assumed.
+  var consumedFutureDay = false;
 
-  while (cursor.isBefore(horizon) && result.length < maxDays) {
-    final lectures = weeklyTimetable[cursor.weekday] ?? const <int>[];
-    if (lectures.isNotEmpty) {
-      // Tentatively mark every lecture that day absent (total+1, attended+0).
-      final snapshotTotal = {...total};
-      for (final sid in lectures) {
-        total[sid] = (total[sid] ?? 0) + 1;
-      }
-      final stillSafe =
-          lectures.every(subjectOk) && overallOk();
-      if (stillSafe) {
-        result.add(SkippableDay(date: cursor, lectureCount: lectures.length));
-      } else {
-        // Roll back this day and stop — further days can't make it safer.
-        total
-          ..clear()
-          ..addAll(snapshotTotal);
-        break;
-      }
+  for (var i = 0; i < 7; i++) {
+    final date = weekStart.add(Duration(days: i));
+
+    if (date.isBefore(todayDate)) {
+      days.add(
+        WeekSkipDay(
+          date: date,
+          lectureCount: 0,
+          verdict: SkipVerdict.past,
+        ),
+      );
+      continue;
     }
-    cursor = cursor.add(const Duration(days: 1));
+
+    // A one-off future holiday isn't knowable from weekday-pattern history, so
+    // a declared-holiday Friday still shows as a class day. That errs
+    // conservative (fewer skips offered than reality), which is the safe way
+    // to be wrong.
+    var lectures = schedule[date.weekday] ?? const <int>[];
+
+    // Today's already-recorded lectures are part of `subjectStats` already;
+    // re-adding them would double-count.
+    if (date == todayDate && recordedToday.isNotEmpty) {
+      lectures = lectures.where((sid) => !recordedToday.contains(sid)).toList();
+    }
+
+    if (lectures.isEmpty) {
+      days.add(
+        WeekSkipDay(
+          date: date,
+          lectureCount: 0,
+          verdict: SkipVerdict.noClasses,
+        ),
+      );
+      continue;
+    }
+
+    // Tentatively mark every lecture that day absent (total+1, attended+0).
+    final snapshot = {...total};
+    for (final sid in lectures) {
+      total[sid] = (total[sid] ?? 0) + 1;
+    }
+    final breach = firstBreach(lectures);
+
+    if (breach == null) {
+      days.add(
+        WeekSkipDay(
+          date: date,
+          lectureCount: lectures.length,
+          verdict: SkipVerdict.skippable,
+          dependsOnFuture: consumedFutureDay,
+        ),
+      );
+      // Keep the hypothetical — later days are judged as if this one is off.
+      if (date.isAfter(todayDate)) consumedFutureDay = true;
+    } else {
+      total
+        ..clear()
+        ..addAll(snapshot);
+      days.add(
+        WeekSkipDay(
+          date: date,
+          lectureCount: lectures.length,
+          verdict: SkipVerdict.unsafe,
+          blockingSubjectId: breach == -1 ? null : breach,
+          dependsOnFuture: consumedFutureDay,
+        ),
+      );
+    }
   }
-  return result;
+
+  return WeekSkipPlan(
+    weekStart: weekStart,
+    days: days,
+    isNextWeek: isNextWeek,
+  );
 }

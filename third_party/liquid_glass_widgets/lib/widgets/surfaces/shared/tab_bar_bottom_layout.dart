@@ -51,6 +51,7 @@ class TabBarBottomLayout extends StatefulWidget {
     this.settings,
     this.showIndicator = true,
     this.indicatorColor,
+    this.alignmentOverride,
     this.indicatorSettings,
     this.indicatorPinchStrength = 0.4,
     this.selectedIconColor,
@@ -103,6 +104,11 @@ class TabBarBottomLayout extends StatefulWidget {
   final LiquidGlassSettings? settings;
   final bool showIndicator;
   final Color? indicatorColor;
+
+  /// Continuous override for the pill's alignment, in [-1, 1]. AttendEase patch
+  /// — see README.attendease.md.
+  final double? alignmentOverride;
+
   final LiquidGlassSettings? indicatorSettings;
   final double indicatorPinchStrength;
   final Color? selectedIconColor;
@@ -256,6 +262,7 @@ class _TabBarBottomLayoutState extends State<TabBarBottomLayout> {
                           visible: widget.showIndicator,
                           tabIndex: widget.selectedIndex,
                           tabCount: widget.tabs.length,
+                          alignmentOverride: widget.alignmentOverride,
                           indicatorColor: widget.indicatorColor,
                           indicatorSettings: widget.indicatorSettings,
                           indicatorPinchStrength: widget.indicatorPinchStrength,

@@ -1,9 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/local_pdf_parser.dart';
+import '../../theme/app_breakpoints.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_dimens.dart';
+import '../../widgets/callout_box.dart';
+import '../../widgets/pdf_source_widgets.dart';
 
 class UploadPdfScreen extends StatefulWidget {
   const UploadPdfScreen({super.key});
@@ -14,6 +21,11 @@ class UploadPdfScreen extends StatefulWidget {
 
 class _UploadPdfScreenState extends State<UploadPdfScreen> {
   bool _isUploading = false;
+
+  /// Cap on the local parse. A well-formed report parses in well under a second;
+  /// anything past this is a PDF the parser cannot handle, and an unbounded
+  /// await there is what left the first-time upload spinning with no way out.
+  static const Duration _parseTimeout = Duration(seconds: 25);
 
   Future<void> _pickAndUploadPdf() async {
     try {
@@ -37,24 +49,26 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
         return;
       }
 
+      if (!mounted) return;
       setState(() => _isUploading = true);
 
+      // Bound the parse so the user always gets their screen back instead of an
+      // infinite spinner (.timeout abandons the future; the short-lived isolate
+      // is left to finish and be collected).
       final Map<String, dynamic> parsedData =
-          await LocalPdfParser.extractAttendanceFromPdf(fileBytes);
+          await LocalPdfParser.extractAttendanceFromPdf(fileBytes)
+              .timeout(_parseTimeout);
 
-      setState(() => _isUploading = false);
-
-      if (mounted) {
-        context.go('/setup/basic', extra: parsedData);
-      }
+      if (!mounted) return;
+      context.go('/setup/basic', extra: parsedData);
     } catch (e) {
       if (mounted) {
-        setState(() => _isUploading = false);
-        // Use the parser's own clean message for FormatException,
-        // generic fallback for any other unexpected error.
-        final msg = e is FormatException
-            ? e.message
-            : 'Something went wrong. Please try again with a valid attendance PDF.';
+        final msg = e is TimeoutException
+            ? "This PDF took too long to read. Make sure it's the attendance "
+                "report downloaded from SAP."
+            : e is FormatException
+                ? e.message
+                : 'Something went wrong. Please try again with a valid attendance PDF.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(msg),
@@ -63,13 +77,38 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
           ),
         );
       }
+    } finally {
+      // The spinner must never outlive the operation, including on an early
+      // return or an exception thrown after it was set.
+      if (mounted && _isUploading) setState(() => _isUploading = false);
+    }
+  }
+
+  Future<void> _launchSAPPortal() async {
+    final Uri url = Uri.parse('https://sdc-sppap1.svkm.ac.in:50001/irj/portal');
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Could not launch SAP Portal.'),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _launchWebVersion() async {
+    final url = Uri.parse('https://attendease-cbc6f.web.app/');
+    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+      debugPrint('Could not launch web URL');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final amber = context.appColors.warning;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -84,144 +123,101 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 540),
-            child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 24,
-            vertical: 24,
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(32),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withValues(alpha: 0.05) : theme.colorScheme.primary.withValues(alpha: 0.05),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.auto_awesome,
-                  size: 64,
-                  color: theme.colorScheme.primary,
-                ),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(
+                horizontal: AppBreakpoints.isMobile(context) ? 24 : 40,
+                vertical: 24,
               ),
-              const SizedBox(height: 32),
-              Text(
-                "Smart PDF Extraction",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: theme.textTheme.bodyLarge?.color,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                "Upload your attendance PDF to instantly extract your subjects and attendance records. Fully offline — no internet needed.",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 16,
-                  height: 1.5,
-                  color: theme.textTheme.bodyMedium?.color,
-                ),
-              ),
-              const SizedBox(height: 48),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Same layout as the Sync screen (shared widgets) with
+                  // setup-appropriate copy and step labels (§8).
+                  const PdfSourceHeroCard(
+                    icon: Icons.upload_file_rounded,
+                    title: 'Import Attendance',
+                    subtitle:
+                        'Upload your attendance PDF to extract your subjects '
+                        'and records — fully offline.',
+                    steps: [
+                      PdfSourceStep('Select PDF'),
+                      PdfSourceStep('Details'),
+                      PdfSourceStep('Done'),
+                    ],
+                    currentStep: 1,
+                  ),
+                  const SizedBox(height: AppDimens.space16),
 
-              if (_isUploading)
-                Column(
-                  children: [
-                    CircularProgressIndicator(color: theme.colorScheme.primary),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Analyzing PDF locally...',
-                      style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                )
-              else
-                ElevatedButton.icon(
-                  onPressed: _pickAndUploadPdf,
-                  icon: const Icon(Icons.upload_file),
-                  label: const Text(
-                    'Select PDF Report',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  const CalloutBox(
+                    kind: CalloutKind.info,
+                    title: 'Note:',
+                    message: 'Semester is auto-detected from your report.',
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 18),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                ),
-                
-              const SizedBox(height: 32),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.indigo.withValues(alpha: 0.15) : Colors.indigo.shade50.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: isDark ? Colors.indigo.withValues(alpha: 0.3) : Colors.indigo.withValues(alpha: 0.2)),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  const SizedBox(height: AppDimens.space24),
+
+                  if (_isUploading)
+                    Column(
                       children: [
-                        Icon(Icons.info_rounded, color: isDark ? Colors.indigo.shade300 : Colors.indigo.shade600, size: 22),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Text(
-                            "This offline parser is exclusively configured for the detailed reports of Mithibai College students.",
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              height: 1.5,
-                              color: isDark ? Colors.indigo.shade100 : Colors.indigo.shade900,
-                            ),
+                        CircularProgressIndicator(
+                            color: theme.colorScheme.primary),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Analyzing PDF locally...',
+                          style: TextStyle(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 16),
-                    Divider(color: isDark ? Colors.indigo.withValues(alpha: 0.3) : Colors.indigo.withValues(alpha: 0.2)),
-                    const SizedBox(height: 12),
+                    )
+                  else ...[
                     Text(
-                      "Students from other colleges, please use our Smart AI Web version for accurate insights.",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? Colors.indigo.shade200 : Colors.indigo.shade800,
-                      ),
+                      'Choose PDF Source',
+                      style: theme.textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.bold),
                     ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final url = Uri.parse('https://attendease-cbc6f.web.app/');
-                          if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-                            debugPrint('Could not launch web URL');
-                          }
-                        },
+                    const SizedBox(height: 4),
+                    Text(
+                      'Select how you want to add your attendance report.',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: AppDimens.space20),
+                    PdfSourceCard(
+                      icon: Icons.folder_open_rounded,
+                      title: 'Select PDF Report',
+                      subtitle:
+                          'Browse and upload your attendance PDF from device.',
+                      accent: theme.colorScheme.primary,
+                      onTap: _pickAndUploadPdf,
+                    ),
+                    const SizedBox(height: AppDimens.space16),
+                    PdfSourceCard(
+                      icon: Icons.cloud_download_rounded,
+                      title: 'Download PDF from SAP',
+                      subtitle:
+                          'Download your attendance report directly from the '
+                          'SAP portal.',
+                      accent: amber,
+                      onTap: _launchSAPPortal,
+                    ),
+                    const SizedBox(height: AppDimens.space24),
+                    const ReassuranceCard(
+                      title: 'Fully offline extraction.',
+                      subtitle:
+                          'Your PDF is parsed on-device — nothing is uploaded.',
+                    ),
+                    const SizedBox(height: AppDimens.space16),
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: _launchWebVersion,
                         icon: const Icon(Icons.open_in_browser_rounded, size: 18),
-                        label: const Text('Open Web Version', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: isDark ? Colors.indigo.shade300 : Colors.indigo.shade700,
-                          side: BorderSide(color: isDark ? Colors.indigo.withValues(alpha: 0.4) : Colors.indigo.withValues(alpha: 0.3)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
+                        label: const Text('Not Mithibai? Open the Web Version'),
                       ),
                     ),
                   ],
-                ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
           ),
         ),
       ),

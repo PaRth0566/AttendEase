@@ -164,6 +164,21 @@ class _AttendEaseAppState extends State<AttendEaseApp>
           darkTheme: AppTheme.darkTheme,
 
           routerConfig: AppRouter.router,
+          builder: (context, child) {
+            final mq = MediaQuery.of(context);
+            final scale = mq.textScaler.scale(1.0);
+            // Only clamp when the system scale is outside our comfort range;
+            // calling clamp with equal min/max triggers an assertion in some
+            // Flutter versions.
+            final needsClamp = scale < 0.9 || scale > 1.3;
+            final effective = needsClamp
+                ? TextScaler.linear(scale.clamp(0.9, 1.3))
+                : mq.textScaler;
+            return MediaQuery(
+              data: mq.copyWith(textScaler: effective),
+              child: child!,
+            );
+          },
         );
       },
     );
