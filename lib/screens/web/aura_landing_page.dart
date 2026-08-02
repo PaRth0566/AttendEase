@@ -540,7 +540,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                       message: 'Download Android App',
                       child: IconButton(
                         onPressed: () => launchUrl(
-                          Uri.parse('https://github.com/PaRth0566/AttendEase/releases/download/v1.0.3/AttendEase.apk'),
+                          Uri.parse('https://github.com/PaRth0566/AttendEase/releases/download/v1.0.4/AttendEase.apk'),
                           mode: LaunchMode.externalApplication,
                         ),
                         icon: Icon(
