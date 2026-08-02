@@ -11,8 +11,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
 import '../../models/subject.dart';
+import '../../theme/app_breakpoints.dart';
 import '../../theme/app_colors.dart';
+import '../../theme/app_dimens.dart';
 import '../../widgets/app_overlays.dart';
+import '../../widgets/callout_box.dart';
+import '../../widgets/pdf_source_widgets.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -608,7 +612,6 @@ class _ReportScreenState extends State<ReportScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final c = context.appColors;
 
     return Scaffold(
@@ -638,20 +641,52 @@ class _ReportScreenState extends State<ReportScreen> {
       // still needs bottom inset protection on gesture-nav devices.
       body: SafeArea(
         top: false,
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 700),
-            child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              border: Border(bottom: BorderSide(color: theme.dividerColor)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+            constraints: const BoxConstraints(maxWidth: AppDimens.maxContentWide),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(
+                AppBreakpoints.isMobile(context)
+                    ? AppDimens.space16
+                    : AppDimens.space32,
+                AppDimens.headerContentGap,
+                AppBreakpoints.isMobile(context)
+                    ? AppDimens.space16
+                    : AppDimens.space32,
+                AppDimens.space24,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Shared hero card — same shape as the Sync / Bug-report
+                  // screens so Analytics reads as part of the same set.
+                  const PdfSourceHeroCard(
+                    icon: Icons.insights_rounded,
+                    title: 'Attendance Report',
+                    subtitle:
+                        'Pick a range, generate your report, and export it as a '
+                        'polished PDF.',
+                  ),
+                  const SizedBox(height: AppDimens.space16),
+                  const CalloutBox(
+                    kind: CalloutKind.info,
+                    title: 'Note:',
+                    message:
+                        'Reports use the same records as your dashboard, so the '
+                        'numbers always match.',
+                  ),
+                  const SizedBox(height: AppDimens.space24),
+                  Container(
+                    padding: const EdgeInsets.all(AppDimens.space16),
+                    decoration: BoxDecoration(
+                      color: theme.cardColor,
+                      borderRadius: BorderRadius.circular(AppDimens.radiusLg),
+                      border: Border.all(color: theme.dividerColor),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                 RadioGroup<int>(
                   groupValue: _reportType,
                   onChanged: (val) => setState(() {
@@ -803,176 +838,227 @@ class _ReportScreenState extends State<ReportScreen> {
               ],
             ),
           ),
-          Expanded(
-            child: !_reportGenerated
-                ? Center(
-                    child: Text(
-                      'Adjust settings and click Generate',
-                      style: TextStyle(
-                        color: theme.textTheme.bodyMedium?.color,
-                      ),
-                    ),
-                  )
-                : _totalLectures == 0
-                ? Center(
-                    child: Text(
-                      'No attendance data found for this period.',
-                      style: TextStyle(
-                        color: theme.textTheme.bodyMedium?.color,
-                      ),
-                    ),
-                  )
-                : ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: isDark
-                              ? theme.colorScheme.primary.withAlpha(25)
-                              : const Color(0xFFF2F4FF),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: theme.colorScheme.primary.withAlpha(76),
-                          ),
-                        ),
-                        child: Column(
-                          children: [
-                            Text(
-                              'Overall Attendance',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: isDark
-                                    ? Colors.grey.shade300
-                                    : Colors.grey.shade700,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                '${_overallPercent.toStringAsFixed(2)}%',
-                                style: TextStyle(
-                                  fontSize: 42,
-                                  fontWeight: FontWeight.bold,
-                                  color: _overallPercent >= 75 ? c.success : c.danger,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              '$_totalAttended / $_totalLectures Lectures Attended',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: theme.textTheme.bodyLarge?.color,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      OutlinedButton.icon(
-                        onPressed: _showExportOptions,
-                        icon: const Icon(Icons.ios_share_rounded, size: 18),
-                        label: const Text('Export & Share PDF'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: theme.colorScheme.primary,
-                          side: BorderSide(color: theme.colorScheme.primary),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Subject Breakdown',
+                  const SizedBox(height: AppDimens.space24),
+                  if (!_reportGenerated)
+                    _emptyState(
+                      theme: theme,
+                      icon: Icons.assessment_outlined,
+                      title: 'No report yet',
+                      message:
+                          'Choose a semester or date range above, then tap '
+                          'Generate Report to see your breakdown.',
+                    )
+                  else if (_totalLectures == 0)
+                    _emptyState(
+                      theme: theme,
+                      icon: Icons.event_busy_outlined,
+                      title: 'No attendance data',
+                      message:
+                          'There are no records for this period. Try a '
+                          'different range or mark some attendance first.',
+                    )
+                  else
+                    ..._buildResults(theme, c),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Centered icon + title + message inside the shared card shell — replaces
+  /// the old bare text floating in an empty pane.
+  Widget _emptyState({
+    required ThemeData theme,
+    required IconData icon,
+    required String title,
+    required String message,
+  }) {
+    final Color secondary =
+        theme.textTheme.bodyMedium?.color ?? theme.colorScheme.onSurface;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimens.space24,
+        vertical: AppDimens.space32,
+      ),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(AppDimens.radiusLg),
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: secondary.withAlpha(20),
+              shape: BoxShape.circle,
+              border: Border.all(color: theme.dividerColor),
+            ),
+            child: Icon(icon, size: 32, color: secondary),
+          ),
+          const SizedBox(height: AppDimens.space16),
+          Text(
+            title,
+            style: theme.textTheme.titleMedium
+                ?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: AppDimens.space8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: secondary, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The generated-report body: overall summary card, export button, then the
+  /// per-subject breakdown cards (dashboard color split).
+  List<Widget> _buildResults(ThemeData theme, AppColors c) {
+    return [
+      Container(
+        padding: const EdgeInsets.all(AppDimens.space20),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(AppDimens.radiusLg),
+          border: Border.all(color: theme.dividerColor),
+        ),
+        child: Column(
+          children: [
+            Text(
+              'Overall Attendance',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: theme.textTheme.bodyMedium?.color,
+              ),
+            ),
+            const SizedBox(height: AppDimens.space8),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                '${_overallPercent.toStringAsFixed(2)}%',
+                style: TextStyle(
+                  fontSize: 42,
+                  fontWeight: FontWeight.bold,
+                  color: _overallPercent >= 75 ? c.success : c.danger,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppDimens.space8),
+            Text(
+              '$_totalAttended / $_totalLectures Lectures Attended',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: theme.textTheme.bodyLarge?.color,
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: AppDimens.space24),
+      OutlinedButton.icon(
+        onPressed: _showExportOptions,
+        icon: const Icon(Icons.ios_share_rounded, size: 18),
+        label: const Text('Export & Share PDF'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: theme.colorScheme.primary,
+          side: BorderSide(color: theme.colorScheme.primary),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+          ),
+        ),
+      ),
+      const SizedBox(height: AppDimens.space24),
+      Text(
+        'Subject Breakdown',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: theme.textTheme.bodyLarge?.color,
+        ),
+      ),
+      const SizedBox(height: AppDimens.space12),
+      ..._subjects.map((sub) {
+        final stat = _stats[sub.id] ?? {'attended': 0, 'total': 0};
+        final attended = stat['attended']!;
+        final total = stat['total']!;
+        final percent = total == 0 ? 0.0 : (attended / total) * 100;
+        final bool isSafe = percent >= sub.requiredPercent;
+        // Same split as the dashboard subject cards: the percentage text
+        // carries the deeper status token while the bar runs a shade brighter.
+        final Color color = isSafe ? c.success : c.danger;
+        final Color barColor =
+            isSafe ? const Color(0xFF49AD4F) : const Color(0xFFF14134);
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: AppDimens.space12),
+          color: theme.cardColor,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+            side: BorderSide(color: theme.dividerColor),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(AppDimens.space16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        sub.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 18,
                           fontWeight: FontWeight.bold,
+                          fontSize: 16,
                           color: theme.textTheme.bodyLarge?.color,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      ..._subjects.map((sub) {
-                        final stat =
-                            _stats[sub.id] ?? {'attended': 0, 'total': 0};
-                        final attended = stat['attended']!;
-                        final total = stat['total']!;
-                        final percent = total == 0
-                            ? 0.0
-                            : (attended / total) * 100;
-                        final color =
-                            percent >= sub.requiredPercent ? c.success : c.danger;
-
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          color: theme.cardColor,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: theme.dividerColor),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        sub.name,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 16,
-                                          color: theme.textTheme.bodyLarge?.color,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '${percent.toStringAsFixed(2)}%',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: color,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                LinearProgressIndicator(
-                                  value: total == 0 ? 0 : percent / 100,
-                                  color: color,
-                                  backgroundColor: theme.dividerColor,
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  '$attended / $total lectures',
-                                  style: TextStyle(
-                                    color: theme.textTheme.bodyMedium?.color,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
+                    ),
+                    const SizedBox(width: AppDimens.space8),
+                    Text(
+                      '${percent.toStringAsFixed(2)}%',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppDimens.space8),
+                LinearProgressIndicator(
+                  value: total == 0 ? 0 : percent / 100,
+                  color: barColor,
+                  backgroundColor: theme.dividerColor,
+                  minHeight: 5,
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
+                const SizedBox(height: AppDimens.space8),
+                Text(
+                  '$attended / $total lectures',
+                  style: TextStyle(
+                    color: theme.textTheme.bodyMedium?.color,
+                    fontSize: 12,
                   ),
+                ),
+              ],
+            ),
           ),
-        ],
-        ),
-      ),
-      ),
-      ),
-    );
+        );
+      }),
+    ];
   }
 }

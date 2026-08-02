@@ -32,7 +32,11 @@ Widget _harness({
     final bool active = iconIndex == i;
     return switch (i) {
       1 => CalendarDaysIcon(filled: filled, active: active, epoch: epoch),
-      2 => AvatarLookingAroundIcon(filled: filled, active: active, epoch: epoch),
+      2 => AvatarLookingAroundIcon(
+        filled: filled,
+        active: active,
+        epoch: epoch,
+      ),
       _ => DashboardMorphIcon(filled: filled, active: active, epoch: epoch),
     };
   }
@@ -88,7 +92,8 @@ Future<List<String>> _tapFrom(
   // Epoch 1 is the from-tab's own arrival; the destination bumps it to 2, as
   // RootScreen bumps _iconEpoch on each real arrival.
   await tester.pumpWidget(
-      _harness(iconIndex: from, pagePosition: from.toDouble(), epoch: 1));
+    _harness(iconIndex: from, pagePosition: from.toDouble(), epoch: 1),
+  );
   await tester.pumpAndSettle();
   log.clear();
 
@@ -123,8 +128,12 @@ void main() {
     for (int from = 0; from < 3; from++) {
       for (int to = 0; to < 3; to++) {
         if (from == to) continue;
-        final List<String> played =
-            await _tapFrom(tester, from: from, to: to, log: log);
+        final List<String> played = await _tapFrom(
+          tester,
+          from: from,
+          to: to,
+          log: log,
+        );
 
         // Both copies of the destination play: the outline one in the base row
         // and the filled one in the pill-masked row. They must stay in step,
@@ -132,25 +141,32 @@ void main() {
         expect(
           played.toSet(),
           {'${_names[to]}/rest', '${_names[to]}/FILL'},
-          reason: '${_names[from]} -> ${_names[to]} should animate only '
+          reason:
+              '${_names[from]} -> ${_names[to]} should animate only '
               '${_names[to]}; a stray entry here is the pass-through bug back.',
         );
       }
     }
   });
 
-  testWidgets('Dashboard to Profile does not animate Calendar in passing',
-      (tester) async {
+  testWidgets('Dashboard to Profile does not animate Calendar in passing', (
+    tester,
+  ) async {
     // The specific reported case, kept as its own test so a failure names it.
-    final List<String> played =
-        await _tapFrom(tester, from: 0, to: 2, log: log);
+    final List<String> played = await _tapFrom(
+      tester,
+      from: 0,
+      to: 2,
+      log: log,
+    );
 
     expect(played.where((p) => p.startsWith('cal/')), isEmpty);
     expect(played, contains('prof/FILL'));
   });
 
-  testWidgets('leaving a tab parks its icon rather than letting it run',
-      (tester) async {
+  testWidgets('leaving a tab parks its icon rather than letting it run', (
+    tester,
+  ) async {
     await tester.pumpWidget(_harness(iconIndex: 0, pagePosition: 0));
     await tester.pumpAndSettle();
 
@@ -178,15 +194,21 @@ void main() {
   // that copy is *born* selected with no live false->true edge to watch. These
   // pin the born-active rule directly, since the exact coalesced frame is not
   // reproducible through the package's own internal alignment animation.
-  Future<void> mountFresh(WidgetTester tester,
-      {required bool active, required int epoch}) async {
+  Future<void> mountFresh(
+    WidgetTester tester, {
+    required bool active,
+    required int epoch,
+  }) async {
     await tester.pumpWidget(
       MaterialApp(
         home: IconTheme(
           data: const IconThemeData(color: Color(0xFFFFFFFF), size: 26),
           child: Center(
-            child:
-                DashboardMorphIcon(filled: true, active: active, epoch: epoch),
+            child: DashboardMorphIcon(
+              filled: true,
+              active: active,
+              epoch: epoch,
+            ),
           ),
         ),
       ),
@@ -194,14 +216,17 @@ void main() {
     await tester.pump(); // let the deferred born-active play fire
   }
 
-  testWidgets('an icon born active at a real epoch still plays', (tester) async {
+  testWidgets('an icon born active at a real epoch still plays', (
+    tester,
+  ) async {
     log.clear();
     await mountFresh(tester, active: true, epoch: 2);
     expect(log.where((e) => e == 'play dash/FILL'), isNotEmpty);
   });
 
-  testWidgets('the cold-start tab (epoch 0) does not play on mount',
-      (tester) async {
+  testWidgets('the cold-start tab (epoch 0) does not play on mount', (
+    tester,
+  ) async {
     log.clear();
     await mountFresh(tester, active: true, epoch: 0);
     expect(log.where((e) => e.startsWith('play')), isEmpty);

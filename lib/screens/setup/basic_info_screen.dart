@@ -216,111 +216,139 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 540),
-            child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(
-            horizontal: AppBreakpoints.isMobile(context) ? 24 : 40,
-            vertical: 16,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                widget.isEditMode ? 'Edit your details' : "Let's get to know you",
-                style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: theme.textTheme.bodyLarge?.color,
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                padding: EdgeInsets.symmetric(
+                  horizontal: AppBreakpoints.isMobile(context) ? 24 : 40,
+                  vertical: 16,
                 ),
-              ),
-              const SizedBox(height: 32),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight - 32,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.isEditMode
+                                ? 'Edit your details'
+                                : "Let's get to know you",
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
+                          ),
+                          const SizedBox(height: 32),
 
-              _inputField(_nameController, 'Full Name', theme),
-              _inputField(_courseController, 'Course', theme),
-              _inputField(_yearController, 'Year', theme),
+                          _inputField(_nameController, 'Full Name', theme),
+                          _inputField(_courseController, 'Course', theme),
+                          _inputField(_yearController, 'Year', theme),
 
-              const SizedBox(height: 16),
+                          const SizedBox(height: 16),
 
-              DropdownButtonFormField<int>(
-                initialValue: _selectedSemester,
-                decoration: _inputDecoration('Semester', theme),
-                dropdownColor: theme.cardColor,
-                style: TextStyle(color: theme.textTheme.bodyLarge?.color),
-                items: List.generate(
-                  8,
-                  (i) => DropdownMenuItem(
-                    value: i + 1,
-                    child: Text('Semester ${i + 1}'),
+                          DropdownButtonFormField<int>(
+                            initialValue: _selectedSemester,
+                            decoration: _inputDecoration('Semester', theme),
+                            dropdownColor: theme.cardColor,
+                            style: TextStyle(
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
+                            items: List.generate(
+                              8,
+                              (i) => DropdownMenuItem(
+                                value: i + 1,
+                                child: Text('Semester ${i + 1}'),
+                              ),
+                            ),
+                            onChanged: (value) async {
+                              if (value != null) {
+                                setState(() => _selectedSemester = value);
+                                await _loadDatesForSemester(value);
+                              }
+                            },
+                          ),
+
+                          const SizedBox(height: 16),
+                          _dateTile(
+                            label: 'Semester Start Date *',
+                            date: _startDate,
+                            onTap: () => _pickDate(true),
+                            theme: theme,
+                          ),
+                          const SizedBox(height: 12),
+                          _dateTile(
+                            label: 'Semester End Date *',
+                            date: _endDate,
+                            onTap: () => _pickDate(false),
+                            theme: theme,
+                          ),
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.withValues(alpha: 0.15),
+                              border: Border.all(
+                                color: Colors.amber.shade700.withValues(
+                                  alpha: 0.5,
+                                ),
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.warning_amber_rounded,
+                                  size: 18,
+                                  color: Colors.amber.shade700,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    "Attendance history is STRICTLY bound by these dates. Classes occurring outside this timeframe are ignored! Ensure they match your report.",
+                                    maxLines: 4,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      height: 1.4,
+                                      color:
+                                          Theme.of(context).brightness ==
+                                                  Brightness.dark
+                                              ? Colors.amber.shade200
+                                              : Colors.amber.shade900,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+                      ),
+
+                      SetupNavButtons(
+                        onBack: () {
+                          if (widget.isEditMode) {
+                            Navigator.pop(context);
+                          } else {
+                            context.go('/setup');
+                          }
+                        },
+                        onNext: _saveAndNext,
+                        nextLabel: widget.isEditMode ? 'Save Changes' : 'Next',
+                        nextLoading: _isSaving,
+                      ),
+                    ],
                   ),
                 ),
-                onChanged: (value) async {
-                  if (value != null) {
-                    setState(() => _selectedSemester = value);
-                    await _loadDatesForSemester(value);
-                  }
-                },
               ),
-
-              const SizedBox(height: 16),
-              _dateTile(
-                label: 'Semester Start Date *',
-                date: _startDate,
-                onTap: () => _pickDate(true),
-                theme: theme,
-              ),
-              const SizedBox(height: 12),
-              _dateTile(
-                label: 'Semester End Date *',
-                date: _endDate,
-                onTap: () => _pickDate(false),
-                theme: theme,
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.withValues(alpha: 0.15),
-                  border: Border.all(color: Colors.amber.shade700.withValues(alpha: 0.5)),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.warning_amber_rounded, size: 18, color: Colors.amber.shade700),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        "Attendance history is STRICTLY bound by these dates. Classes occurring outside this timeframe are ignored! Ensure they match your report.",
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 12,
-                          height: 1.4,
-                          color: Theme.of(context).brightness == Brightness.dark ? Colors.amber.shade200 : Colors.amber.shade900,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              SetupNavButtons(
-                onBack: () {
-                  if (widget.isEditMode) {
-                    Navigator.pop(context);
-                  } else {
-                    context.go('/setup');
-                  }
-                },
-                onNext: _saveAndNext,
-                nextLabel: widget.isEditMode ? 'Save Changes' : 'Next',
-                nextLoading: _isSaving,
-              ),
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
+            ),
           ),
         ),
       ),

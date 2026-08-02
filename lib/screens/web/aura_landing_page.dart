@@ -11,6 +11,7 @@ import '../../models/subject.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../theme/theme_provider.dart';
+import '../../widgets/theme_crossfade.dart';
 import 'aura_ai_dashboard.dart';
 import 'aura_upload_config.dart';
 
@@ -148,9 +149,26 @@ class _AuraLandingPageState extends State<AuraLandingPage>
   /// Respects the OS default when first toggling from system mode.
   void _toggleTheme() {
     final effectivelyDark = themeProvider.isDarkMode;
-    themeProvider.setThemeMode(
-      effectivelyDark ? ThemeMode.light : ThemeMode.dark,
-    );
+    final renderBox = context.findRenderObject() as RenderBox?;
+    Rect? maskRect;
+    if (renderBox != null && renderBox.hasSize) {
+      final origin = renderBox.localToGlobal(Offset.zero);
+      maskRect = origin & renderBox.size;
+    }
+    final controller = ThemeCrossfade.maybeOf(context);
+    if (controller != null) {
+      controller.crossfade(
+        () => themeProvider.setThemeMode(
+          effectivelyDark ? ThemeMode.light : ThemeMode.dark,
+        ),
+        maskRect: maskRect,
+        maskBorderRadius: BorderRadius.circular(24),
+      );
+    } else {
+      themeProvider.setThemeMode(
+        effectivelyDark ? ThemeMode.light : ThemeMode.dark,
+      );
+    }
   }
 
   @override
@@ -473,17 +491,17 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                       child: IconButton(
                         onPressed: _toggleTheme,
                         icon: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 400),
+                          duration: const Duration(milliseconds: 350),
+                          switchInCurve: Curves.easeInOutCubic,
+                          switchOutCurve: Curves.easeInOutCubic,
                           transitionBuilder: (child, anim) => RotationTransition(
-                            turns: child.key == const ValueKey('dark') 
-                                ? Tween<double>(begin: 0.5, end: 1).animate(anim)
-                                : Tween<double>(begin: 0.5, end: 1).animate(anim),
-                            child: FadeTransition(opacity: anim, child: child),
+                            turns: Tween<double>(begin: 0.5, end: 1.0).animate(anim),
+                            child: ScaleTransition(scale: anim, child: child),
                           ),
                           child: Icon(
                             themeProvider.isDarkMode
-                                ? Icons.dark_mode
-                                : Icons.light_mode_rounded,
+                                ? Icons.dark_mode_rounded
+                                : Icons.wb_sunny_rounded,
                             key: ValueKey(themeProvider.isDarkMode ? 'dark' : 'light'),
                             color: isDark
                                 ? const Color(0xFFC7D2FE)
@@ -542,17 +560,17 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                       child: IconButton(
                         onPressed: _toggleTheme,
                         icon: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 400),
+                          duration: const Duration(milliseconds: 350),
+                          switchInCurve: Curves.easeInOutCubic,
+                          switchOutCurve: Curves.easeInOutCubic,
                           transitionBuilder: (child, anim) => RotationTransition(
-                            turns: child.key == const ValueKey('dark') 
-                                ? Tween<double>(begin: 0.5, end: 1).animate(anim)
-                                : Tween<double>(begin: 0.5, end: 1).animate(anim),
-                            child: FadeTransition(opacity: anim, child: child),
+                            turns: Tween<double>(begin: 0.5, end: 1.0).animate(anim),
+                            child: ScaleTransition(scale: anim, child: child),
                           ),
                           child: Icon(
                             themeProvider.isDarkMode
-                                ? Icons.dark_mode
-                                : Icons.light_mode_rounded,
+                                ? Icons.dark_mode_rounded
+                                : Icons.wb_sunny_rounded,
                             key: ValueKey(themeProvider.isDarkMode ? 'dark' : 'light'),
                             color: isDark
                                 ? const Color(0xFFC7D2FE)

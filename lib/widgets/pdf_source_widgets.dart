@@ -124,62 +124,93 @@ class _StepIndicator extends StatelessWidget {
     final Color secondary =
         theme.textTheme.bodyMedium?.color ?? theme.colorScheme.onSurface;
 
+    // Each step owns an equal-width column — circle centred on top, label
+    // beneath it — so long labels get the full column to wrap into instead of
+    // fighting the connector lines for room on a single row.
     final children = <Widget>[];
     for (var i = 0; i < steps.length; i++) {
       final int stepNum = i + 1;
       final bool active = stepNum <= currentStep;
       children.add(
-        Flexible(
-          child: Row(
+        Expanded(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 24,
-                height: 24,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: active ? accent : Colors.transparent,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: active ? accent : muted),
-                ),
-                child: Text(
-                  '$stepNum',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: active ? Colors.white : secondary,
+              Row(
+                children: [
+                  _Connector(color: muted, visible: i > 0, leading: true),
+                  Container(
+                    width: 24,
+                    height: 24,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: active ? accent : Colors.transparent,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: active ? accent : muted),
+                    ),
+                    child: Text(
+                      '$stepNum',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: active ? Colors.white : secondary,
+                      ),
+                    ),
                   ),
-                ),
+                  _Connector(
+                    color: muted,
+                    visible: i < steps.length - 1,
+                    leading: false,
+                  ),
+                ],
               ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  steps[i].label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: active ? theme.textTheme.bodyLarge?.color : secondary,
-                    fontWeight: active ? FontWeight.bold : FontWeight.w500,
-                  ),
+              const SizedBox(height: 8),
+              Text(
+                steps[i].label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: active ? theme.textTheme.bodyLarge?.color : secondary,
+                  fontWeight: active ? FontWeight.bold : FontWeight.w500,
                 ),
               ),
             ],
           ),
         ),
       );
-      if (i < steps.length - 1) {
-        children.add(
-          Expanded(
-            child: Container(
-              height: 1,
-              margin: const EdgeInsets.symmetric(horizontal: 8),
-              color: muted,
-            ),
-          ),
-        );
-      }
     }
-    return Row(children: children);
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: children);
+  }
+}
+
+/// Half of the hairline joining two step circles. Kept invisible (rather than
+/// absent) at the two ends so every step column stays the same width.
+class _Connector extends StatelessWidget {
+  const _Connector({
+    required this.color,
+    required this.visible,
+    required this.leading,
+  });
+
+  final Color color;
+  final bool visible;
+
+  /// Whether this is the segment to the left of the circle.
+  final bool leading;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        height: 1,
+        margin: EdgeInsets.only(
+          left: leading ? 0 : 6,
+          right: leading ? 6 : 0,
+        ),
+        color: visible ? color : Colors.transparent,
+      ),
+    );
   }
 }
 

@@ -655,8 +655,10 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
     final colorPresentBorder = c.success.withAlpha(isDark ? 150 : 120);
     final colorAbsentBg = c.danger.withAlpha(isDark ? 52 : 44);
     final colorAbsentBorder = c.danger.withAlpha(isDark ? 160 : 130);
-    final colorMixedBg = c.warning.withAlpha(isDark ? 56 : 48);
-    final colorMixedBorder = c.warning.withAlpha(isDark ? 170 : 140);
+    // Matched to the present/absent alphas — the mixed tiles used to run hotter
+    // (56/170), which read as a glow next to the calmer green/red boxes.
+    final colorMixedBg = c.warning.withAlpha(isDark ? 46 : 40);
+    final colorMixedBorder = c.warning.withAlpha(isDark ? 150 : 120);
     final colorHolidayBg = isDark
         ? Colors.white.withAlpha(14)
         : Colors.grey.withAlpha(24);

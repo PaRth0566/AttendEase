@@ -743,6 +743,29 @@ class TabIndicatorState extends State<TabIndicator>
     );
   }
 
+  /// **AttendEase patch.** True when the live pill [alignment] is essentially
+  /// centred over a tab, i.e. not mid-slide.
+  ///
+  /// Tab centres sit at `computeTabAlignment(i)` in `[-1, 1]`, evenly spaced
+  /// `2 / (tabCount - 1)` apart. Converting [alignment] back to that tab-index
+  /// space and measuring the distance to the nearest whole index gives an
+  /// "off-tab" fraction: 0 when parked, up to 0.5 halfway between two tabs.
+  /// Anything under [_parkedTabEpsilon] counts as parked.
+  ///
+  /// Used to gate the unclipped selected overlay in [_buildSimpleMode] so it
+  /// only paints at rest — never sliding across the stationary unselected
+  /// labels during a switch, which is what produced the double-exposed label
+  /// text.
+  static const double _parkedTabEpsilon = 0.02;
+
+  bool _isPillParked(Alignment alignment) {
+    if (widget.tabCount <= 1) return true;
+    // Map alignment x ∈ [-1, 1] onto tab-index space [0, tabCount - 1].
+    final double tabFloat = ((alignment.x + 1) / 2) * (widget.tabCount - 1);
+    final double offTab = (tabFloat - tabFloat.roundToDouble()).abs();
+    return offTab < _parkedTabEpsilon;
+  }
+
   /// Builds simple rendering mode without masking (MaskingQuality.off).
   ///
   /// Only renders tabs once without dual-layer masking. Maximum performance.
@@ -812,11 +835,35 @@ class TabIndicatorState extends State<TabIndicator>
                   : widget.backgroundKey,
             ),
 
-          // Persistent selected-icon overlay — always rendered at the TARGET
-          // (settled) tab position regardless of spring thickness. This ensures
-          // the selected icon stays vibrant (selected style) at rest, not washed
-          // out by the unselected-style icons in the layer below.
-          if (widget.visible)
+          // Persistent selected overlay — keeps the selected tab vibrant
+          // (selected style) *at rest* in `.off` mode, where there is no pill
+          // clip to reveal the selected row.
+          //
+          // AttendEase patch: gated to render ONLY while the pill is essentially
+          // parked over a tab (see [_isPillParked]).
+          //
+          // Why: this overlay is a selected-styled icon **+ label** that is NOT
+          // clipped to the pill. Its anchor, `targetAlignment`, is
+          // `alignmentOverride ?? computeTabAlignment(tabIndex)` (see [build]),
+          // and this app always supplies a *continuous* `alignmentOverride`
+          // driven by the page-scroll position — so `targetAlignment` tracks the
+          // live slide, not the settled slot, and `alignment` is only its
+          // spring-smoothed copy. The two therefore stay within a hair of each
+          // other for the whole trip, which is why an earlier gate on
+          // `(alignment.x - targetAlignment.x)` never actually closed.
+          //
+          // Left ungated, the overlay's selected (e.g. blue) LABEL slides across
+          // the stationary unselected (grey) labels in `childUnselected`, and as
+          // it crosses the gap between two tabs the two labels overlap into
+          // garbled, double-exposed text. (Two *different* words can overlap only
+          // because this overlay is not laid out in the same Row as the
+          // unselected labels.) Gating on distance-to-nearest-tab-centre —
+          // which is ~0 only at rest and up to 0.5 mid-slide — leaves exactly one
+          // label per tab throughout the slide (the unselected row, refracted by
+          // the moving pill) and brings the vibrant selected label back the
+          // instant the pill lands, invisibly, since it returns exactly over the
+          // label it covers.
+          if (widget.visible && _isPillParked(alignment))
             Positioned.fill(
               child: Align(
                 alignment: targetAlignment,

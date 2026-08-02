@@ -11,7 +11,10 @@ import '../../database/db_helper.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../theme/app_breakpoints.dart';
+import '../../theme/app_colors.dart';
+import '../../theme/app_dimens.dart';
 import '../../widgets/app_overlays.dart';
+import '../../widgets/pdf_source_widgets.dart';
 
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
@@ -471,10 +474,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final c = context.appColors;
     final user = _auth.currentUser;
     final isGuest = user?.isAnonymous ?? true;
 
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(title: const Text('Account Settings')),
       body: SafeArea(
         top: false,
@@ -483,100 +488,164 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             : Align(
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 600),
+                  constraints: const BoxConstraints(
+                    maxWidth: AppDimens.maxContentMedium,
+                  ),
                   child: SingleChildScrollView(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppBreakpoints.isMobile(context) ? 16 : 32,
-                      vertical: 16,
+                    padding: EdgeInsets.fromLTRB(
+                      AppBreakpoints.isMobile(context)
+                          ? AppDimens.space16
+                          : AppDimens.space32,
+                      AppDimens.headerContentGap,
+                      AppBreakpoints.isMobile(context)
+                          ? AppDimens.space16
+                          : AppDimens.space32,
+                      AppDimens.space24,
                     ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Profile Information',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Same hero card as the Sync / Bug-report screens so
+                        // this screen reads as part of the same set.
+                        PdfSourceHeroCard(
+                          icon: isGuest
+                              ? Icons.account_circle_outlined
+                              : Icons.verified_user_outlined,
+                          title: 'Your Account',
+                          subtitle: isGuest
+                              ? 'Link a Google account to keep your data safe.'
+                              : 'Manage your sign-in and account security.',
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      ListTile(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: theme.dividerColor),
-                        ),
-                        leading: Icon(
-                          isGuest ? Icons.person_outline : Icons.email,
-                          color: theme.colorScheme.primary,
-                        ),
-                        title: Text(
-                          isGuest
+                        const SizedBox(height: AppDimens.space24),
+
+                        _sectionHeader('PROFILE INFORMATION', theme),
+                        const SizedBox(height: AppDimens.space10),
+                        _infoTile(
+                          icon: isGuest ? Icons.person_outline : Icons.email,
+                          title: isGuest
                               ? 'Guest Account'
                               : (user?.email ?? 'Unknown Email'),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          subtitle: isGuest
+                              ? 'Temporary session'
+                              : 'Verified user',
+                          theme: theme,
                         ),
-                        subtitle: isGuest
-                            ? const Text('Temporary session')
-                            : const Text('Verified user'),
-                      ),
-                      const SizedBox(height: 32),
-                      Text(
-                        'Settings',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
 
-                      if (isGuest) ...[
+                        const SizedBox(height: AppDimens.space24),
+                        _sectionHeader('SETTINGS', theme),
+                        const SizedBox(height: AppDimens.space10),
+                        if (isGuest)
+                          _actionTile(
+                            icon: Icons.link,
+                            title: 'Link with Google Account',
+                            subtitle:
+                                'Save your guest data permanently to a secure Google account.',
+                            onTap: _linkWithGoogle,
+                            theme: theme,
+                          )
+                        else
+                          _actionTile(
+                            icon: Icons.password,
+                            title: 'Change Password',
+                            subtitle: 'Set or reset your account password.',
+                            onTap: _changePassword,
+                            theme: theme,
+                          ),
+
+                        const SizedBox(height: AppDimens.space24),
+                        _sectionHeader('DANGER ZONE', theme, color: c.danger),
+                        const SizedBox(height: AppDimens.space10),
                         _actionTile(
-                          icon: Icons.link,
-                          title: 'Link with Google Account',
+                          icon: Icons.delete_forever,
+                          title: 'Delete Account',
                           subtitle:
-                              'Save your guest data permanently to a secure Google account.',
-                          onTap: _linkWithGoogle,
+                              'Permanently remove your account and all data.',
+                          onTap: _deleteAccount,
                           theme: theme,
+                          isDestructive: true,
                         ),
-                      ] else ...[
 
-                        _actionTile(
-                          icon: Icons.password,
-                          title: 'Change Password',
-                          subtitle: 'Set or reset your account password.',
-                          onTap: _changePassword,
-                          theme: theme,
+                        const SizedBox(height: AppDimens.space24),
+                        const ReassuranceCard(
+                          title: 'Your data stays private.',
+                          subtitle:
+                              'Account changes only affect this device and your '
+                              'secure cloud backup.',
                         ),
                       ],
-
-                      const SizedBox(height: 48),
-                      Text(
-                        'Danger Zone',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.red.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _actionTile(
-                        icon: Icons.delete_forever,
-                        title: 'Delete Account',
-                        subtitle:
-                            'Permanently remove your account and all data.',
-                        onTap: _deleteAccount,
-                        theme: theme,
-                        isDestructive: true,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
       ),
+    );
+  }
+
+  /// A quiet, letter-spaced section label — the app's grouping style rather
+  /// than a loud coloured heading. The danger group tints it red.
+  Widget _sectionHeader(String text, ThemeData theme, {Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.only(left: AppDimens.space4),
+      child: Text(
+        text,
+        style: theme.textTheme.labelMedium?.copyWith(
+          color: color ?? theme.textTheme.bodySmall?.color,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
+  }
+
+  /// A non-tappable info row in the same card shell as [_actionTile], so the
+  /// profile row and the action rows read as one set.
+  Widget _infoTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required ThemeData theme,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: AppDimens.brLg,
+        border: Border.all(color: theme.dividerColor),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space16,
+          vertical: AppDimens.space4,
+        ),
+        leading: _iconChip(icon, theme.colorScheme.primary),
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            fontSize: 12,
+            color: theme.textTheme.bodySmall?.color,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// A tinted rounded-square behind the leading icon — the same treatment the
+  /// dashboard/profile chips use, so the rows don't read as a bare list.
+  Widget _iconChip(IconData icon, Color color) {
+    return Container(
+      width: 40,
+      height: 40,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: AppDimens.brSm,
+      ),
+      child: Icon(icon, color: color, size: 20),
     );
   }
 
@@ -588,27 +657,34 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     required ThemeData theme,
     bool isDestructive = false,
   }) {
-    final color = isDestructive ? Colors.red : theme.textTheme.bodyLarge?.color;
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 12),
-      color: isDestructive ? Colors.red.withValues(alpha: 0.05) : theme.cardColor,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
+    final c = theme.extension<AppColors>()!;
+    // Destructive rows carry status through the icon chip, title and a hairline
+    // red border — not a filled red panel, which fought the app's flat cards.
+    final Color accent = isDestructive ? c.danger : theme.colorScheme.primary;
+    final Color titleColor =
+        isDestructive ? c.danger : theme.textTheme.bodyLarge?.color ?? accent;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: AppDimens.brLg,
+        border: Border.all(
           color: isDestructive
-              ? Colors.red.withValues(alpha: 0.3)
+              ? c.danger.withValues(alpha: 0.35)
               : theme.dividerColor,
         ),
       ),
       child: ListTile(
-        leading: Icon(
-          icon,
-          color: isDestructive ? Colors.red : theme.colorScheme.primary,
+        onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppDimens.space16,
+          vertical: AppDimens.space4,
         ),
+        shape: RoundedRectangleBorder(borderRadius: AppDimens.brLg),
+        leading: _iconChip(icon, accent),
         title: Text(
           title,
-          style: TextStyle(fontWeight: FontWeight.w600, color: color),
+          style: TextStyle(fontWeight: FontWeight.w600, color: titleColor),
         ),
         subtitle: Text(
           subtitle,
@@ -617,12 +693,15 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
           style: TextStyle(
             fontSize: 12,
             color: isDestructive
-                ? Colors.red.withValues(alpha: 0.8)
+                ? c.danger.withValues(alpha: 0.8)
                 : theme.textTheme.bodySmall?.color,
           ),
         ),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 14),
-        onTap: onTap,
+        trailing: Icon(
+          Icons.chevron_right_rounded,
+          size: 20,
+          color: theme.dividerColor,
+        ),
       ),
     );
   }

@@ -36,14 +36,17 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color cardBorder;
 
   static const light = AppColors(
-    // Softer, friendlier emerald/rose tones (brighter than the old 16A34A/DC2626).
-    success: Color(0xFF22C55E),
+    // Custom brand green/red — the single app-wide status pair. Used for status
+    // text, progress bars and ring fills across dashboard, profile, calendar
+    // and reports.
+    success: Color(0xFF358D3E),
     successContainer: Color(0xFFDCFCE7),
     onSuccessContainer: Color(0xFF166534),
-    warning: Color(0xFFF59E0B),
+    // Calmer amber than the old neon F59E0B — matched in weight to green/red.
+    warning: Color(0xFFCB8420),
     warningContainer: Color(0xFFFEF3C7),
     onWarningContainer: Color(0xFF92400E),
-    danger: Color(0xFFEF4444),
+    danger: Color(0xFFF34032),
     dangerContainer: Color(0xFFFEE2E2),
     onDangerContainer: Color(0xFF991B1B),
     subtleSurface: Color(0xFFF8FAFC),
@@ -51,16 +54,20 @@ class AppColors extends ThemeExtension<AppColors> {
   );
 
   static const dark = AppColors(
-    // Lighter containers so banners read as soft tints, not heavy dark blocks.
-    success: Color(0xFF4ADE80),
-    successContainer: Color(0xFF16432B),
-    onSuccessContainer: Color(0xFFBBF7D0),
-    warning: Color(0xFFFBBF24),
-    warningContainer: Color(0xFF5A3A12),
+    // Custom brand green/red — the single app-wide status pair (see [light]).
+    success: Color(0xFF358D3E),
+    // Message-line strips: your deep tones so the band reads as a calm, solid
+    // surface rather than a bright tint.
+    successContainer: Color(0xFF182719),
+    onSuccessContainer: Color(0xFF80C681),
+    // Calmer amber than the old neon FBBF24 — the vivid one "glowed" on the
+    // calendar's dark tiles. Matched in weight to the green/red pair.
+    warning: Color(0xFFD9932B),
+    warningContainer: Color(0xFF4A2F0E),
     onWarningContainer: Color(0xFFFDE68A),
-    danger: Color(0xFFF87171),
-    dangerContainer: Color(0xFF5A1D1D),
-    onDangerContainer: Color(0xFFFECACA),
+    danger: Color(0xFFF34032),
+    dangerContainer: Color(0xFF301716),
+    onDangerContainer: Color(0xFFCF7A72),
     subtleSurface: Color(0xFF0F0F0F),
     cardBorder: Color(0xFF2A2A2A),
   );

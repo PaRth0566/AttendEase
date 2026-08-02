@@ -52,6 +52,11 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
   @override
   bool get wantKeepAlive => true;
 
+  /// Owns the one open day popover for this screen. Shared by every [_DayCell]
+  /// so opening one closes any other, and so a scroll can dismiss whatever is
+  /// open. See [_DayPopoverController].
+  final _DayPopoverController _dayPopover = _DayPopoverController();
+
   final SubjectDao _subjectDao = SubjectDao();
   final AttendanceDao _attendanceDao = AttendanceDao();
 
@@ -92,6 +97,7 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _midnightTimer?.cancel();
+    _dayPopover.dispose();
     super.dispose();
   }
 
@@ -294,7 +300,17 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
           constraints: const BoxConstraints(maxWidth: 700),
           child: RefreshIndicator(
             onRefresh: _syncAndReload,
-            child: SingleChildScrollView(
+            // Any scroll drops the open day popover: it is anchored to a fixed
+            // screen position via an Overlay, so once the strip moves the
+            // bubble would otherwise float detached from its tile.
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification is ScrollUpdateNotification) {
+                  _dayPopover.close();
+                }
+                return false;
+              },
+              child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: EdgeInsets.fromLTRB(
                 MediaQuery.of(context).size.width > 600
@@ -315,7 +331,7 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
                   // ── Overall attendance card ──────────────────────────
                   Card(
                     child: Padding(
-                      padding: const EdgeInsets.all(AppDimens.space20),
+                      padding: const EdgeInsets.all(AppDimens.space16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -360,7 +376,7 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
                                               // The one number the card exists
                                               // to show, sized to dominate it
                                               // as in the reference.
-                                              fontSize: 40,
+                                              fontSize: 30,
                                               height: 1.1,
                                             ),
                                       ),
@@ -383,11 +399,8 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
                                 alignment: Alignment.center,
                                 children: [
                                   SizedBox(
-                                    // Wheel: tighter footprint, heavier ring —
-                                    // the ring is the card's primary signal, so
-                                    // it thickens even as the wheel shrinks (§9).
-                                    height: 76,
-                                    width: 76,
+                                    height: 68,
+                                    width: 68,
                                     child: TweenAnimationBuilder<double>(
                                       // Sweep from 0 only on the first app-open;
                                       // afterwards jump straight to the value so
@@ -411,18 +424,17 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
                                             value: value,
                                             backgroundColor: theme.dividerColor,
                                             color: statusColor,
-                                            strokeWidth: 13,
+                                            strokeWidth: 9,
                                           ),
                                     ),
                                   ),
                                   Icon(
-                                    // Shrunk to clear the thicker ring: inner
-                                    // clear = 76 - 2*13 = 50 (§9).
                                     isSafe
                                         ? Icons.check_rounded
                                         : Icons.close_rounded,
                                     color: statusColor,
-                                    size: 28,
+                                    size: 26,
+                                    weight: 900,
                                   ),
                                 ],
                               ),
@@ -448,6 +460,7 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
                             _SkippableDaysSection(
                               plan: _weekSkipPlan!,
                               subjectNames: _subjectNames,
+                              popover: _dayPopover,
                             ),
                           ],
                         ],
@@ -485,6 +498,7 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
                   const SizedBox(height: AppDimens.space24),
                 ],
               ),
+            ),
             ),
           ),
         ),
@@ -642,10 +656,14 @@ class _SkippableDaysSection extends StatelessWidget {
   const _SkippableDaysSection({
     required this.plan,
     required this.subjectNames,
+    required this.popover,
   });
 
   final WeekSkipPlan plan;
   final Map<int, String> subjectNames;
+
+  /// The shared controller that ensures only one day popover is open at a time.
+  final _DayPopoverController popover;
 
   /// Weekday names, Mon → Sun. Hardcoded rather than formatted from each date
   /// so the strip's column order is fixed by construction: the plan's `days` is
@@ -752,6 +770,7 @@ class _SkippableDaysSection extends StatelessWidget {
                     blockingSubject:
                         subjectNames[plan.days[i].blockingSubjectId],
                     message: _message(plan.days[i]),
+                    popover: popover,
                   ),
                 ),
               ),
@@ -832,6 +851,58 @@ class _LegendItem extends StatelessWidget {
   }
 }
 
+/// Ensures at most one day popover is open across the whole week strip, and
+/// gives the dashboard a single handle to dismiss it (used on scroll).
+///
+/// Each [_DayCell] owns its own [OverlayEntry]; this only tracks *which* cell
+/// is open and how to close it. Opening a new one closes the previous through
+/// its stored callback — this is what fixes the "tap twice to switch days" bug,
+/// since the switch no longer depends on a dismiss-barrier tap being consumed
+/// first.
+class _DayPopoverController {
+  /// Shared [TapRegion] group tying the day tiles and the open bubble together.
+  /// A tap inside any of them is "inside the group" and does not dismiss; a tap
+  /// anywhere else fires the bubble's `onTapOutside`. Using a group (rather than
+  /// a full-screen tap barrier) is what lets a single tap on another day both
+  /// dismiss the current bubble and reach that day's own tap handler — a barrier
+  /// would win the gesture arena and swallow the first tap, forcing a second.
+  final Object groupId = Object();
+
+  /// The cell whose popover is currently open, used as an identity token so a
+  /// stale [detach] from an already-replaced cell is ignored.
+  Object? _openOwner;
+
+  /// Closes the popover owned by [_openOwner].
+  VoidCallback? _closeCurrent;
+
+  /// Registers [owner] as the open popover, closing any previous one first.
+  void open(Object owner, VoidCallback close) {
+    if (!identical(_openOwner, owner)) _closeCurrent?.call();
+    _openOwner = owner;
+    _closeCurrent = close;
+  }
+
+  /// Clears the record if [owner] is the one currently open. Called by a cell
+  /// as it tears its own overlay down, so the controller never points at a
+  /// closed popover.
+  void detach(Object owner) {
+    if (identical(_openOwner, owner)) {
+      _openOwner = null;
+      _closeCurrent = null;
+    }
+  }
+
+  /// Dismisses whatever is open. No-op when nothing is.
+  void close() {
+    _closeCurrent?.call();
+  }
+
+  void dispose() {
+    _closeCurrent = null;
+    _openOwner = null;
+  }
+}
+
 /// One day of the week strip: a tile holding the weekday name over the date
 /// number, with the verdict glyph below it.
 ///
@@ -844,6 +915,7 @@ class _DayCell extends StatefulWidget {
     required this.isToday,
     required this.blockingSubject,
     required this.message,
+    required this.popover,
   });
 
   final WeekSkipDay day;
@@ -857,6 +929,10 @@ class _DayCell extends StatefulWidget {
 
   /// The verdict explanation shown in the popover anchored to this day.
   final String message;
+
+  /// Shared across all day cells so at most one popover is open, and so a
+  /// scroll on the dashboard can dismiss it.
+  final _DayPopoverController popover;
 
   @override
   State<_DayCell> createState() => _DayCellState();
@@ -884,9 +960,14 @@ class _DayCellState extends State<_DayCell> {
     super.dispose();
   }
 
+  /// Tears down this cell's overlay and clears itself from the shared
+  /// controller if it is the one currently registered there. Safe to call when
+  /// nothing is open. Passed to the controller as its close callback, so a
+  /// scroll or another cell opening routes back through here.
   void _removePopover() {
     _popover?.remove();
     _popover = null;
+    widget.popover.detach(this);
   }
 
   void _togglePopover() {
@@ -897,6 +978,12 @@ class _DayCellState extends State<_DayCell> {
     final tileBox = _tileKey.currentContext?.findRenderObject() as RenderBox?;
     if (tileBox == null || !tileBox.hasSize) return;
     final overlay = Overlay.of(context);
+
+    // Close whatever other cell is open first, and claim the slot. Doing this
+    // through the shared controller — rather than relying on the dismiss
+    // barrier's tap — is what lets a single tap on a new day both close the old
+    // popover and open the new one, instead of needing two taps.
+    widget.popover.open(this, _removePopover);
 
     final tilePos = tileBox.localToGlobal(Offset.zero);
     final tileSize = tileBox.size;
@@ -918,25 +1005,22 @@ class _DayCellState extends State<_DayCell> {
     final beakCenterX = (targetCenterX - left).clamp(16.0, bubbleWidth - 16.0);
 
     _popover = OverlayEntry(
-      builder: (context) => Stack(
-        children: [
-          // Tap anywhere to dismiss.
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: _removePopover,
-            ),
+      builder: (context) => Positioned(
+        left: left,
+        top: top,
+        // Grouped with every day tile: a tap on empty space (outside the group)
+        // dismisses; a tap on another tile stays inside the group, so that
+        // tile's own handler runs on the first tap instead of being eaten by a
+        // dismiss barrier.
+        child: TapRegion(
+          groupId: widget.popover.groupId,
+          onTapOutside: (_) => _removePopover(),
+          child: _SkipPopoverBubble(
+            width: bubbleWidth,
+            beakCenterX: beakCenterX,
+            message: widget.message,
           ),
-          Positioned(
-            left: left,
-            top: top,
-            child: _SkipPopoverBubble(
-              width: bubbleWidth,
-              beakCenterX: beakCenterX,
-              message: widget.message,
-            ),
-          ),
-        ],
+        ),
       ),
     );
     overlay.insert(_popover!);
@@ -1008,7 +1092,12 @@ class _DayCellState extends State<_DayCell> {
     return Semantics(
       label: _semanticLabel(),
       button: true,
-      child: GestureDetector(
+      // In the same group as the open bubble, so tapping this tile counts as
+      // "inside" and never triggers the bubble's dismiss — the tap flows to the
+      // GestureDetector below, which opens/switches on the first press.
+      child: TapRegion(
+        groupId: widget.popover.groupId,
+        child: GestureDetector(
         onTap: _togglePopover,
         // The whole column is the tap target, not just the tile.
         behavior: HitTestBehavior.opaque,
@@ -1078,6 +1167,7 @@ class _DayCellState extends State<_DayCell> {
             ],
           ),
         ),
+      ),
       ),
     );
   }
@@ -1239,7 +1329,19 @@ class _SubjectCard extends StatelessWidget {
     final c = context.appColors;
     final bool isSafe = percent >= subject.requiredPercent;
     final double fraction = total == 0 ? 0.0 : percent / 100;
-    final Color color = isSafe ? c.success : c.danger;
+
+    // The progress bar deliberately runs a shade brighter than the
+    // percentage/label text, so these stay as their own local values rather
+    // than the single shared status token.
+    final Color barColor = isSafe
+        ? const Color(0xFF49AD4F)
+        : const Color(0xFFF14134);
+    final Color labelColor = isSafe
+        ? const Color(0xFF358D3E)
+        : const Color(0xFFF34032);
+    // Message line pulls from the shared status-container tokens, which already
+    // carry the per-mode green/red tints (light tint + dark text in light mode,
+    // deep band + soft text in dark mode).
     final Color bg = isSafe ? c.successContainer : c.dangerContainer;
     final Color onBg = isSafe ? c.onSuccessContainer : c.onDangerContainer;
 
@@ -1289,7 +1391,7 @@ class _SubjectCard extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: color,
+                            color: labelColor,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -1310,7 +1412,7 @@ class _SubjectCard extends StatelessWidget {
                       curve: AppMotion.enter,
                       builder: (context, value, _) => LinearProgressIndicator(
                         value: value,
-                        color: color,
+                        color: barColor,
                         backgroundColor: theme.dividerColor,
                         minHeight: 5,
                         borderRadius: BorderRadius.circular(2.5),
@@ -1332,7 +1434,7 @@ class _SubjectCard extends StatelessWidget {
                         Text(
                           isSafe ? 'Safe' : 'Risk',
                           style: TextStyle(
-                            color: color,
+                            color: labelColor,
                             fontWeight: FontWeight.w600,
                             fontSize: 12,
                           ),
@@ -1363,7 +1465,7 @@ class _SubjectCard extends StatelessWidget {
                             ? Icons.lightbulb_outline
                             : Icons.warning_amber_rounded,
                         size: 14,
-                        color: color,
+                        color: onBg,
                       ),
                       const SizedBox(width: AppDimens.space6),
                       Expanded(

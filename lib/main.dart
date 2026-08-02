@@ -11,6 +11,7 @@ import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
 import 'services/update_service.dart';
+import 'widgets/theme_crossfade.dart';
 import 'widgets/update_dialog.dart';
 
 void main() async {
@@ -159,6 +160,7 @@ class _AttendEaseAppState extends State<AttendEaseApp>
           scrollBehavior: AppScrollBehavior(),
 
           // DYNAMIC THEME IMPLEMENTATION
+          themeAnimationDuration: Duration.zero,
           themeMode: themeProvider.themeMode,
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
@@ -176,7 +178,12 @@ class _AttendEaseAppState extends State<AttendEaseApp>
                 : mq.textScaler;
             return MediaQuery(
               data: mq.copyWith(textScaler: effective),
-              child: child!,
+              // Wraps the whole app so a Dark Mode toggle reads as one unified
+              // crossfade (background, text, icons, cards, glass nav bar all on
+              // the same timeline) instead of half the UI snapping at the theme
+              // lerp midpoint. Triggered via ThemeCrossfade.of(context) — see
+              // the Profile screen's Dark Mode switch.
+              child: ThemeCrossfade(child: child!),
             );
           },
         );

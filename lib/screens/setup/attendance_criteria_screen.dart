@@ -137,9 +137,10 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
       // column scroll once the keyboard shrinks the viewport — a Spacer cannot
       // do that job inside a scroll view.
       body: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 540),
+            constraints: const BoxConstraints(maxWidth: 600),
             child: LayoutBuilder(
               builder: (context, constraints) => SingleChildScrollView(
                 padding: EdgeInsets.symmetric(
@@ -222,22 +223,14 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
                             ),
                             decoration: _inputStyle('e.g. 70 (default)', theme),
                           ),
+                          const SizedBox(height: 24),
                         ],
                       ),
 
-                      const SizedBox(height: 24),
-
-                      Column(
-                        children: [
-                          SetupNavButtons(
-                            onBack: () => Navigator.pop(context),
-                            onNext: _saveData,
-                            nextLabel: widget.isEditMode
-                                ? 'Save Changes'
-                                : 'Next',
-                          ),
-                          const SizedBox(height: 16),
-                        ],
+                      SetupNavButtons(
+                        onBack: () => Navigator.pop(context),
+                        onNext: _saveData,
+                        nextLabel: widget.isEditMode ? 'Save Changes' : 'Next',
                       ),
                     ],
                   ),

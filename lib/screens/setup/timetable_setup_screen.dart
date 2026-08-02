@@ -8,6 +8,7 @@ import '../../models/subject.dart';
 import '../../models/timetable_entry.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../theme/app_breakpoints.dart';
+import '../../widgets/app_buttons.dart';
 
 class TimetableSetupScreen extends StatefulWidget {
   final bool isEditMode;
@@ -133,15 +134,16 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
         automaticallyImplyLeading: false,
       ),
       body: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 600),
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: AppBreakpoints.isMobile(context) ? 24 : 40,
-                vertical: 10,
+                vertical: 16,
               ),
-            child: Column(
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
@@ -469,31 +471,12 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                 const SizedBox(height: 16),
 
                 // Bottom Actions
-                SafeArea(
-                  top: false,
-                  child: Row(
-                    children: [
-                      Expanded(
-                        flex: 1,
-                        child: OutlinedButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Back'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        flex: 2,
-                        child: ElevatedButton(
-                          onPressed: _finishSetup,
-                          child: Text(
-                            widget.isEditMode
-                                ? 'Save Timetable'
-                                : 'Finish Setup',
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                SetupNavButtons(
+                  onBack: () => Navigator.pop(context),
+                  onNext: _finishSetup,
+                  nextLabel: widget.isEditMode
+                      ? 'Save Timetable'
+                      : 'Finish Setup',
                 ),
               ],
             ),

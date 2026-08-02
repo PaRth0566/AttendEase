@@ -40,6 +40,8 @@ class AppTheme {
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.dark,
         statusBarBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.white,
+        systemNavigationBarIconBrightness: Brightness.dark,
       ),
       iconTheme: IconThemeData(color: Color(0xFF1E293B)),
       titleTextStyle: TextStyle(
@@ -200,6 +202,8 @@ class AppTheme {
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.black,
+        systemNavigationBarIconBrightness: Brightness.light,
       ),
       iconTheme: IconThemeData(color: Colors.white),
       titleTextStyle: TextStyle(

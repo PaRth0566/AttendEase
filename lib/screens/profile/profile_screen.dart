@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,6 +20,8 @@ import '../../theme/theme_provider.dart'; // ✅ NEW IMPORT
 import '../../widgets/app_overlays.dart';
 import '../../widgets/backup_sync_card.dart';
 import '../../widgets/pressable.dart';
+import '../../widgets/smooth_theme_switch.dart';
+import '../../widgets/theme_crossfade.dart';
 import '../../widgets/update_dialog.dart';
 import '../root/tab_page_state.dart';
 
@@ -480,9 +483,9 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                     onTap: () => context.go('/app/profile/refresh-pdf'),
                   ),
 
-                  const SizedBox(height: 8),
+                  // Carries its own 12px bottom margin, matching the tiles'
+                  // rhythm — no extra spacers, which made its gap wider before.
                   BackupSyncCard(onSyncComplete: _loadProfileData),
-                  const SizedBox(height: 8),
 
                   _profileTile(
                     icon: Icons.manage_accounts_rounded,
@@ -517,9 +520,13 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                     onTap: _handleLogout,
                   ),
 
-                  const SizedBox(height: 16),
-                  if (_appVersion.isNotEmpty)
-                    Center(
+                  // Left-aligned under the cards. The Log Out tile already
+                  // carries 12px below it, so only a small extra gap here, and
+                  // a modest tail before the nav-bar clearance padding.
+                  if (_appVersion.isNotEmpty) ...[
+                    const SizedBox(height: AppDimens.space4),
+                    Padding(
+                      padding: const EdgeInsets.only(left: AppDimens.space4),
                       child: Text(
                         'Version $_appVersion',
                         style: TextStyle(
@@ -529,7 +536,8 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                         ),
                       ),
                     ),
-                  const SizedBox(height: 24),
+                  ],
+                  const SizedBox(height: AppDimens.space8),
                 ],
               ),
                   ),
@@ -900,9 +908,11 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
       ),
       child: ListTile(
         leading: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 350),
+          switchInCurve: Curves.easeInOutCubic,
+          switchOutCurve: Curves.easeInOutCubic,
           transitionBuilder: (child, animation) => RotationTransition(
-            turns: Tween<double>(begin: 0.5, end: 1).animate(animation),
+            turns: Tween<double>(begin: 0.5, end: 1.0).animate(animation),
             child: FadeTransition(opacity: animation, child: child),
           ),
           child: Icon(
@@ -915,21 +925,25 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
           'Dark Mode',
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
-        trailing: Switch(
+        trailing: SmoothThemeSwitch(
           value: isDark,
-          // Explicit colors for both states — the adaptive switch's off-track
-          // was blending into the light card, making the toggle look broken.
-          activeThumbColor: Colors.white,
-          activeTrackColor: theme.colorScheme.primary,
-          inactiveThumbColor: Colors.white,
-          inactiveTrackColor: isDark ? const Color(0xFF3A3A3A) : const Color(0xFFCBD5E1),
-          trackOutlineColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? theme.colorScheme.primary
-                : (isDark ? const Color(0xFF3A3A3A) : const Color(0xFF94A3B8)),
-          ),
           onChanged: (bool value) {
-            themeProvider.setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
+            ThemeCrossfade.of(context).crossfade(
+              () => themeProvider.setThemeMode(
+                value ? ThemeMode.dark : ThemeMode.light,
+              ),
+              onMidpoint: () => SystemChrome.setSystemUIOverlayStyle(
+                value
+                    ? SystemUiOverlayStyle.light.copyWith(
+                        statusBarColor: Colors.transparent,
+                        systemNavigationBarColor: Colors.black,
+                      )
+                    : SystemUiOverlayStyle.dark.copyWith(
+                        statusBarColor: Colors.transparent,
+                        systemNavigationBarColor: Colors.white,
+                      ),
+              ),
+            );
             setState(() {});
           },
         ),
