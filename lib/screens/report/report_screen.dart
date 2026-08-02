@@ -16,7 +16,6 @@ import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 import '../../widgets/app_overlays.dart';
 import '../../widgets/callout_box.dart';
-import '../../widgets/pdf_source_widgets.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -224,6 +223,74 @@ class _ReportScreenState extends State<ReportScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _showSemesterPicker() async {
+    final theme = Theme.of(context);
+    final int? picked = await showAppModalSheet<int>(
+      context: context,
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: theme.dividerColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Text(
+                'Select Semester',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: AppDimens.space12),
+              ...List.generate(8, (i) {
+                final int sem = i + 1;
+                final bool isCurrent = sem == _selectedSemester;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(
+                    Icons.school_rounded,
+                    color: isCurrent
+                        ? theme.colorScheme.primary
+                        : theme.textTheme.bodyMedium?.color,
+                  ),
+                  title: Text(
+                    'Semester $sem',
+                    style: TextStyle(
+                      fontWeight:
+                          isCurrent ? FontWeight.bold : FontWeight.w500,
+                      color: isCurrent ? theme.colorScheme.primary : null,
+                    ),
+                  ),
+                  trailing: isCurrent
+                      ? Icon(Icons.check_rounded,
+                          color: theme.colorScheme.primary)
+                      : null,
+                  onTap: () => Navigator.of(ctx).pop(sem),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (picked != null && picked != _selectedSemester) {
+      setState(() {
+        _selectedSemester = picked;
+        _reportGenerated = false;
+      });
+    }
   }
 
   Future<void> _processExport({required bool isShare}) async {
@@ -650,7 +717,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 AppBreakpoints.isMobile(context)
                     ? AppDimens.space16
                     : AppDimens.space32,
-                AppDimens.headerContentGap,
+                AppDimens.space12,
                 AppBreakpoints.isMobile(context)
                     ? AppDimens.space16
                     : AppDimens.space32,
@@ -659,24 +726,62 @@ class _ReportScreenState extends State<ReportScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Shared hero card — same shape as the Sync / Bug-report
-                  // screens so Analytics reads as part of the same set.
-                  const PdfSourceHeroCard(
-                    icon: Icons.insights_rounded,
-                    title: 'Attendance Report',
-                    subtitle:
-                        'Pick a range, generate your report, and export it as a '
-                        'polished PDF.',
+                  // Compact Header Hero Card
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: theme.cardColor,
+                      borderRadius: BorderRadius.circular(AppDimens.radiusLg),
+                      border: Border.all(color: theme.dividerColor),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: (theme.textTheme.bodyMedium?.color ??
+                                    theme.colorScheme.onSurface)
+                                .withAlpha(18),
+                            shape: BoxShape.circle,
+                            border: Border.all(color: theme.dividerColor),
+                          ),
+                          child: Icon(
+                            Icons.insights_rounded,
+                            size: 22,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Attendance Report',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Pick a range, generate your report, and export it as a polished PDF.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.textTheme.bodyMedium?.color,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: AppDimens.space16),
-                  const CalloutBox(
-                    kind: CalloutKind.info,
-                    title: 'Note:',
-                    message:
-                        'Reports use the same records as your dashboard, so the '
-                        'numbers always match.',
-                  ),
-                  const SizedBox(height: AppDimens.space24),
+                  const SizedBox(height: 12),
                   Container(
                     padding: const EdgeInsets.all(AppDimens.space16),
                     decoration: BoxDecoration(
@@ -687,158 +792,262 @@ class _ReportScreenState extends State<ReportScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                RadioGroup<int>(
-                  groupValue: _reportType,
-                  onChanged: (val) => setState(() {
-                    _reportType = val!;
-                    _reportGenerated = false;
-                  }),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: RadioListTile<int>(
-                          title: Text(
-                            'Semester',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: theme.textTheme.bodyLarge?.color,
-                            ),
-                          ),
-                          value: 0,
-                          contentPadding: EdgeInsets.zero,
-                          activeColor: theme.colorScheme.primary,
-                        ),
-                      ),
-                      Expanded(
-                        child: RadioListTile<int>(
-                          title: Text(
-                            'Custom Dates',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: theme.textTheme.bodyLarge?.color,
-                            ),
-                          ),
-                          value: 1,
-                          contentPadding: EdgeInsets.zero,
-                          activeColor: theme.colorScheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                if (_reportType == 0)
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          'Select Semester: ',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: theme.textTheme.bodyLarge?.color,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      DropdownButton<int>(
-                        value: _selectedSemester,
-                        dropdownColor: theme.cardColor,
-                        style: TextStyle(
-                          color: theme.textTheme.bodyLarge?.color,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        items: List.generate(
-                          8,
-                          (i) => DropdownMenuItem(
-                            value: i + 1,
-                            child: Text('Semester ${i + 1}'),
-                          ),
-                        ),
-                        onChanged: (val) => setState(() {
-                          _selectedSemester = val!;
-                          _reportGenerated = false;
-                        }),
-                      ),
-                    ],
-                  )
-                else
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _pickDate(true),
-                          icon: const Icon(Icons.calendar_today, size: 16),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: theme.colorScheme.primary,
-                            side: BorderSide(color: theme.colorScheme.primary),
-                          ),
-                          label: Text(
-                            _startDate == null
-                                ? 'Start Date'
-                                : DateFormat(
-                                    'MMM dd, yyyy',
-                                  ).format(_startDate!),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        RadioGroup<int>(
+                          groupValue: _reportType,
+                          onChanged: (val) => setState(() {
+                            if (val != null) {
+                              _reportType = val;
+                              _reportGenerated = false;
+                            }
+                          }),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => setState(() {
+                                    _reportType = 0;
+                                    _reportGenerated = false;
+                                  }),
+                                  borderRadius:
+                                      BorderRadius.circular(AppDimens.radiusSm),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 4, horizontal: 2),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Radio<int>(
+                                          value: 0,
+                                          activeColor:
+                                              theme.colorScheme.primary,
+                                          materialTapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            'Semester',
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.bold,
+                                              color: theme.textTheme.bodyLarge
+                                                  ?.color,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: InkWell(
+                                  onTap: () => setState(() {
+                                    _reportType = 1;
+                                    _reportGenerated = false;
+                                  }),
+                                  borderRadius:
+                                      BorderRadius.circular(AppDimens.radiusSm),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 4, horizontal: 2),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Radio<int>(
+                                          value: 1,
+                                          activeColor:
+                                              theme.colorScheme.primary,
+                                          materialTapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            'Custom Dates',
+                                            style: TextStyle(
+                                              fontSize: 15,
+                                              fontWeight: FontWeight.bold,
+                                              color: theme.textTheme.bodyLarge
+                                                  ?.color,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () => _pickDate(false),
-                          icon: const Icon(Icons.calendar_today, size: 16),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: theme.colorScheme.primary,
-                            side: BorderSide(color: theme.colorScheme.primary),
-                          ),
-                          label: Text(
-                            _endDate == null
-                                ? 'End Date'
-                                : DateFormat('MMM dd, yyyy').format(_endDate!),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isGenerating ? null : _generateReport,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: _isGenerating
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
+                        const SizedBox(height: 14),
+                        if (_reportType == 0)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Text(
+                                'Select Semester: ',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.textTheme.bodyLarge?.color,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              InkWell(
+                                onTap: _showSemesterPicker,
+                                borderRadius:
+                                    BorderRadius.circular(AppDimens.radiusMd),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 14, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: theme.brightness == Brightness.dark
+                                        ? Colors.white.withAlpha(12)
+                                        : Colors.black.withAlpha(8),
+                                    borderRadius: BorderRadius.circular(
+                                        AppDimens.radiusMd),
+                                    border:
+                                        Border.all(color: theme.dividerColor),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.school_outlined,
+                                        size: 18,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Semester $_selectedSemester',
+                                        style: TextStyle(
+                                          color:
+                                              theme.textTheme.bodyLarge?.color,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Icon(
+                                        Icons.keyboard_arrow_down_rounded,
+                                        color: theme
+                                            .textTheme.bodyMedium?.color,
+                                        size: 20,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           )
-                        : const Text(
-                            'Generate Report',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
+                        else
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => _pickDate(true),
+                                  icon: const Icon(Icons.calendar_today_rounded,
+                                      size: 16),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: theme.colorScheme.primary,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12, horizontal: 8),
+                                    side: BorderSide(
+                                        color: theme.colorScheme.primary
+                                            .withAlpha(180)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                          AppDimens.radiusMd),
+                                    ),
+                                  ),
+                                  label: Text(
+                                    _startDate == null
+                                        ? 'Start Date'
+                                        : DateFormat('MMM dd, yyyy')
+                                            .format(_startDate!),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () => _pickDate(false),
+                                  icon: const Icon(Icons.calendar_today_rounded,
+                                      size: 16),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: theme.colorScheme.primary,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12, horizontal: 8),
+                                    side: BorderSide(
+                                        color: theme.colorScheme.primary
+                                            .withAlpha(180)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(
+                                          AppDimens.radiusMd),
+                                    ),
+                                  ),
+                                  label: Text(
+                                    _endDate == null
+                                        ? 'End Date'
+                                        : DateFormat('MMM dd, yyyy')
+                                            .format(_endDate!),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _isGenerating ? null : _generateReport,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: theme.colorScheme.primary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(AppDimens.radiusMd),
+                              ),
+                            ),
+                            child: _isGenerating
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Generate Report',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-                  const SizedBox(height: AppDimens.space24),
+                  const SizedBox(height: 12),
                   if (!_reportGenerated)
                     _emptyState(
                       theme: theme,
@@ -859,6 +1068,14 @@ class _ReportScreenState extends State<ReportScreen> {
                     )
                   else
                     ..._buildResults(theme, c),
+                  const SizedBox(height: 12),
+                  const CalloutBox(
+                    kind: CalloutKind.info,
+                    title: 'Note:',
+                    message:
+                        'Reports use the same records as your dashboard, so the '
+                        'numbers always match.',
+                  ),
                 ],
               ),
             ),
@@ -880,8 +1097,8 @@ class _ReportScreenState extends State<ReportScreen> {
         theme.textTheme.bodyMedium?.color ?? theme.colorScheme.onSurface;
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space24,
-        vertical: AppDimens.space32,
+        horizontal: AppDimens.space20,
+        vertical: AppDimens.space24,
       ),
       decoration: BoxDecoration(
         color: theme.cardColor,
@@ -891,23 +1108,23 @@ class _ReportScreenState extends State<ReportScreen> {
       child: Column(
         children: [
           Container(
-            width: 72,
-            height: 72,
+            width: 56,
+            height: 56,
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: secondary.withAlpha(20),
               shape: BoxShape.circle,
               border: Border.all(color: theme.dividerColor),
             ),
-            child: Icon(icon, size: 32, color: secondary),
+            child: Icon(icon, size: 26, color: secondary),
           ),
-          const SizedBox(height: AppDimens.space16),
+          const SizedBox(height: AppDimens.space12),
           Text(
             title,
             style: theme.textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.bold),
           ),
-          const SizedBox(height: AppDimens.space8),
+          const SizedBox(height: AppDimens.space6),
           Text(
             message,
             textAlign: TextAlign.center,
@@ -924,7 +1141,7 @@ class _ReportScreenState extends State<ReportScreen> {
   List<Widget> _buildResults(ThemeData theme, AppColors c) {
     return [
       Container(
-        padding: const EdgeInsets.all(AppDimens.space20),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
           color: theme.cardColor,
           borderRadius: BorderRadius.circular(AppDimens.radiusLg),
@@ -935,27 +1152,28 @@ class _ReportScreenState extends State<ReportScreen> {
             Text(
               'Overall Attendance',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: theme.textTheme.bodyMedium?.color,
               ),
             ),
-            const SizedBox(height: AppDimens.space8),
+            const SizedBox(height: 4),
             FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
                 '${_overallPercent.toStringAsFixed(2)}%',
                 style: TextStyle(
-                  fontSize: 42,
+                  fontSize: 38,
                   fontWeight: FontWeight.bold,
                   color: _overallPercent >= 75 ? c.success : c.danger,
                 ),
               ),
             ),
-            const SizedBox(height: AppDimens.space8),
+            const SizedBox(height: 4),
             Text(
               '$_totalAttended / $_totalLectures Lectures Attended',
               style: TextStyle(
+                fontSize: 13,
                 fontWeight: FontWeight.w600,
                 color: theme.textTheme.bodyLarge?.color,
               ),
@@ -963,7 +1181,7 @@ class _ReportScreenState extends State<ReportScreen> {
           ],
         ),
       ),
-      const SizedBox(height: AppDimens.space24),
+      const SizedBox(height: 12),
       OutlinedButton.icon(
         onPressed: _showExportOptions,
         icon: const Icon(Icons.ios_share_rounded, size: 18),
@@ -977,30 +1195,28 @@ class _ReportScreenState extends State<ReportScreen> {
           ),
         ),
       ),
-      const SizedBox(height: AppDimens.space24),
+      const SizedBox(height: 16),
       Text(
         'Subject Breakdown',
         style: TextStyle(
-          fontSize: 18,
+          fontSize: 17,
           fontWeight: FontWeight.bold,
           color: theme.textTheme.bodyLarge?.color,
         ),
       ),
-      const SizedBox(height: AppDimens.space12),
+      const SizedBox(height: 10),
       ..._subjects.map((sub) {
         final stat = _stats[sub.id] ?? {'attended': 0, 'total': 0};
         final attended = stat['attended']!;
         final total = stat['total']!;
         final percent = total == 0 ? 0.0 : (attended / total) * 100;
         final bool isSafe = percent >= sub.requiredPercent;
-        // Same split as the dashboard subject cards: the percentage text
-        // carries the deeper status token while the bar runs a shade brighter.
         final Color color = isSafe ? c.success : c.danger;
         final Color barColor =
             isSafe ? const Color(0xFF49AD4F) : const Color(0xFFF14134);
 
         return Card(
-          margin: const EdgeInsets.only(bottom: AppDimens.space12),
+          margin: const EdgeInsets.only(bottom: 8),
           color: theme.cardColor,
           elevation: 0,
           shape: RoundedRectangleBorder(
@@ -1008,7 +1224,7 @@ class _ReportScreenState extends State<ReportScreen> {
             side: BorderSide(color: theme.dividerColor),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(AppDimens.space16),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1022,7 +1238,7 @@ class _ReportScreenState extends State<ReportScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 16,
+                          fontSize: 15,
                           color: theme.textTheme.bodyLarge?.color,
                         ),
                       ),
@@ -1033,12 +1249,12 @@ class _ReportScreenState extends State<ReportScreen> {
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: color,
-                        fontSize: 16,
+                        fontSize: 15,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: AppDimens.space8),
+                const SizedBox(height: 6),
                 LinearProgressIndicator(
                   value: total == 0 ? 0 : percent / 100,
                   color: barColor,
@@ -1046,7 +1262,7 @@ class _ReportScreenState extends State<ReportScreen> {
                   minHeight: 5,
                   borderRadius: BorderRadius.circular(2.5),
                 ),
-                const SizedBox(height: AppDimens.space8),
+                const SizedBox(height: 6),
                 Text(
                   '$attended / $total lectures',
                   style: TextStyle(

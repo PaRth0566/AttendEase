@@ -474,10 +474,15 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
 
                   // ── Subject list ─────────────────────────────────────
                   if (_subjects.isEmpty)
-                    EmptyState(
-                      icon: Icons.book_outlined,
-                      title: 'No subjects yet',
-                      message: 'No subjects added for this semester yet.',
+                    SizedBox(
+                      width: double.infinity,
+                      child: EmptyState(
+                        icon: Icons.inbox_outlined,
+                        title: 'No records for this semester',
+                        message:
+                            'Upload a PDF report or add subjects to get started.',
+                        compact: true,
+                      ),
                     )
                   else
                     for (int i = 0; i < _subjects.length; i++) ...[

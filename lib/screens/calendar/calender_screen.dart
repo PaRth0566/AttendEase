@@ -130,10 +130,21 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
     if (!changed) return false;
 
     if (!mounted) return false;
+    // Clamp focus/selection into the new range *in the same setState* that
+    // narrows the bounds. The screen is a kept-alive tab, so on a semester
+    // switch these still hold the previous semester's dates; committing the
+    // tighter bounds first (and clamping in a later frame) would rebuild
+    // TableCalendar with focusedDay outside [firstDay, lastDay], which its base
+    // asserts — the calendar's "sometimes errors, sometimes breaks on tap" bug.
+    DateTime clampDay(DateTime d) =>
+        d.isBefore(newFirst) ? newFirst : (d.isAfter(newLast) ? newLast : d);
+
     setState(() {
       _activeSemester = sem;
       _firstDay = newFirst;
       _lastDay = newLast;
+      _focusedDay = clampDay(_focusedDay);
+      if (_selectedDay != null) _selectedDay = clampDay(_selectedDay!);
     });
     return true;
   }
@@ -146,6 +157,7 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
 
     DateTime initialFocus = now;
     if (normalize(now).isBefore(_firstDay)) initialFocus = _firstDay;
+    if (normalize(initialFocus).isAfter(_lastDay)) initialFocus = _lastDay;
 
     // Load all subjects once for the add-record sheet
     final subjects = await _subjectDao.getSubjectsBySemester(_activeSemester);
@@ -599,38 +611,40 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
   Widget _buildLegendItem(Color color, String title, String subtitle, ThemeData theme) {
     return Row(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
         ),
         const SizedBox(width: 6),
-        Flexible(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: theme.textTheme.bodyLarge?.color,
-                  fontWeight: FontWeight.w600,
-                ),
-                overflow: TextOverflow.ellipsis,
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 11,
+                color: theme.textTheme.bodyLarge?.color,
+                fontWeight: FontWeight.w600,
+                height: 1.2,
               ),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 9,
-                  color: theme.textTheme.bodySmall?.color,
-                  fontWeight: FontWeight.w400,
-                ),
-                overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 9,
+                color: theme.textTheme.bodySmall?.color,
+                fontWeight: FontWeight.w400,
+                height: 1.2,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ],
     );
@@ -723,11 +737,18 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
           constraints: const BoxConstraints(maxWidth: 700),
           child: RefreshIndicator(
             onRefresh: _syncAndReload,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Calendar widget
-                Container(
+            // The whole page is one always-scrollable view so a pull-down
+            // anywhere on the calendar screen engages the RefreshIndicator —
+            // the same pattern Dashboard and Profile use. The records list
+            // below is shrink-wrapped and non-scrolling so it flows as part of
+            // this page scroll instead of fighting it.
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Calendar widget
+                  Container(
                   // Same header-to-content gap as Dashboard and Profile (§3).
                   margin: const EdgeInsets.fromLTRB(
                       10, AppDimens.headerContentGap, 10, 0),
@@ -963,15 +984,23 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                                 }
                               },
                               onPageChanged: (focusedDay) {
-                                _focusedDay = focusedDay;
-                                _fetchMonthData(focusedDay);
+                                // Keep focus inside the semester range; a page
+                                // at the very edge can report a day just past
+                                // the bound, which TableCalendar's base asserts.
+                                final clamped = focusedDay.isBefore(_firstDay)
+                                    ? _firstDay
+                                    : (focusedDay.isAfter(_lastDay)
+                                          ? _lastDay
+                                          : focusedDay);
+                                _focusedDay = clamped;
+                                _fetchMonthData(clamped);
                               },
                             ),
 
                       // Divider above legend
                       if (_isCalendarReady)
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 2, 10, 0),
+                          padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
                           child: Divider(
                             height: 1,
                             thickness: 1,
@@ -982,40 +1011,33 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                       // Legend
                       if (_isCalendarReady)
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
                           child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Expanded(
-                                child: _buildLegendItem(
-                                  c.success,
-                                  'All Present',
-                                  'Attended all',
-                                  theme,
-                                ),
+                              _buildLegendItem(
+                                c.success,
+                                'All Present',
+                                'Attended all',
+                                theme,
                               ),
-                              Expanded(
-                                child: _buildLegendItem(
-                                  c.danger,
-                                  'All Absent',
-                                  'Absent all',
-                                  theme,
-                                ),
+                              _buildLegendItem(
+                                c.danger,
+                                'All Absent',
+                                'Absent all',
+                                theme,
                               ),
-                              Expanded(
-                                child: _buildLegendItem(
-                                  c.warning,
-                                  'Mixed',
-                                  'Partial attendance',
-                                  theme,
-                                ),
+                              _buildLegendItem(
+                                c.warning,
+                                'Mixed',
+                                'Partial attendance',
+                                theme,
                               ),
-                              Expanded(
-                                child: _buildLegendItem(
-                                  isDark ? Colors.white.withAlpha(100) : Colors.grey,
-                                  'Off',
-                                  'No classes',
-                                  theme,
-                                ),
+                              _buildLegendItem(
+                                isDark ? Colors.white.withAlpha(100) : Colors.grey,
+                                'Off',
+                                'No classes',
+                                theme,
                               ),
                             ],
                           ),
@@ -1038,9 +1060,10 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                     ),
                   ),
 
-                // Records list
-                Expanded(
-                  child: AnimatedSwitcher(
+                // Records list. Flows within the page scroll (no Expanded):
+                // the list shrink-wraps and the transient states get a fixed
+                // height so the AnimatedSwitcher cross-fade has a stable box.
+                AnimatedSwitcher(
                     duration: AppMotion.standard,
                     switchInCurve: AppMotion.enter,
                     switchOutCurve: AppMotion.exit,
@@ -1049,18 +1072,24 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                         // a unique key so a re-load's spinner never shares a key
                         // with the previous one still animating out of the
                         // switcher's transition Stack.
-                        ? Center(
+                        ? SizedBox(
+                            height: 320,
                             key: ValueKey('loading-$_loadSeq'),
-                            child: CircularProgressIndicator(
-                              color: theme.colorScheme.primary,
+                            child: Center(
+                              child: CircularProgressIndicator(
+                                color: theme.colorScheme.primary,
+                              ),
                             ),
                           )
                         : isSunday
-                        ? EmptyState(
-                            key: const ValueKey('sunday'),
-                            icon: Icons.weekend_rounded,
-                            message: 'Sunday — no classes',
-                            compact: true,
+                        ? const SizedBox(
+                            height: 320,
+                            key: ValueKey('sunday'),
+                            child: EmptyState(
+                              icon: Icons.weekend_rounded,
+                              message: 'Sunday — no classes',
+                              compact: true,
+                            ),
                           )
                         // Future days fall through to the record list:
                         // getDaySchedule projects the weekday timetable for them,
@@ -1068,15 +1097,24 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                         // suppressed below). This is the §4 fix that removes the
                         // daily re-upload requirement.
                         : _dayRecords.isEmpty
-                        ? EmptyState(
-                            key: const ValueKey('empty'),
-                            icon: Icons.event_note_outlined,
-                            message:
-                                'No records for this date\nTap + to add one',
-                            compact: true,
+                        ? const SizedBox(
+                            height: 320,
+                            key: ValueKey('empty'),
+                            child: EmptyState(
+                              icon: Icons.event_note_outlined,
+                              message:
+                                  'No records for this date\nTap + to add one',
+                              compact: true,
+                            ),
                           )
                         : ListView.builder(
                             key: ValueKey(_selectedDay),
+                            // Shrink-wrapped into the page scroll instead of
+                            // owning its own viewport, so the whole screen is
+                            // one pull-to-refresh surface (§ calendar refresh).
+                            shrinkWrap: true,
+                            physics:
+                                const NeverScrollableScrollPhysics(),
                             padding: EdgeInsets.fromLTRB(
                               AppDimens.space16,
                               AppDimens.space4,
@@ -1384,8 +1422,8 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                             },
                           ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
