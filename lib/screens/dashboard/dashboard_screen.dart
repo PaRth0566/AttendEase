@@ -1368,7 +1368,15 @@ class _SubjectCard extends StatelessWidget {
                               // the detail screen's AppBar title. It fought
                               // the container transform, which already
                               // carries the card's contents into place.
-                              Expanded(
+                              //
+                              // Flexible, not Expanded: Expanded makes the
+                              // title claim the whole row whatever its length,
+                              // which parked the chevron against the percentage
+                              // instead of against the name it belongs to. Loose
+                              // fit lets a short name take only its own width so
+                              // the chevron follows it, and a long one still
+                              // ellipsizes at the same limit.
+                              Flexible(
                                 child: Text(
                                   subject.name,
                                   maxLines: 1,

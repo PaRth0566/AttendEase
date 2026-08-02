@@ -30,20 +30,34 @@ class AppMotion {
   /// `transitionDuration`, and splitting it (450 open / 400 close) made the pop
   /// read as a different, hastier animation than the push.
   ///
-  /// Quicker than the budget app's 400ms (475ms on iOS): that pace is tuned for
-  /// its full-width settings rows, and on a card that travels most of the screen
-  /// it lingers. iOS keeps a little more room, matching its slower system
-  /// transitions.
+  /// Roughly the budget app's 400ms (475ms on iOS). This was 300/340 for a
+  /// while, cut on the reading that the reference pace lingers on a card that
+  /// travels most of the screen — but that read the boxiness as slowness. With
+  /// the corner collapse and the cross-fade fixed separately (see
+  /// `container_transform.dart`), the shorter pace was simply abrupt: the card
+  /// arrived before the eye could follow it becoming the page. iOS keeps a
+  /// little more room, matching its slower system transitions.
   static Duration get morphContainer =>
       defaultTargetPlatform == TargetPlatform.iOS
-          ? const Duration(milliseconds: 340)
-          : const Duration(milliseconds: 300);
+          ? const Duration(milliseconds: 480)
+          : const Duration(milliseconds: 440);
 
-  /// Easing for [morphContainer]. `OpenContainer` drives its geometry with
-  /// `fastOutSlowIn` (and `fastOutSlowIn.flipped` in reverse), not M3's
-  /// emphasized [morph] — the two settle onto the tile quite differently, and
-  /// fastOutSlowIn is the one that leaves the tile gently.
-  static const Curve morphContainerCurve = Curves.fastOutSlowIn;
+  /// Easing for [morphContainer].
+  ///
+  /// `OpenContainer` drives its geometry with `fastOutSlowIn` (and
+  /// `fastOutSlowIn.flipped` in reverse), and this followed it for a long time.
+  /// It is the wrong curve for a box that crosses most of the screen:
+  /// `fastOutSlowIn` is heavily front-loaded — about 80% grown by the timeline
+  /// midpoint — so the card leaps almost the whole distance at once and then
+  /// creeps the last little way. That leap is what reads as the morph being
+  /// "direct", and no amount of extra duration fixes it, because lengthening
+  /// the flight only stretches the crawl at the end.
+  ///
+  /// M3's emphasized easing is slow at both ends and quick through the middle,
+  /// so the box eases off the card, covers the distance, and settles onto the
+  /// page. **This is a deliberate deviation from the reference port** — revert
+  /// to [Curves.fastOutSlowIn] here to get the faithful geometry back.
+  static const Curve morphContainerCurve = Curves.easeInOutCubicEmphasized;
 
   // ── Curves ────────────────────────────────────────────────
   static const Curve enter = Curves.easeOutCubic;

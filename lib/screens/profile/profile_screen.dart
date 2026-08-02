@@ -520,15 +520,15 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                     onTap: _handleLogout,
                   ),
 
-                  // Left-aligned under the cards. The Log Out tile already
-                  // carries 12px below it, so only a small extra gap here, and
-                  // a modest tail before the nav-bar clearance padding.
+                  // Centred under the cards. The Log Out tile already carries
+                  // 12px below it, so only a small extra gap here, and a modest
+                  // tail before the nav-bar clearance padding.
                   if (_appVersion.isNotEmpty) ...[
                     const SizedBox(height: AppDimens.space4),
-                    Padding(
-                      padding: const EdgeInsets.only(left: AppDimens.space4),
+                    Center(
                       child: Text(
                         'Version $_appVersion',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           color: theme.textTheme.bodyMedium?.color?.withAlpha(150),
                           fontSize: 13,

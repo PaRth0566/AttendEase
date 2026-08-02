@@ -836,7 +836,12 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                                   Color textColor =
                                       theme.textTheme.bodyLarge?.color ??
                                       Colors.black;
-                                  final FontWeight weight = isToday
+                                  // Selection no longer has a fill to carry it,
+                                  // so it takes the same bold the current date
+                                  // gets — otherwise the only thing separating a
+                                  // picked day from an unpicked one is a 2px
+                                  // border it may already share with its status.
+                                  final FontWeight weight = isToday || isSelected
                                       ? FontWeight.bold
                                       : FontWeight.w600;
 
@@ -888,41 +893,52 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                                     );
                                   }
 
-                                  if (isSelected) {
-                                    return DecoratedBox(
-                                      decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(10),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: theme.colorScheme.primary
-                                                .withAlpha(90),
-                                            blurRadius: 8,
-                                            spreadRadius: 0.5,
+                                  // The date itself. Today is marked by a short
+                                  // rounded underline beneath the number rather
+                                  // than a border or a disc, which leaves the
+                                  // border free to mean one thing only —
+                                  // selection — so a selected day that is not
+                                  // today can no longer be confused with the
+                                  // current date. An underline also sits clear
+                                  // of the tile's attendance fill instead of
+                                  // covering it, which is what the old solid
+                                  // chip (and its 8px blurred shadow, the glow)
+                                  // got wrong.
+                                  //
+                                  // The stack is 14px of text + 3 gap + 3 rule =
+                                  // ~26, safe at every row height: rowHeight
+                                  // clamps to 44…58 and dayCell insets 3 a side,
+                                  // so the cell is never shorter than 38.
+                                  Widget label = Text(
+                                    '${day.day}',
+                                    style: TextStyle(
+                                      color: textColor,
+                                      fontWeight: weight,
+                                      fontSize: 14,
+                                    ),
+                                  );
+                                  if (isToday) {
+                                    label = Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        label,
+                                        const SizedBox(height: 3),
+                                        Container(
+                                          width: 16,
+                                          height: 3,
+                                          decoration: BoxDecoration(
+                                            color: theme.colorScheme.primary,
+                                            borderRadius:
+                                                BorderRadius.circular(3),
                                           ),
-                                        ],
-                                      ),
-                                      child: dayCell(
-                                        fill: theme.colorScheme.primary,
-                                        border: Border.all(
-                                          color: theme.colorScheme.primary
-                                              .withAlpha(180),
-                                          width: 1.5,
                                         ),
-                                        child: Text(
-                                          '${day.day}',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ),
+                                      ],
                                     );
                                   }
 
                                   return dayCell(
                                     fill: bgColor,
-                                    border: isToday
+                                    border: isSelected
                                         ? Border.all(
                                             color: theme.colorScheme.primary,
                                             width: 2,
@@ -933,14 +949,7 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                                             width: 1.2,
                                           )
                                         : null,
-                                    child: Text(
-                                      '${day.day}',
-                                      style: TextStyle(
-                                        color: textColor,
-                                        fontWeight: weight,
-                                        fontSize: 14,
-                                      ),
-                                    ),
+                                    child: label,
                                   );
                                 },
                               ),

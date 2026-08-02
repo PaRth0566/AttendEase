@@ -231,6 +231,28 @@ class ContainerTransformTransition extends StatelessWidget {
   static double _openOpacityReverse(double v) =>
       ((v - 0.40) / 0.45).clamp(0.0, 1.0);
 
+  /// The card clone's own opacity.
+  ///
+  /// `ContainerTransitionType.fade` holds the closed child at a constant 1.0 for
+  /// the whole flight, and this port followed it. That is fine for the
+  /// reference's full-width settings rows, which barely change size; it is not
+  /// fine for a dashboard card scaled to the full screen. `FittedBox` magnifies
+  /// the clone's *contents* along with its box, so the card's 5px progress bar
+  /// balloons into a thick band across the top of the screen and sits there,
+  /// fully opaque, until the page finally covers it at v = 0.60.
+  ///
+  /// Fading the clone out instead lets it dissolve as it grows, so what you see
+  /// is the card expanding rather than its insides being blown up. It reaches
+  /// zero exactly where [_openOpacityForward] reaches one, so the two hand over
+  /// with no seam and the surface never shows through on its own. Symmetric in
+  /// v, so the pop brings the card back without a separate reverse curve.
+  ///
+  /// Deviation from the reference: this is `fadeThrough`'s treatment of the
+  /// closed child, not `fade`'s. Return this to a constant 1.0 to get the
+  /// faithful behaviour back.
+  static double _closedOpacity(double v) =>
+      1 - ((v - 0.25) / 0.35).clamp(0.0, 1.0);
+
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
@@ -293,20 +315,24 @@ class ContainerTransformTransition extends StatelessWidget {
                     fit: StackFit.passthrough,
                     children: [
                       // The tapped card, scaled to the box's current width so
-                      // it grows with it. Held fully opaque the whole way —
-                      // `ContainerTransitionType.fade` never fades the closed
-                      // child out; the page arriving over it is the transition.
+                      // it grows with it, dissolving as it goes — see
+                      // [_closedOpacity] for why it is not held opaque.
                       if (closedChild != null)
-                        FittedBox(
-                          fit: BoxFit.fitWidth,
-                          alignment: Alignment.topLeft,
-                          child: SizedBox(
-                            width: origin.rect.width,
-                            height: origin.rect.height,
-                            // Rasterised once, then only re-composited as the
-                            // scale changes — without this the card repaints
-                            // every frame of the flight.
-                            child: RepaintBoundary(child: closedChild),
+                        Opacity(
+                          // Flutter skips the saveLayer at 0 and 1, so this is
+                          // free outside the actual fade.
+                          opacity: _closedOpacity(v),
+                          child: FittedBox(
+                            fit: BoxFit.fitWidth,
+                            alignment: Alignment.topLeft,
+                            child: SizedBox(
+                              width: origin.rect.width,
+                              height: origin.rect.height,
+                              // Rasterised once, then only re-composited as the
+                              // scale changes — without this the card repaints
+                              // every frame of the flight.
+                              child: RepaintBoundary(child: closedChild),
+                            ),
                           ),
                         ),
                       // The page laid out at its final size and *scaled* into

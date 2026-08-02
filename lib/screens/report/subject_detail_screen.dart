@@ -54,6 +54,20 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
     super.dispose();
   }
 
+  // Note: this commit deliberately does NOT wait for the container transform to
+  // finish. Holding it until the morph settled was tried (2026-08-02) to keep
+  // the whole-page rebuild out of the flight, and it caused a worse artefact:
+  // with the destination showing nothing but a centred spinner for the entire
+  // morph, the cross-fade had nothing to fade into, so the card clone — which
+  // the transform holds fully opaque throughout — stayed visible all the way up,
+  // stretched to full width with its LinearProgressIndicator across the top,
+  // and then vanished when the content finally landed. A visible flicker in
+  // place of a possible hitch is a bad trade.
+  //
+  // The real fix is to give this screen a first paint worth cross-fading into:
+  // `widget.subject` already carries name/attended/total, so the header card can
+  // render immediately and only the history list needs to wait on the DB.
+
   Future<void> _loadHistory() async {
     if (widget.subject.id == null) return;
 
