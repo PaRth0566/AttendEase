@@ -27,12 +27,177 @@ class LocalPdfParser {
     caseSensitive: false,
   );
 
-  // ── Pattern: finds <number> <course name> at the end of a text chunk ──
-  // Course name = letters, spaces, dots, plus, hash, ampersand, parens.
-  // Supports names like ".NET", "C++", "C#", "Data Structures & Algorithms".
-  static final _srNoCourseRe = RegExp(
-    r'(\d+)\s+([A-Za-z][A-Za-z .+#&()]*[A-Za-z.+#&)])',
+  // ── Course-name resolution ────────────────────────────────────────────
+  //
+  // A row's text chunk ends with "<Sr No> <Course Name>". The name is recovered
+  // by splitting on Sr No candidates and keeping the longest tail that reads as
+  // a clean name — see [_courseNameFrom].
+
+  /// A candidate Sr No: a short digit run bounded by whitespace.
+  ///
+  /// The trailing lookahead is what makes a time column ineligible — the parts
+  /// of "9:20:00 AM" are bounded by ':', never whitespace — so a clock can
+  /// never be mistaken for a serial number.
+  static final _srNoCandidateRe = RegExp(r'(?:^|\s)\d{1,4}(?=\s)');
+
+  /// A whole course name.
+  ///
+  /// The leading '.' admits ".NET". Digits and '-' admit "Applied
+  /// Mathematics-IV" and "Engineering Physics 1", which the previous
+  /// letters-only class silently truncated — and, for two variants of one stem
+  /// ("…-III" and "…-IV"), collapsed into a single merged subject with pooled
+  /// attendance. ':' is deliberately absent so a stray time cannot validate.
+  static final _courseNameRe = RegExp(
+    r"^[A-Za-z.][A-Za-z0-9 .+#&()\-/,'’]*$",
   );
+
+  /// Column-header and metadata-label phrases. Matched as whole-word phrases,
+  /// not loose words: "Time" and "Name" are legitimate parts of subject names
+  /// ("Real Time Systems"), so blacklisting them individually would drop real
+  /// rows. Word-bounded rather than substring, so "Front**end Time** Series"
+  /// does not trip the "end time" phrase.
+  static final _headerPhraseRe = RegExp(
+    r'\b(sr\s*no|course\s+name|start\s+time|end\s+time|lecture\s+date'
+    r'|attendance\s+report|student\s+name|academic\s+session|program\s+name)\b',
+    caseSensitive: false,
+  );
+
+  /// Tails that are a bare header cell rather than a subject.
+  static const _headerWords = <String>{
+    'sr', 'no', 'no.', 'course', 'name', 'date', 'start', 'end', 'time',
+    'attendance', 'page', 'of', 'status', 'am', 'pm', 'lecture', 'total',
+  };
+
+  /// The longest a subject name is allowed to be. Real names run well under
+  /// this; a run-on past it means the tail has swallowed surrounding banner
+  /// text rather than isolating a name.
+  static const _maxCourseNameLength = 80;
+
+  /// Extracts the course name from the text chunk preceding a row's
+  /// DATE·TIME·TIME·STATUS anchor.
+  ///
+  /// The chunk ends with `<Sr No> <Course Name>`, so every Sr No candidate
+  /// splits it into a possible name. This takes the **longest** tail that still
+  /// reads as a clean name.
+  ///
+  /// Longest-clean rather than rightmost is what handles both failure modes at
+  /// once. A page-break banner ("… Page 3 of 12 Sr No. Course Name 45 DBMS")
+  /// yields longer tails, but each trips a header phrase or the length ceiling,
+  /// leaving "DBMS". A name with an interior digit ("Engineering Physics 1 Lab")
+  /// yields a short rightmost tail ("Lab") and a longer clean one, and the
+  /// longer wins — a rightmost rule would silently truncate it.
+  ///
+  /// Returns null when no candidate yields a plausible name, so the caller skips
+  /// the row rather than inventing a subject.
+  static String? _courseNameFrom(String between) {
+    String? best;
+    for (final srNo in _srNoCandidateRe.allMatches(between)) {
+      final name = between.substring(srNo.end).trim();
+      // "C#" and "AI" are real subjects, so the floor is 2. A single stray
+      // letter left by a column split is not.
+      if (name.length < 2 || name.length > _maxCourseNameLength) continue;
+      if (!_courseNameRe.hasMatch(name)) continue;
+      final lower = name.toLowerCase();
+      if (_headerWords.contains(lower)) continue;
+      if (_headerPhraseRe.hasMatch(name)) continue;
+      if (best == null || name.length > best.length) best = name;
+    }
+    return best;
+  }
+
+  // ── Semester resolution ───────────────────────────────────────────────
+  //
+  // In a real SVKM report the semester is not a field of its own — it is the
+  // tail of the Academic Session value, written label-first:
+  //
+  //     Academic Year & Academic Session    2026-2027, Semester V
+  //     Program Name                        Bachelor of Science (Computer Science)
+  //     Attendance Report Duration :        From 01.06.2026 to 06.08.2026
+  //
+  // So the reading that matters is "Semester" followed by its value. Both
+  // orders are still accepted, because the value-first spelling ("V Semester")
+  // does occur, but label-first is tried first since that is what the reports
+  // in hand actually use.
+  //
+  // The one thing that must never happen is taking a digit out of the *middle*
+  // of a longer number: "From 01.06.2026" is what previously produced
+  // Semester 1. Both patterns below therefore require the captured value to be
+  // bounded by a non-digit that is also not a date separator, so no part of
+  // "01.06.2026" or "2026-2027" can be read as a semester.
+
+  /// Canonical semester Roman numerals. An explicit table rather than a general
+  /// Roman parser, so a token like "MIX" or "CD" cannot become a semester.
+  static const _romanSemesters = <String, int>{
+    'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6,
+    'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10, 'XI': 11, 'XII': 12,
+  };
+
+  /// The highest semester treated as real, so a stray number cannot become one.
+  static const _maxSemester = 12;
+
+  // Both patterns bound the captured value the same way:
+  //
+  //   (?<!\d)          not continuing a longer number, so the "26" of
+  //                    "2026-2027" cannot be picked up
+  //   (?![\d.\-/])     not the head of a date or range, so the "01" of
+  //                    "01.06.2026" cannot become Semester 1
+  //
+  // The date guard belongs only after the value — putting it before would reject
+  // the separator the label pattern has just consumed, breaking "Sem-IV".
+
+  /// "Semester V", "Semester: 5", "Sem-IV", "Semester 05".
+  ///
+  /// `\b` after the label is what keeps a subject called "Seminar" out — there
+  /// is no word boundary inside "Seminar".
+  static final _semesterLabelFirstRe = RegExp(
+    r'\bSem(?:ester)?\b[\s.:\-]*(?<!\d)([IVX]{1,4}|\d{1,2})(?![\d.\-/])',
+    caseSensitive: false,
+  );
+
+  /// "V Semester", "5th Sem" — the value ahead of the label.
+  static final _semesterValueFirstRe = RegExp(
+    r'(?<!\d)([IVX]{1,4}|\d{1,2})(?![\d.\-/])'
+    r'(?:st|nd|rd|th)?[\s.:\-]*\bSem(?:ester)?\b',
+    caseSensitive: false,
+  );
+
+  /// Reads the semester number out of a report's header text.
+  ///
+  /// Returns null when the report names no semester, so the caller can say so
+  /// instead of silently importing one term's report on top of another.
+  static int? extractSemesterNumber(String text) {
+    for (final re in [_semesterLabelFirstRe, _semesterValueFirstRe]) {
+      for (final match in re.allMatches(text)) {
+        final value = semesterTokenValue(match.group(1)!);
+        if (value != null) return value;
+      }
+    }
+    return null;
+  }
+
+  /// The semester a single token denotes: "V" → 5, "05" → 5, "5," → 5.
+  ///
+  /// Null unless the *whole* token is a semester, which is what rejects a date,
+  /// an academic session ("2026-2027") and a roll number.
+  static int? semesterTokenValue(String raw) {
+    final token = raw.replaceAll(
+      RegExp(r'^[^A-Za-z0-9]+|[^A-Za-z0-9]+$'),
+      '',
+    );
+    if (token.isEmpty) return null;
+    if (RegExp(r'^\d{1,2}$').hasMatch(token)) {
+      // Parsed whole, so a zero-padded "05" resolves to 5 instead of falling
+      // through to a default the way the old `\b[1-8]\b` search did.
+      final value = int.parse(token);
+      return value >= 1 && value <= _maxSemester ? value : null;
+    }
+    return _romanSemesters[token.toUpperCase()];
+  }
+
+  /// Reads a semester out of a short label string such as "Semester V", "Sem 5"
+  /// or a bare "5". For full header text use [extractSemesterNumber].
+  static int? semesterNumberFrom(String raw) =>
+      extractSemesterNumber(raw) ?? semesterTokenValue(raw);
 
   // ── Core parsing ──────────────────────────────────────────────────────
 
@@ -47,6 +212,7 @@ class LocalPdfParser {
     String course = '';
     String year = '';
     String semester = '';
+    int? semesterNumber;
     String startDate = '';
     String endDate = '';
 
@@ -98,12 +264,8 @@ class LocalPdfParser {
       final yearMatch = RegExp(r'(\d{4}\s*-\s*\d{4})').firstMatch(text);
       if (yearMatch != null) year = yearMatch.group(1)!.replaceAll(' ', '');
 
-      // Semester: "Semester IV" / "Semester 4" etc.
-      final semMatch = RegExp(
-        r'Semester\s+([IVX]+|\d+)',
-        caseSensitive: false,
-      ).firstMatch(text);
-      if (semMatch != null) semester = 'Semester ${semMatch.group(1)!}';
+      semesterNumber = extractSemesterNumber(text);
+      semester = semesterNumber == null ? '' : 'Semester $semesterNumber';
 
       // Program: Match between "Academic Session" and "Program Name"
       final progExact = RegExp(
@@ -138,6 +300,12 @@ class LocalPdfParser {
       debugPrint(
         '[Parser] Metadata: name="$studentName" year="$year" sem="$semester" course="$course" dates="$startDate to $endDate"',
       );
+      if (semesterNumber == null) {
+        debugPrint(
+          '[Parser] No semester in header — the import will keep the '
+          'semester the user already has open.',
+        );
+      }
 
       // ══════════════════════════════════════════════════════════════════
       // Step 3: Extract attendance records
@@ -170,25 +338,13 @@ class LocalPdfParser {
         final between = text.substring(lastEnd, m.start).trim();
         lastEnd = m.end;
 
-        // Find ALL <number> <letter-text> patterns in the between text
-        // and take the LAST one — that's our Sr No. + Course Name
-        final srMatches = _srNoCourseRe.allMatches(between).toList();
-        if (srMatches.isEmpty) {
+        // The name is the tail after the row's Sr No. Resolved right-to-left so
+        // a page-break banner before the row cannot be absorbed into it.
+        final courseName = _courseNameFrom(between);
+        if (courseName == null) {
           debugPrint(
             '[Parser] No course found in between text: "${between.length > 100 ? between.substring(between.length - 100) : between}"',
           );
-          continue;
-        }
-
-        final lastSr = srMatches.last;
-        final courseName = lastSr.group(2)!.trim();
-
-        // Skip if course name looks like a header fragment
-        if (courseName.length < 3) continue;
-        if (RegExp(
-          r'^(Sr|No|Course|Name|Date|Start|End|Time|Attendance|Page|of)$',
-          caseSensitive: false,
-        ).hasMatch(courseName)) {
           continue;
         }
 
@@ -254,6 +410,10 @@ class LocalPdfParser {
       'name': studentName,
       'year': year,
       'semester': semester,
+      // The resolved number alongside the display string. Every consumer needs
+      // the number, and each re-deriving it from "Semester V" is how the roman
+      // form came to be handled three different ways.
+      'semesterNumber': semesterNumber,
       'course': course,
       'startDate': startDate,
       'endDate': endDate,
@@ -367,6 +527,7 @@ class LocalPdfParser {
     'jul': 7,
     'aug': 8,
     'sep': 9,
+    'sept': 9,
     'oct': 10,
     'nov': 11,
     'dec': 12,
@@ -386,10 +547,22 @@ class LocalPdfParser {
   static String? _toIsoDate(String raw) {
     final parts = raw.split(RegExp(r'[\s,]+'));
     if (parts.length >= 3) {
-      final month = _monthMap[parts[0].toLowerCase()];
+      // The row anchor admits a dotted abbreviation ("Sep. 15, 2025"), so the
+      // trailing '.' is stripped before lookup — otherwise every row of such a
+      // report silently fails to parse and the import reports zero records.
+      final monthKey = parts[0].toLowerCase().replaceAll('.', '');
+      final month = _monthMap[monthKey];
       final day = int.tryParse(parts[1].replaceAll(',', ''));
       final year = int.tryParse(parts.last);
       if (month != null && day != null && year != null) {
+        // Range-check rather than trusting the values: DateTime(2025, 9, 45)
+        // silently rolls over into October, which would file a lecture under a
+        // date that never appeared in the report.
+        if (day < 1 || day > 31 || year < 1900 || year > 2200) return null;
+        final probe = DateTime(year, month, day);
+        if (probe.year != year || probe.month != month || probe.day != day) {
+          return null; // e.g. Feb 30
+        }
         return '${year.toString().padLeft(4, '0')}-'
             '${month.toString().padLeft(2, '0')}-'
             '${day.toString().padLeft(2, '0')}';

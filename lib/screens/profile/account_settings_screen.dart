@@ -391,7 +391,12 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            // Label colour via foregroundColor rather than a raw TextStyle on
+            // the Text.
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
             onPressed: () async {
               if (deleteController.text == 'DELETE') {
                 Navigator.pop(ctx);
@@ -406,10 +411,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
                 );
               }
             },
-            child: const Text(
-              'Delete Permanently',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('Delete Permanently'),
           ),
         ],
       ),

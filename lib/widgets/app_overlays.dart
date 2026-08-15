@@ -10,6 +10,14 @@ import '../theme/app_motion.dart';
 /// helpers route everything through [AppMotion] so durations, curves and
 /// reduced-motion handling live in one place.
 
+/// Max width of a dialog, matching Material's own dialog maximum.
+///
+/// Flutter's `Dialog` enforces a *minimum* width of 280 and no maximum, so a
+/// dialog whose content has unbounded intrinsic width grows to fill the
+/// viewport. Phone viewports are narrower than this, so the cap is a no-op
+/// there.
+const double maxDialogWidth = 560;
+
 /// Drop-in replacement for `showDialog` with the app's scale + fade motion.
 ///
 /// Also clamps text scaling inside the dialog. `AlertDialog` lays its `content`
@@ -18,6 +26,10 @@ import '../theme/app_motion.dart';
 /// upper bound keeps dialogs legible without letting them grow unbounded;
 /// individual dialogs with genuinely long content should still pass a
 /// `SingleChildScrollView` as their `content`.
+///
+/// Width is capped at [maxDialogWidth] for every dialog in the app. This is the
+/// single funnel for all of them, so the cap belongs here rather than on each
+/// `AlertDialog`.
 Future<T?> showAppDialog<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -27,6 +39,7 @@ Future<T?> showAppDialog<T>({
   double maxTextScaleFactor = 1.4,
 }) {
   final bool reduceMotion = MediaQuery.of(context).disableAnimations;
+  final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
   return showGeneralDialog<T>(
     context: context,
@@ -35,16 +48,35 @@ Future<T?> showAppDialog<T>({
     barrierLabel: barrierDismissible
         ? MaterialLocalizations.of(context).modalBarrierDismissLabel
         : null,
-    barrierColor: barrierColor ?? Colors.black54,
+    barrierColor:
+        barrierColor ??
+        (isDark
+            ? Colors.black.withValues(alpha: 0.72)
+            : const Color(0x730F172A)),
     // Dialogs keep the shorter duration — a dialog is small and often
     // dismissed in a hurry, so the smoothness here comes from the easing, not
     // from stretching the timing out. (RawDialogRoute reuses this for the
     // reverse; there is no separate close duration to set.)
     transitionDuration: reduceMotion ? Duration.zero : AppMotion.standard,
-    pageBuilder: (context, animation, secondaryAnimation) => MediaQuery.withClampedTextScaling(
-      maxScaleFactor: maxTextScaleFactor,
-      child: builder(context),
-    ),
+    pageBuilder: (context, animation, secondaryAnimation) =>
+        MediaQuery.withClampedTextScaling(
+          maxScaleFactor: maxTextScaleFactor,
+          // Flutter's Dialog has no max width. A dialog whose content has unbounded
+          // intrinsic width — the delete-account confirmation's bare TextField, for
+          // one — therefore grows to the viewport minus insetPadding: measured
+          // 1000 px wide at a 1080 px viewport, overlapping the page behind it.
+          // [maxDialogWidth] is Material's dialog max; below that this is a no-op,
+          // so phone layouts are untouched.
+          //
+          // The Center is load-bearing: without it the ConstrainedBox inherits the
+          // route's tight constraints and the dialog pins to the left edge.
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: maxDialogWidth),
+              child: builder(context),
+            ),
+          ),
+        ),
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       if (reduceMotion) return child;
       final curved = CurvedAnimation(
@@ -89,12 +121,14 @@ Future<T?> showAppModalSheet<T>({
   bool enableDrag = true,
   bool useSafeArea = false,
   Color? backgroundColor,
+  Color? barrierColor,
   ShapeBorder? shape,
   EdgeInsets? padding,
   double maxHeightFactor = 0.85,
   bool selfSizing = false,
 }) {
   final bool reduceMotion = MediaQuery.of(context).disableAnimations;
+  final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
   return showModalBottomSheet<T>(
     context: context,
@@ -103,6 +137,11 @@ Future<T?> showAppModalSheet<T>({
     enableDrag: enableDrag,
     useSafeArea: useSafeArea,
     backgroundColor: backgroundColor,
+    barrierColor:
+        barrierColor ??
+        (isDark
+            ? Colors.black.withValues(alpha: 0.72)
+            : const Color(0x730F172A)),
     shape: shape,
     // Retimed via sheetAnimationStyle rather than by handing in our own
     // transitionAnimationController: the route disposes controllers it creates

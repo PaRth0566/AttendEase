@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/db_helper.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../services/local_pdf_parser.dart';
 import '../../services/pdf_attendance_import_service.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../widgets/app_buttons.dart';
@@ -25,6 +26,12 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
   final _yearController = TextEditingController();
 
   int _selectedSemester = 1;
+
+  /// Whether [_selectedSemester] came from the uploaded report. False when the
+  /// report's header did not name one, which the Semester field then says so the
+  /// student can correct it before the import runs.
+  bool _semesterFromReport = false;
+
   DateTime? _startDate;
   DateTime? _endDate;
 
@@ -55,28 +62,25 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
       _endDate = DateTime.tryParse(data['endDate']);
     }
 
-    final semStr = data['semester']?.toString().toLowerCase().trim() ?? '';
-    int semNum = _parseSemesterNumber(semStr);
+    // Prefer the number the parser resolved; the display string is only a
+    // fallback for data saved before it carried one. Clamped to the dropdown's
+    // range, because a value it has no item for throws rather than rendering.
+    final parsedSem = data['semesterNumber'];
+    final semNum = parsedSem is int
+        ? parsedSem
+        : LocalPdfParser.semesterNumberFrom(data['semester']?.toString() ?? '');
 
     setState(() {
-      _selectedSemester = semNum;
+      _selectedSemester = (semNum ?? _selectedSemester).clamp(1, _maxSemester);
+      // The report did not say which semester it is for, so the choice is the
+      // student's. Surfaced in the UI rather than silently defaulting to 1 —
+      // that default is what filed one term's report on top of another.
+      _semesterFromReport = semNum != null;
     });
   }
 
-  /// Parses a semester string like "Semester III", "sem 3", "3", "iii" etc.
-  int _parseSemesterNumber(String s) {
-    final digitMatch = RegExp(r'\b([1-8])\b').firstMatch(s);
-    if (digitMatch != null) return int.parse(digitMatch.group(1)!);
-    if (RegExp(r'\bviii\b').hasMatch(s)) return 8;
-    if (RegExp(r'\bvii\b').hasMatch(s))  return 7;
-    if (RegExp(r'\bvi\b').hasMatch(s))   return 6;
-    if (RegExp(r'\biv\b').hasMatch(s))   return 4;
-    if (RegExp(r'\bv\b').hasMatch(s))    return 5;
-    if (RegExp(r'\biii\b').hasMatch(s))  return 3;
-    if (RegExp(r'\bii\b').hasMatch(s))   return 2;
-    if (RegExp(r'\bi\b').hasMatch(s))    return 1;
-    return 1;
-  }
+  /// Highest semester the dropdown offers.
+  static const int _maxSemester = 8;
 
   Future<void> _loadSavedData() async {
     final prefs = await SharedPreferences.getInstance();
@@ -254,13 +258,33 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
 
                           DropdownButtonFormField<int>(
                             initialValue: _selectedSemester,
-                            decoration: _inputDecoration('Semester', theme),
-                            dropdownColor: theme.cardColor,
-                            style: TextStyle(
-                              color: theme.textTheme.bodyLarge?.color,
+                            decoration: _inputDecoration('Semester', theme)
+                                .copyWith(
+                              helperText: widget.prefilledData == null
+                                  ? null
+                                  : _semesterFromReport
+                                      ? 'Detected from your report'
+                                      : "Couldn't read this from your report — "
+                                          'please check it',
+                              helperMaxLines: 2,
+                              helperStyle: _semesterFromReport
+                                  ? null
+                                  : TextStyle(color: theme.colorScheme.error),
                             ),
+                            dropdownColor:
+                                theme.dialogTheme.backgroundColor ??
+                                theme.cardColor,
+                            // Derived from the theme, not constructed. A
+                            // `DropdownButton` *replaces* its text style with
+                            // whatever it is handed (dropdown.dart's
+                            // `_textStyle => widget.style ?? titleMedium`), so a
+                            // bare `TextStyle(color: ...)` left fontFamily null
+                            // and the menu items rendered blank on web — CanvasKit
+                            // fetches Roboto rather than shipping it. See
+                            // 
+                            style: theme.textTheme.bodyLarge,
                             items: List.generate(
-                              8,
+                              _maxSemester,
                               (i) => DropdownMenuItem(
                                 value: i + 1,
                                 child: Text('Semester ${i + 1}'),
@@ -268,7 +292,12 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                             ),
                             onChanged: (value) async {
                               if (value != null) {
-                                setState(() => _selectedSemester = value);
+                                setState(() {
+                                  _selectedSemester = value;
+                                  // Once the student picks, the field is settled
+                                  // and the warning has served its purpose.
+                                  _semesterFromReport = true;
+                                });
                                 await _loadDatesForSemester(value);
                               }
                             },
@@ -360,7 +389,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
       padding: const EdgeInsets.only(bottom: 16),
       child: TextField(
         controller: controller,
-        style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+        style: theme.textTheme.bodyLarge,
         decoration: _inputDecoration(label, theme),
       ),
     );

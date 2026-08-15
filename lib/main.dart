@@ -11,6 +11,7 @@ import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
 import 'services/update_service.dart';
+import 'widgets/incoming_pdf_handler.dart';
 import 'widgets/theme_crossfade.dart';
 import 'widgets/update_dialog.dart';
 
@@ -19,6 +20,57 @@ void main() async {
 
   // Enable Path URL strategy to remove '#' from web routing
   usePathUrlStrategy();
+
+  // Everything below this point decides how long the user stares at a blank
+  // page before the first frame paints, so on web we do as little as possible
+  // here and move the rest off the critical path.
+  if (kIsWeb) {
+    // Firebase is still awaited: the router's redirect reads
+    // `FirebaseAuth.instance.currentUser` on the very first navigation, so
+    // starting without it would flash the logged-out landing page at a
+    // signed-in user. It is a local SDK init, not a round-trip.
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+
+    // The shader warm-up is deliberately NOT awaited on web. It exists to stop
+    // the glass nav bar flashing white on its first paint, and that bar is
+    // mobile-only — it never renders in the web shell. On web the two
+    // `FragmentProgram.fromAsset` calls inside it are network fetches for
+    // shader assets, so awaiting them bought nothing while blocking first
+    // paint. `LightweightLiquidGlass` already pre-warms itself lazily on first
+    // use, so dropping it here costs nothing.
+    //
+    // The theme read, by contrast, IS still awaited. It backs onto
+    // localStorage rather than the network, so it is cheap — and it has to
+    // resolve before the first frame: `initializeTheme` deliberately does not
+    // call `notifyListeners()`, so a late load would leave a saved dark-mode
+    // user on the light theme until something else happened to rebuild.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      themeProvider.initializeTheme(prefs.getString('themeMode'));
+    } catch (error) {
+      // Falls back to ThemeMode.system, which is the default anyway.
+      debugPrint('Theme restore skipped: $error');
+    }
+
+    runApp(
+      LiquidGlassWidgets.wrap(
+        child: const AttendEaseApp(),
+        // The nav pill's metaball blend and lens refraction are gated on
+        // `GlassQuality.premium` inside `AdaptiveLiquidGlassLayer`, and premium
+        // is only reachable through this scope or an explicit `GlassTheme`.
+        // Without it the app is pinned to `standard` — the lightweight fragment
+        // shader, no blend group — so the pill renders flat whatever it is
+        // configured to do.
+        //
+        // Seeds at standard, benchmarks the device for ~3s, and promotes only if
+        // the frame budget holds, so a weak device stays where it is today.
+        adaptiveQuality: true,
+      ),
+    );
+    return;
+  }
 
   // ☁️ INITIALIZE FIREBASE
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -39,41 +91,26 @@ void main() async {
   final savedMode = prefs.getString('themeMode');
   themeProvider.initializeTheme(savedMode);
 
-  // Disable orientation limitations on web to prevent startup crashes
-  if (kIsWeb) {
-    runApp(LiquidGlassWidgets.wrap(
-      child: const AttendEaseApp(),
-      // The nav pill's metaball blend and lens refraction are gated on
-      // `GlassQuality.premium` inside `AdaptiveLiquidGlassLayer`, and premium
-      // is only reachable through this scope or an explicit `GlassTheme`.
-      // Without it the app is pinned to `standard` — the lightweight fragment
-      // shader, no blend group — so the pill renders flat whatever it is
-      // configured to do.
-      //
-      // Seeds at standard, benchmarks the device for ~3s, and promotes only if
-      // the frame budget holds, so a weak device stays where it is today.
-      adaptiveQuality: true,
-    ));
-  } else {
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
-    ]).then((_) {
-      runApp(LiquidGlassWidgets.wrap(
-      child: const AttendEaseApp(),
-      // The nav pill's metaball blend and lens refraction are gated on
-      // `GlassQuality.premium` inside `AdaptiveLiquidGlassLayer`, and premium
-      // is only reachable through this scope or an explicit `GlassTheme`.
-      // Without it the app is pinned to `standard` — the lightweight fragment
-      // shader, no blend group — so the pill renders flat whatever it is
-      // configured to do.
-      //
-      // Seeds at standard, benchmarks the device for ~3s, and promotes only if
-      // the frame budget holds, so a weak device stays where it is today.
-      adaptiveQuality: true,
-    ));
-    });
-  }
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]).then((_) {
+    runApp(
+      LiquidGlassWidgets.wrap(
+        child: const AttendEaseApp(),
+        // The nav pill's metaball blend and lens refraction are gated on
+        // `GlassQuality.premium` inside `AdaptiveLiquidGlassLayer`, and premium
+        // is only reachable through this scope or an explicit `GlassTheme`.
+        // Without it the app is pinned to `standard` — the lightweight fragment
+        // shader, no blend group — so the pill renders flat whatever it is
+        // configured to do.
+        //
+        // Seeds at standard, benchmarks the device for ~3s, and promotes only if
+        // the frame budget holds, so a weak device stays where it is today.
+        adaptiveQuality: true,
+      ),
+    );
+  });
 }
 
 class AttendEaseApp extends StatefulWidget {
@@ -104,7 +141,9 @@ class _AttendEaseAppState extends State<AttendEaseApp>
     super.initState();
     // Listen for OS-level brightness changes so ThemeMode.system reacts live
     WidgetsBinding.instance.addObserver(this);
-    WidgetsBinding.instance.addPostFrameCallback((_) => _runUpdateStartupFlow());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _runUpdateStartupFlow(),
+    );
   }
 
   Future<void> _runUpdateStartupFlow() async {
@@ -114,11 +153,18 @@ class _AttendEaseAppState extends State<AttendEaseApp>
     if (!mounted) return;
     try {
       // Reconcile a completed install and show "What's New" exactly once.
-      final installedNotes = await UpdateService.instance.reconcileInstalledUpdate();
+      final installedNotes = await UpdateService.instance
+          .reconcileInstalledUpdate();
       final notesContext = AppRouter.rootNavigatorKey.currentContext;
-      if (installedNotes != null && notesContext != null && notesContext.mounted) {
+      if (installedNotes != null &&
+          notesContext != null &&
+          notesContext.mounted) {
         await UpdateService.instance.runExclusiveSheet(
-          () => showPatchNotesSheet(notesContext, installedNotes, markViewed: true),
+          () => showPatchNotesSheet(
+            notesContext,
+            installedNotes,
+            markViewed: true,
+          ),
         );
       }
       // Then check for a newer release. Guarded so a manual check can't stack.
@@ -168,13 +214,34 @@ class _AttendEaseAppState extends State<AttendEaseApp>
           routerConfig: AppRouter.router,
           builder: (context, child) {
             final mq = MediaQuery.of(context);
+            final overlayTheme = AppTheme.withResponsiveOverlays(
+              Theme.of(context),
+              mq.size.width,
+            );
             final scale = mq.textScaler.scale(1.0);
+            // The app's layouts are dense — subject names, the profile hero and
+            // the dashboard cards all pack text into fixed-width rows — so a
+            // large system font setting was the single biggest source of
+            // truncated names and overflow ribbons on other people's phones.
+            //
+            // 1.15 is the ceiling those layouts hold at with every name still
+            // fully readable; past that Android's own "Font size"/"Display
+            // size" sliders start eating the content instead of enlarging it.
+            // The 0.9 floor keeps a shrunk system setting legible.
+            //
+            // Narrow phones get a tighter ceiling still: the same 1.15 that is
+            // comfortable at 400dp starts clipping at 360dp, where there is
+            // simply less width for a scaled-up subject name to live in.
+            const double minScale = 0.9;
+            final double maxScale = mq.size.width < 360
+                ? 1.0
+                : (mq.size.width < 400 ? 1.1 : 1.15);
             // Only clamp when the system scale is outside our comfort range;
             // calling clamp with equal min/max triggers an assertion in some
             // Flutter versions.
-            final needsClamp = scale < 0.9 || scale > 1.3;
+            final needsClamp = scale < minScale || scale > maxScale;
             final effective = needsClamp
-                ? TextScaler.linear(scale.clamp(0.9, 1.3))
+                ? TextScaler.linear(scale.clamp(minScale, maxScale))
                 : mq.textScaler;
             return MediaQuery(
               data: mq.copyWith(textScaler: effective),
@@ -183,7 +250,16 @@ class _AttendEaseAppState extends State<AttendEaseApp>
               // the same timeline) instead of half the UI snapping at the theme
               // lerp midpoint. Triggered via ThemeCrossfade.of(context) — see
               // the Profile screen's Dark Mode switch.
-              child: ThemeCrossfade(child: child!),
+              //
+              // The incoming-PDF handler sits outside that crossfade and renders
+              // its child untouched. It lives here, above the router's pages,
+              // because a report opened from Android's "Open with" chooser can
+              // arrive on any screen — or before there is one, on a cold start —
+              // so nothing further down the tree is reliably alive to catch it.
+              child: Theme(
+                data: overlayTheme,
+                child: IncomingPdfHandler(child: ThemeCrossfade(child: child!)),
+              ),
             );
           },
         );

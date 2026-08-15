@@ -7,6 +7,7 @@ import 'package:web/web.dart' as web;
 import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
@@ -15,6 +16,7 @@ import 'package:intl/intl.dart';
 import '../../models/subject.dart';
 import '../../services/local_pdf_parser.dart';
 import '../../theme/app_breakpoints.dart';
+import '../../utils/percent_input_formatter.dart';
 import 'aura_ai_dashboard.dart';
 
 // ── JS interop: reads globals set by index.html drop handler ────────────────
@@ -346,7 +348,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
 
     final meta = <String, String>{
       'studentName': (data['name'] ?? '').toString(),
-      'semester': _semesterNumber(data['semester']?.toString() ?? ''),
+      'semester': _semesterLabel(data),
       'program': (data['course'] ?? '').toString(),
       'academicYear': (data['year'] ?? '').toString(),
       'reportStartDate': _prettyDate(data['startDate']?.toString() ?? ''),
@@ -375,27 +377,16 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
     }
   }
 
-  /// "Semester V" / "Semester 5" → "5" (the dashboard prefixes "Semester ").
-  String _semesterNumber(String raw) {
-    final arabic = RegExp(r'\d+').firstMatch(raw);
-    if (arabic != null) return arabic.group(0)!;
-    const roman = {
-      'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000,
-    };
-    final m = RegExp(r'\b([IVXLCDM]+)\b').firstMatch(raw.toUpperCase());
-    if (m == null) return raw.trim();
-    final s = m.group(1)!;
-    var total = 0, prev = 0;
-    for (var i = s.length - 1; i >= 0; i--) {
-      final v = roman[s[i]]!;
-      if (v < prev) {
-        total -= v;
-      } else {
-        total += v;
-        prev = v;
-      }
-    }
-    return total > 0 ? total.toString() : raw.trim();
+  /// The semester number for the dashboard chip, which prefixes "Semester ".
+  ///
+  /// Prefers the number the parser resolved over re-reading its display string;
+  /// falls back to the raw text so a value this app cannot interpret is shown
+  /// as-is rather than replaced by a wrong default.
+  String _semesterLabel(Map<String, dynamic> data) {
+    final parsed = data['semesterNumber'];
+    if (parsed is int && parsed >= 1) return parsed.toString();
+    final raw = data['semester']?.toString() ?? '';
+    return LocalPdfParser.semesterNumberFrom(raw)?.toString() ?? raw.trim();
   }
 
   /// yyyy-MM-dd → "dd MMM yyyy", matching the AI dashboard's date style.
@@ -678,33 +669,33 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                             children: [
                               _buildSettingsCard(isDark, isMobile),
                               const SizedBox(height: 16),
-                              _buildConsentCheckbox(isDark, isMobile),
-                              const SizedBox(height: 16),
                               _buildUploadCard(isDark, isMobile),
+                              const SizedBox(height: 16),
+                              _buildConsentCheckbox(isDark, isMobile),
                             ],
                           );
                         }
-                        return IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(
-                                flex: 1,
-                                child: _buildSettingsCard(isDark, isMobile),
+                        return Column(
+                          children: [
+                            IntrinsicHeight(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    flex: 1,
+                                    child: _buildSettingsCard(isDark, isMobile),
+                                  ),
+                                  const SizedBox(width: 32),
+                                  Expanded(
+                                    flex: 2,
+                                    child: _buildUploadCard(isDark, isMobile),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 32),
-                              Expanded(
-                                flex: 2,
-                                child: Column(
-                                  children: [
-                                    _buildConsentCheckbox(isDark, isMobile),
-                                    const SizedBox(height: 16),
-                                    Expanded(child: _buildUploadCard(isDark, isMobile)),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 16),
+                            _buildConsentCheckbox(isDark, isMobile),
+                          ],
                         );
                       },
                     );
@@ -1011,12 +1002,25 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
           child: TextField(
             controller: ctrl,
             keyboardType: TextInputType.number,
+            // TextInputType.number only hints which soft keyboard to show; it
+            // does not stop a physical keyboard or a paste. The formatter is
+            // what actually enforces digits-only and the 0–100 ceiling.
+            inputFormatters: const [PercentInputFormatter()],
             style: TextStyle(
               color: isDark ? Colors.white : const Color(0xFF1E293B),
               fontSize: isMobile ? 14 : 16,
             ),
+            // The container already draws this field's border, so every
+            // InputDecorator border state is cleared — otherwise Material's
+            // focused border painted a second blue outline inside it.
             decoration: const InputDecoration(
               border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              focusedErrorBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              filled: false,
               isDense: true,
               contentPadding: EdgeInsets.zero,
             ),
@@ -1040,7 +1044,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
 
   Widget _buildConsentCheckbox(bool isDark, bool isMobile) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1B4B).withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(16),
@@ -1050,34 +1054,50 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
               : (isDark ? const Color(0xFF818CF8).withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.05)),
         ),
       ),
-      child: CheckboxListTile(
-        value: _hasConsented,
-        onChanged: (val) {
-          setState(() {
-            _hasConsented = val ?? false;
-            if (_hasConsented) _errorMessage = null;
-          });
-        },
-        title: Text(
-          'I consent to sending my PDF to Google Gemini AI for processing.',
-          style: TextStyle(
-            fontSize: isMobile ? 12 : 14,
-            color: isDark ? const Color(0xFFEEF2FF) : const Color(0xFF1E293B),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Checkbox(
+            value: _hasConsented,
+            onChanged: (val) {
+              setState(() {
+                _hasConsented = val ?? false;
+                if (_hasConsented) _errorMessage = null;
+              });
+            },
+            activeColor: isDark
+                ? const Color(0xFF10B981)
+                : const Color(0xFF059669),
           ),
-        ),
-        subtitle: Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: Text(
-            'Your PDF is sent for one-time analysis and is not stored on our servers.',
-            style: TextStyle(
-              fontSize: isMobile ? 10 : 12,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'I consent to sending my PDF to AttendEase for processing.',
+                  style: TextStyle(
+                    fontSize: isMobile ? 12 : 14,
+                    color: isDark
+                        ? const Color(0xFFEEF2FF)
+                        : const Color(0xFF1E293B),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Your PDF is sent for one-time analysis and is not stored on our servers.',
+                  style: TextStyle(
+                    fontSize: isMobile ? 10 : 12,
+                    color: isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-        controlAffinity: ListTileControlAffinity.leading,
-        contentPadding: EdgeInsets.zero,
-        activeColor: isDark ? const Color(0xFF10B981) : const Color(0xFF059669),
+        ],
       ),
     );
   }
@@ -1298,8 +1318,12 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                   ),
                   const SizedBox(height: 12),
                   if (_fileName == null)
-                    RichText(
-                      text: TextSpan(
+                    // Text.rich, not RichText: RichText does not inherit
+                    // DefaultTextStyle, so it renders with no fontFamily and
+                    // falls back to Roboto — which CanvasKit does not bundle,
+                    // so this line painted no glyphs on web.
+                    Text.rich(
+                      TextSpan(
                         text: 'or ',
                         style: TextStyle(
                           color: isDark
@@ -1311,6 +1335,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                           TextSpan(
                             text: 'click to browse',
                             style: TextStyle(
+                              fontWeight: FontWeight.w600,
                               color: isDark
                                   ? const Color(0xFF818CF8)
                                   : const Color(0xFF4F46E5),
@@ -1319,11 +1344,18 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                           const TextSpan(text: ' your device'),
                         ],
                       ),
+                      textAlign: TextAlign.center,
                     )
                   else
-                    const Text(
+                    Text(
                       'Click to replace file',
-                      style: TextStyle(color: Color(0xFFC7D2FE)),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: isDark
+                            ? const Color(0xFFC7D2FE).withValues(alpha: 0.8)
+                            : const Color(0xFF64748B),
+                      ),
                     ),
                 ],
               ],
@@ -1334,3 +1366,4 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
     ); // closes GestureDetector
   }
 }
+

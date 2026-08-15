@@ -2,7 +2,7 @@ name: attend_ease
 description: "AttendEase - a privacy-conscious attendance tracker with PDF insights and cloud sync."
 publish_to: 'none'
 
-version: 1.0.4+4
+version: 1.0.5+5
 
 environment:
   sdk: ^3.10.7
@@ -17,7 +17,16 @@ dependencies:
   sqflite_common_ffi: ^2.3.3
   shared_preferences: ^2.2.3
   table_calendar: ^3.1.1
+
+  # No app code imports this, but do not drop it: the vendored
+  # liquid_glass_widgets draws `CupertinoIcons.chevron_forward` and
+  # `CupertinoIcons.info` in glass_list_tile.dart without declaring the package
+  # itself. `package:flutter/cupertino.dart` supplies the `CupertinoIcons`
+  # class; only this package ships the font the glyphs live in. Without it the
+  # web build warns "Expected to find fonts for (..., CupertinoIcons)" and those
+  # glyphs paint as blank boxes. Tree-shaking makes it near-free when unused.
   cupertino_icons: ^1.0.8
+
   firebase_core: ^4.4.0
   firebase_auth: ^6.1.4
   cloud_firestore: ^6.1.2
@@ -25,7 +34,6 @@ dependencies:
 
   connectivity_plus: ^7.0.0
   pdf: ^3.12.0
-  printing: ^5.14.3
   share_plus: ^12.0.2
   sqflite_common_ffi_web: ^1.1.1
   file_picker: ^10.3.10
@@ -75,10 +83,32 @@ flutter:
 
   assets:
     - assets/icon/app_icon2.png
-    - assets/icon/app_icon.jpg
     - assets/icon/google_logo.png
     - assets/github.svg
-    - assets/android.svg
+    # Rests inside the dashboard's circular sync button — see
+    # lib/widgets/sync_report_button.dart.
+    - assets/icon/upload_pdf_icon.png
+    # Rests inside the dashboard's circular SAP portal button, immediately left
+    # of the sync button — see lib/widgets/sap_portal_button.dart.
+    - assets/icon/sap_icon.png
+
+  # Bundled text font. With no explicit family Flutter falls back to Roboto,
+  # which the CanvasKit web renderer pulls from fonts.gstatic.com on first
+  # paint. A slow or blocked request means the web build measures every string
+  # correctly and then draws no glyphs — icons and card outlines appear, all
+  # text is invisible. Bundling removes that network dependency for good.
+  #
+  # Weights map to the ones the UI actually asks for: w400/w500 -> Regular,
+  # w600 -> SemiBold, w700/w800/w900 -> Bold. Flutter synthesises the rest.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
 
 flutter_launcher_icons:
   android: true

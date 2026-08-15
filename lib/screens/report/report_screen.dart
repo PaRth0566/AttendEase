@@ -157,10 +157,6 @@ class _ReportScreenState extends State<ReportScreen> {
   void _showExportOptions() {
     showAppModalSheet(
       context: context,
-      backgroundColor: Theme.of(context).cardColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
       builder: (context) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
         child: Column(
@@ -249,8 +245,9 @@ class _ReportScreenState extends State<ReportScreen> {
               ),
               Text(
                 'Select Semester',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: AppDimens.space12),
               ...List.generate(8, (i) {
@@ -267,14 +264,15 @@ class _ReportScreenState extends State<ReportScreen> {
                   title: Text(
                     'Semester $sem',
                     style: TextStyle(
-                      fontWeight:
-                          isCurrent ? FontWeight.bold : FontWeight.w500,
+                      fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
                       color: isCurrent ? theme.colorScheme.primary : null,
                     ),
                   ),
                   trailing: isCurrent
-                      ? Icon(Icons.check_rounded,
-                          color: theme.colorScheme.primary)
+                      ? Icon(
+                          Icons.check_rounded,
+                          color: theme.colorScheme.primary,
+                        )
                       : null,
                   onTap: () => Navigator.of(ctx).pop(sem),
                 );
@@ -319,7 +317,8 @@ class _ReportScreenState extends State<ReportScreen> {
       } else {
         final start = DateFormat('dd MMM yyyy').format(_startDate!);
         final end = DateFormat('dd MMM yyyy').format(_endDate!);
-        fileName = "Attendance_Report_${DateFormat('dd-MM-yyyy').format(_startDate!)}_to_${DateFormat('dd-MM-yyyy').format(_endDate!)}.pdf";
+        fileName =
+            "Attendance_Report_${DateFormat('dd-MM-yyyy').format(_startDate!)}_to_${DateFormat('dd-MM-yyyy').format(_endDate!)}.pdf";
         reportSubtitle = "$start  to  $end";
       }
 
@@ -328,7 +327,9 @@ class _ReportScreenState extends State<ReportScreen> {
 
       for (final sub in _subjects) {
         final stat = _stats[sub.id] ?? {'attended': 0, 'total': 0};
-        final percent = stat['total'] == 0 ? 0.0 : (stat['attended']! / stat['total']!) * 100;
+        final percent = stat['total'] == 0
+            ? 0.0
+            : (stat['attended']! / stat['total']!) * 100;
         if (percent >= sub.requiredPercent) {
           subjectsMeetingCriteria++;
         } else {
@@ -375,10 +376,7 @@ class _ReportScreenState extends State<ReportScreen> {
               pw.SizedBox(height: 4),
               pw.Text(
                 subtitle,
-                style: pw.TextStyle(
-                  fontSize: 9,
-                  color: subTextColor,
-                ),
+                style: pw.TextStyle(fontSize: 9, color: subTextColor),
               ),
             ],
           ),
@@ -400,7 +398,11 @@ class _ReportScreenState extends State<ReportScreen> {
         );
       }
 
-      pw.Widget buildDataCell(String text, {PdfColor? color, bool isBold = false}) {
+      pw.Widget buildDataCell(
+        String text, {
+        PdfColor? color,
+        bool isBold = false,
+      }) {
         return pw.Container(
           padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 8),
           alignment: pw.Alignment.centerLeft,
@@ -482,7 +484,10 @@ class _ReportScreenState extends State<ReportScreen> {
               margin: const pw.EdgeInsets.only(top: 16),
               child: pw.Text(
                 "Generated securely by AttendEase App | Page ${context.pageNumber} of ${context.pagesCount}",
-                style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey500),
+                style: const pw.TextStyle(
+                  fontSize: 10,
+                  color: PdfColors.grey500,
+                ),
               ),
             );
           },
@@ -497,7 +502,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 ),
               ),
               pw.SizedBox(height: 12),
-              
+
               pw.Row(
                 children: [
                   pw.Expanded(
@@ -505,7 +510,9 @@ class _ReportScreenState extends State<ReportScreen> {
                       title: "Overall Attendance",
                       value: "${_overallPercent.toStringAsFixed(2)}%",
                       subtitle: "$_totalAttended / $_totalLectures Lectures",
-                      valueColor: _overallPercent >= 75 ? successColor : dangerColor,
+                      valueColor: _overallPercent >= 75
+                          ? successColor
+                          : dangerColor,
                       bgColor: bgCard,
                       textColor: textDark,
                       subTextColor: textLight,
@@ -529,7 +536,9 @@ class _ReportScreenState extends State<ReportScreen> {
                       title: "Needs Attention",
                       value: "$subjectsNeedingAttention",
                       subtitle: "Below Required %",
-                      valueColor: subjectsNeedingAttention > 0 ? dangerColor : successColor,
+                      valueColor: subjectsNeedingAttention > 0
+                          ? dangerColor
+                          : successColor,
                       bgColor: bgCard,
                       textColor: textDark,
                       subTextColor: textLight,
@@ -548,7 +557,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 ),
               ),
               pw.SizedBox(height: 12),
-              
+
               pw.Table(
                 columnWidths: {
                   0: const pw.FlexColumnWidth(3),
@@ -557,7 +566,10 @@ class _ReportScreenState extends State<ReportScreen> {
                   3: const pw.FlexColumnWidth(1.2),
                   4: const pw.FlexColumnWidth(1.5),
                 },
-                border: pw.TableBorder.all(color: PdfColors.grey300, width: 0.5),
+                border: pw.TableBorder.all(
+                  color: PdfColors.grey300,
+                  width: 0.5,
+                ),
                 children: [
                   pw.TableRow(
                     decoration: pw.BoxDecoration(color: primaryAppBlue),
@@ -576,27 +588,40 @@ class _ReportScreenState extends State<ReportScreen> {
                     final total = stat['total']!;
                     final percent = total == 0 ? 0.0 : (attended / total) * 100;
                     final isMeeting = percent >= sub.requiredPercent;
-                    
+
                     return pw.TableRow(
                       decoration: pw.BoxDecoration(
-                        color: index % 2 == 1 ? PdfColors.grey50 : PdfColors.white,
+                        color: index % 2 == 1
+                            ? PdfColors.grey50
+                            : PdfColors.white,
                       ),
                       children: [
                         buildDataCell(sub.name, isBold: true),
                         buildDataCell(attended.toString()),
                         buildDataCell(total.toString()),
-                        buildDataCell('${percent.toStringAsFixed(2)}%', 
+                        buildDataCell(
+                          '${percent.toStringAsFixed(2)}%',
                           color: isMeeting ? successColor : dangerColor,
                           isBold: true,
                         ),
                         pw.Container(
-                          padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                          padding: const pw.EdgeInsets.symmetric(
+                            vertical: 8,
+                            horizontal: 8,
+                          ),
                           alignment: pw.Alignment.centerLeft,
                           child: pw.Container(
-                            padding: const pw.EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+                            padding: const pw.EdgeInsets.symmetric(
+                              vertical: 4,
+                              horizontal: 8,
+                            ),
                             decoration: pw.BoxDecoration(
-                              color: isMeeting ? PdfColor.fromHex('#DCFCE7') : PdfColor.fromHex('#FEE2E2'),
-                              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+                              color: isMeeting
+                                  ? PdfColor.fromHex('#DCFCE7')
+                                  : PdfColor.fromHex('#FEE2E2'),
+                              borderRadius: const pw.BorderRadius.all(
+                                pw.Radius.circular(4),
+                              ),
                             ),
                             child: pw.Text(
                               isMeeting ? 'On Track' : 'Warning',
@@ -643,7 +668,6 @@ class _ReportScreenState extends State<ReportScreen> {
             SnackBar(
               content: Text('Saved to Downloads: $fileName'),
               duration: const Duration(seconds: 4),
-              backgroundColor: Colors.green.shade700,
             ),
           );
         } else {
@@ -658,10 +682,7 @@ class _ReportScreenState extends State<ReportScreen> {
         Navigator.pop(context);
 
         await SharePlus.instance.share(
-          ShareParams(
-            files: [XFile(file.path)],
-            text: 'My Attendance Report',
-          ),
+          ShareParams(files: [XFile(file.path)], text: 'My Attendance Report'),
         );
       }
     } catch (e) {
@@ -669,7 +690,9 @@ class _ReportScreenState extends State<ReportScreen> {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Could not export the report. Please check storage permissions and try again.'),
+          content: Text(
+            'Could not export the report. Please check storage permissions and try again.',
+          ),
           duration: Duration(seconds: 4),
         ),
       );
@@ -711,7 +734,9 @@ class _ReportScreenState extends State<ReportScreen> {
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: AppDimens.maxContentWide),
+            constraints: const BoxConstraints(
+              maxWidth: AppDimens.maxContentWide,
+            ),
             child: SingleChildScrollView(
               padding: EdgeInsets.fromLTRB(
                 AppBreakpoints.isMobile(context)
@@ -729,7 +754,9 @@ class _ReportScreenState extends State<ReportScreen> {
                   // Compact Header Hero Card
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: theme.cardColor,
                       borderRadius: BorderRadius.circular(AppDimens.radiusLg),
@@ -742,9 +769,10 @@ class _ReportScreenState extends State<ReportScreen> {
                           height: 44,
                           alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: (theme.textTheme.bodyMedium?.color ??
-                                    theme.colorScheme.onSurface)
-                                .withAlpha(18),
+                            color:
+                                (theme.textTheme.bodyMedium?.color ??
+                                        theme.colorScheme.onSurface)
+                                    .withAlpha(18),
                             shape: BoxShape.circle,
                             border: Border.all(color: theme.dividerColor),
                           ),
@@ -808,11 +836,14 @@ class _ReportScreenState extends State<ReportScreen> {
                                     _reportType = 0;
                                     _reportGenerated = false;
                                   }),
-                                  borderRadius:
-                                      BorderRadius.circular(AppDimens.radiusSm),
+                                  borderRadius: BorderRadius.circular(
+                                    AppDimens.radiusSm,
+                                  ),
                                   child: Padding(
                                     padding: const EdgeInsets.symmetric(
-                                        vertical: 4, horizontal: 2),
+                                      vertical: 4,
+                                      horizontal: 2,
+                                    ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
@@ -831,7 +862,9 @@ class _ReportScreenState extends State<ReportScreen> {
                                             style: TextStyle(
                                               fontSize: 15,
                                               fontWeight: FontWeight.bold,
-                                              color: theme.textTheme.bodyLarge
+                                              color: theme
+                                                  .textTheme
+                                                  .bodyLarge
                                                   ?.color,
                                             ),
                                           ),
@@ -848,11 +881,14 @@ class _ReportScreenState extends State<ReportScreen> {
                                     _reportType = 1;
                                     _reportGenerated = false;
                                   }),
-                                  borderRadius:
-                                      BorderRadius.circular(AppDimens.radiusSm),
+                                  borderRadius: BorderRadius.circular(
+                                    AppDimens.radiusSm,
+                                  ),
                                   child: Padding(
                                     padding: const EdgeInsets.symmetric(
-                                        vertical: 4, horizontal: 2),
+                                      vertical: 4,
+                                      horizontal: 2,
+                                    ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
@@ -871,7 +907,9 @@ class _ReportScreenState extends State<ReportScreen> {
                                             style: TextStyle(
                                               fontSize: 15,
                                               fontWeight: FontWeight.bold,
-                                              color: theme.textTheme.bodyLarge
+                                              color: theme
+                                                  .textTheme
+                                                  .bodyLarge
                                                   ?.color,
                                             ),
                                           ),
@@ -900,19 +938,24 @@ class _ReportScreenState extends State<ReportScreen> {
                               const SizedBox(width: 12),
                               InkWell(
                                 onTap: _showSemesterPicker,
-                                borderRadius:
-                                    BorderRadius.circular(AppDimens.radiusMd),
+                                borderRadius: BorderRadius.circular(
+                                  AppDimens.radiusMd,
+                                ),
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 8),
+                                    horizontal: 14,
+                                    vertical: 8,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: theme.brightness == Brightness.dark
                                         ? Colors.white.withAlpha(12)
                                         : Colors.black.withAlpha(8),
                                     borderRadius: BorderRadius.circular(
-                                        AppDimens.radiusMd),
-                                    border:
-                                        Border.all(color: theme.dividerColor),
+                                      AppDimens.radiusMd,
+                                    ),
+                                    border: Border.all(
+                                      color: theme.dividerColor,
+                                    ),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -935,8 +978,8 @@ class _ReportScreenState extends State<ReportScreen> {
                                       const SizedBox(width: 6),
                                       Icon(
                                         Icons.keyboard_arrow_down_rounded,
-                                        color: theme
-                                            .textTheme.bodyMedium?.color,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
                                         size: 20,
                                       ),
                                     ],
@@ -951,30 +994,38 @@ class _ReportScreenState extends State<ReportScreen> {
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: () => _pickDate(true),
-                                  icon: const Icon(Icons.calendar_today_rounded,
-                                      size: 16),
+                                  icon: const Icon(
+                                    Icons.calendar_today_rounded,
+                                    size: 16,
+                                  ),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: theme.colorScheme.primary,
                                     padding: const EdgeInsets.symmetric(
-                                        vertical: 12, horizontal: 8),
+                                      vertical: 12,
+                                      horizontal: 8,
+                                    ),
                                     side: BorderSide(
-                                        color: theme.colorScheme.primary
-                                            .withAlpha(180)),
+                                      color: theme.colorScheme.primary
+                                          .withAlpha(180),
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(
-                                          AppDimens.radiusMd),
+                                        AppDimens.radiusMd,
+                                      ),
                                     ),
                                   ),
                                   label: Text(
                                     _startDate == null
                                         ? 'Start Date'
-                                        : DateFormat('MMM dd, yyyy')
-                                            .format(_startDate!),
+                                        : DateFormat(
+                                            'MMM dd, yyyy',
+                                          ).format(_startDate!),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -982,30 +1033,38 @@ class _ReportScreenState extends State<ReportScreen> {
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: () => _pickDate(false),
-                                  icon: const Icon(Icons.calendar_today_rounded,
-                                      size: 16),
+                                  icon: const Icon(
+                                    Icons.calendar_today_rounded,
+                                    size: 16,
+                                  ),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: theme.colorScheme.primary,
                                     padding: const EdgeInsets.symmetric(
-                                        vertical: 12, horizontal: 8),
+                                      vertical: 12,
+                                      horizontal: 8,
+                                    ),
                                     side: BorderSide(
-                                        color: theme.colorScheme.primary
-                                            .withAlpha(180)),
+                                      color: theme.colorScheme.primary
+                                          .withAlpha(180),
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(
-                                          AppDimens.radiusMd),
+                                        AppDimens.radiusMd,
+                                      ),
                                     ),
                                   ),
                                   label: Text(
                                     _endDate == null
                                         ? 'End Date'
-                                        : DateFormat('MMM dd, yyyy')
-                                            .format(_endDate!),
+                                        : DateFormat(
+                                            'MMM dd, yyyy',
+                                          ).format(_endDate!),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1022,8 +1081,9 @@ class _ReportScreenState extends State<ReportScreen> {
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               elevation: 0,
                               shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(AppDimens.radiusMd),
+                                borderRadius: BorderRadius.circular(
+                                  AppDimens.radiusMd,
+                                ),
                               ),
                             ),
                             child: _isGenerating
@@ -1121,15 +1181,18 @@ class _ReportScreenState extends State<ReportScreen> {
           const SizedBox(height: AppDimens.space12),
           Text(
             title,
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold),
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: AppDimens.space6),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: secondary, height: 1.4),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: secondary,
+              height: 1.4,
+            ),
           ),
         ],
       ),
@@ -1212,8 +1275,9 @@ class _ReportScreenState extends State<ReportScreen> {
         final percent = total == 0 ? 0.0 : (attended / total) * 100;
         final bool isSafe = percent >= sub.requiredPercent;
         final Color color = isSafe ? c.success : c.danger;
-        final Color barColor =
-            isSafe ? const Color(0xFF49AD4F) : const Color(0xFFF14134);
+        final Color barColor = isSafe
+            ? const Color(0xFF49AD4F)
+            : const Color(0xFFF14134);
 
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
@@ -1230,15 +1294,21 @@ class _ReportScreenState extends State<ReportScreen> {
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  // Top-aligned so the percentage tracks the name's first line
+                  // now that a long name wraps.
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Text(
                         sub.name,
-                        maxLines: 1,
+                        // Two lines: a report row is unusable if you cannot
+                        // tell which subject it belongs to.
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
+                          height: 1.25,
                           color: theme.textTheme.bodyLarge?.color,
                         ),
                       ),

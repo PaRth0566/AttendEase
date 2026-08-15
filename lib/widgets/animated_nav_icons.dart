@@ -98,10 +98,51 @@ double _interp(
 @visibleForTesting
 void Function(String event)? debugNavIcon;
 
+/// Stable identities for one bar's six icon copies (three tabs ×
+/// outline/filled), so each copy keeps its [State] — and therefore its running
+/// animation — when the bar rebuilds it somewhere else in the tree.
+///
+/// This is what stops an arrival animating twice. `TabIndicator` chooses its
+/// entire render tree with a `switch` on `maskingQuality`: the clip-free `.off`
+/// path while the pill travels, the dual-layer `.high` path once it parks. The
+/// two put the icon rows at different depths under different parents, so the
+/// swap as the pill settles reconciles as a tear-down and a fresh build rather
+/// than an update. The rebuilt copy is born active at an epoch it has no memory
+/// of playing, the born-active rule in [_NavIconHost] fires exactly as
+/// designed, and the cycle already running restarts from zero — one arrival,
+/// two visible plays. Dashboard→Profile shows it most plainly because that trip
+/// crosses two tabs, so the pill is still travelling well into the 1100 ms
+/// cycle and the restart lands in open view.
+///
+/// A [GlobalKey] turns that tear-down into a reparent. The swap happens within
+/// one build, so Flutter finds the deactivated element by key and moves it,
+/// [State] and [AnimationController] intact: `didUpdateWidget` sees an epoch it
+/// has already played, declines to replay, and the single cycle carries on
+/// uninterrupted across the swap. Merely suppressing the second play would
+/// truncate that cycle instead, since the flip lands partway through it.
+///
+/// Owned per bar rather than globally, because a [GlobalKey] carries State
+/// wherever it goes: one process-wide set would hand a fresh bar the last one's
+/// half-played animations, and any two bars alive at once would collide on the
+/// same keys.
+class NavIconKeys {
+  final Map<String, GlobalKey> _keys = <String, GlobalKey>{};
+
+  /// The key for one icon copy — `slot` being its `debugLabel`, e.g.
+  /// `'prof/FILL'`. Created on first use and kept for this bar's life.
+  ///
+  /// Each key is used exactly once per frame: the bar draws the outline row
+  /// from `GlassTab.icon` and the pill-masked row from `GlassTab.activeIcon`,
+  /// and `filled` differs between them, so the two never collide.
+  GlobalKey operator [](String slot) =>
+      _keys.putIfAbsent(slot, () => GlobalKey(debugLabel: slot));
+}
+
 /// Owns the controller and the play-once rule for all three icons; the public
 /// widgets are thin wrappers that supply a painter and a duration.
 class _NavIconHost extends StatefulWidget {
   const _NavIconHost({
+    super.key,
     required this.duration,
     required this.size,
     required this.active,
@@ -150,18 +191,35 @@ class _NavIconHostState extends State<_NavIconHost>
 
   /// The epoch whose play this icon has already run (or claimed as not owed).
   /// Null means it has played nothing yet.
+  ///
+  /// Kept alive across the bar's masking-quality swap by the [GlobalKey] each
+  /// icon carries — see [NavIconKeys]. Without that the swap discarded this
+  /// field mid-cycle and the born-active rule replayed the same arrival.
   int? _playedEpoch;
+
+  /// Claims [epoch], returning whether the play is owed.
+  bool _claim(int epoch) {
+    if (_playedEpoch == epoch) return false;
+    _playedEpoch = epoch;
+    return true;
+  }
 
   @override
   void initState() {
     super.initState();
-    // Born active — either the cold-start tab, or a filled copy that the
-    // package mounted straight into the selected state mid-navigation. The
-    // epoch tells the two apart: 0 is cold start (claim it, stay quiet), and
-    // anything else is a real arrival whose play the missing false→true edge
-    // would otherwise have swallowed.
+    // Born active — either the cold-start tab, or a copy the bar mounted
+    // straight into the selected state mid-navigation. The epoch tells the two
+    // apart: 0 is cold start (claim it, stay quiet), and anything else is a
+    // real arrival whose play the missing false→true edge would otherwise have
+    // swallowed.
+    //
+    // This runs only for a genuinely new icon. The rebuild that the bar's
+    // masking swap performs at the end of every trip is a reparent, because of
+    // the [GlobalKey] in [NavIconKeys] — the State comes through it intact and
+    // `didUpdateWidget` handles that frame instead, so an arrival already
+    // playing is not born again here and does not restart.
     if (widget.active) {
-      _playedEpoch = widget.epoch;
+      _claim(widget.epoch);
       if (widget.epoch != 0) {
         // MediaQuery is not readable in initState; defer past first build.
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -177,8 +235,7 @@ class _NavIconHostState extends State<_NavIconHost>
     // Runs on every frame of a swipe — the root screen mirrors the page
     // position into State to track the pill — so this must fire only on a real
     // change of state, never on a bare rebuild.
-    if (widget.active && widget.epoch != 0 && widget.epoch != _playedEpoch) {
-      _playedEpoch = widget.epoch;
+    if (widget.active && widget.epoch != 0 && _claim(widget.epoch)) {
       _play();
     } else if (old.active && !widget.active) {
       // Leaving a tab parks its icon. Deselection used to be ignored entirely,
@@ -241,7 +298,13 @@ class DashboardMorphIcon extends StatelessWidget {
     this.filled = false,
     this.active = false,
     this.epoch = 0,
+    this.keys,
   });
+
+  /// The owning bar's [NavIconKeys]. Pass it inside a [GlassTabBar], where the
+  /// masking swap rebuilds the icons; omit it anywhere the icon is not moved
+  /// between parents and there is nothing to preserve.
+  final NavIconKeys? keys;
 
   /// Defaults to the ambient [IconTheme]'s size — which inside the bar is
   /// `GlassNavTheme.iconSize`.
@@ -270,8 +333,13 @@ class DashboardMorphIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final IconThemeData iconTheme = IconTheme.of(context);
     final Color resolved = color ?? iconTheme.color ?? const Color(0xFF000000);
+    final String slot = filled ? 'dash/FILL' : 'dash/rest';
     return _NavIconHost(
-      debugLabel: filled ? 'dash/FILL' : 'dash/rest',
+      // Keeps this copy's animation alive across the bar's masking swap, which
+      // otherwise rebuilds it mid-cycle and replays the arrival. See
+      // [NavIconKeys].
+      key: keys?[slot],
+      debugLabel: slot,
       duration: const Duration(milliseconds: 1100),
       size: size ?? iconTheme.size ?? 24,
       active: active,
@@ -426,10 +494,14 @@ class CalendarDaysIcon extends StatelessWidget {
     this.filled = false,
     this.active = false,
     this.epoch = 0,
+    this.keys,
   });
 
   final double? size;
   final Color? color;
+
+  /// The owning bar's [NavIconKeys]. See [DashboardMorphIcon.keys].
+  final NavIconKeys? keys;
 
   /// Logical pixels. See the file header.
   final double strokeWidth;
@@ -452,6 +524,7 @@ class CalendarDaysIcon extends StatelessWidget {
       // inside this cycle. The SVG's original 2.4s cycle was a *loop* period —
       // the tail was idle time to space out repeats, which a single play has
       // nothing to space out.
+      key: keys?[filled ? 'cal/FILL' : 'cal/rest'],
       debugLabel: filled ? 'cal/FILL' : 'cal/rest',
       duration: const Duration(milliseconds: 1100),
       size: size ?? iconTheme.size ?? 24,
@@ -613,10 +686,14 @@ class AvatarLookingAroundIcon extends StatelessWidget {
     this.filled = false,
     this.active = false,
     this.epoch = 0,
+    this.keys,
   });
 
   final double? size;
   final Color? color;
+
+  /// The owning bar's [NavIconKeys]. See [DashboardMorphIcon.keys].
+  final NavIconKeys? keys;
 
   /// Tints the head and shoulders. They never overlap at any point in the
   /// cycle — the head's lowest reach is y=214.6 and the shoulders top out at
@@ -638,6 +715,7 @@ class AvatarLookingAroundIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final IconThemeData iconTheme = IconTheme.of(context);
     return _NavIconHost(
+      key: keys?[filled ? 'prof/FILL' : 'prof/rest'],
       debugLabel: filled ? 'prof/FILL' : 'prof/rest',
       duration: const Duration(milliseconds: 1100),
       size: size ?? iconTheme.size ?? 24,

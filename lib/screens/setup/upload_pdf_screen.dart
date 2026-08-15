@@ -43,7 +43,9 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
       if (fileBytes == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not read the selected PDF file.')),
+            const SnackBar(
+              content: Text('Could not read the selected PDF file.'),
+            ),
           );
         }
         return;
@@ -56,8 +58,9 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
       // infinite spinner (.timeout abandons the future; the short-lived isolate
       // is left to finish and be collected).
       final Map<String, dynamic> parsedData =
-          await LocalPdfParser.extractAttendanceFromPdf(fileBytes)
-              .timeout(_parseTimeout);
+          await LocalPdfParser.extractAttendanceFromPdf(
+            fileBytes,
+          ).timeout(_parseTimeout);
 
       if (!mounted) return;
       context.go('/setup/basic', extra: parsedData);
@@ -65,16 +68,12 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
       if (mounted) {
         final msg = e is TimeoutException
             ? "This PDF took too long to read. Make sure it's the attendance "
-                "report downloaded from SAP."
+                  "report downloaded from SAP."
             : e is FormatException
-                ? e.message
-                : 'Something went wrong. Please try again with a valid attendance PDF.';
+            ? e.message
+            : 'Something went wrong. Please try again with a valid attendance PDF.';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(msg),
-            backgroundColor: Colors.red.shade600,
-            duration: const Duration(seconds: 4),
-          ),
+          SnackBar(content: Text(msg), duration: const Duration(seconds: 4)),
         );
       }
     } finally {
@@ -89,10 +88,7 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Could not launch SAP Portal.'),
-            backgroundColor: Colors.red.shade600,
-          ),
+          SnackBar(content: const Text('Could not launch SAP Portal.')),
         );
       }
     }
@@ -159,7 +155,8 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
                     Column(
                       children: [
                         CircularProgressIndicator(
-                            color: theme.colorScheme.primary),
+                          color: theme.colorScheme.primary,
+                        ),
                         const SizedBox(height: 16),
                         Text(
                           'Analyzing PDF locally...',
@@ -173,8 +170,9 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
                   else ...[
                     Text(
                       'Choose PDF Source',
-                      style: theme.textTheme.titleLarge
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -210,7 +208,10 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
                     Center(
                       child: TextButton.icon(
                         onPressed: _launchWebVersion,
-                        icon: const Icon(Icons.open_in_browser_rounded, size: 18),
+                        icon: const Icon(
+                          Icons.open_in_browser_rounded,
+                          size: 18,
+                        ),
                         label: const Text('Not Mithibai? Open the Web Version'),
                       ),
                     ),

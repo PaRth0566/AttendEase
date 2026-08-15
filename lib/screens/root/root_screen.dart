@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
+import '../../services/app_refresh_bus.dart';
 import '../../services/cloud_sync_service.dart';
+import '../../theme/app_dimens.dart';
 import '../../theme/app_motion.dart';
 import '../../theme/glass_nav_theme.dart';
 import '../../widgets/animated_nav_icons.dart';
@@ -76,6 +78,16 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   /// animates, and I have to tap twice" was.
   int _iconIndex = 0;
 
+  /// Stable identities for the six icon copies this bar renders.
+  ///
+  /// The bar swaps its whole render tree when `maskingQuality` flips from
+  /// `.off` back to `.high` at the end of a trip, which rebuilds the icons
+  /// under different parents. Without these keys that rebuild restarted the
+  /// arrival animation it landed in the middle of, so a trip long enough to
+  /// still be travelling — Dashboard→Profile most visibly — played its icon
+  /// twice. See `NavIconKeys`.
+  final NavIconKeys _iconKeys = NavIconKeys();
+
   /// Where a tap or a router change is heading, so [_onPageSettled] can tell
   /// the destination from the pages crossed to reach it. Null during a drag,
   /// where every settle is a real destination.
@@ -90,7 +102,22 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     _pageController = PageController(initialPage: _currentIndex);
     _pageController.addListener(_onPageScroll);
     WidgetsBinding.instance.addObserver(this);
+    AppRefreshBus.instance.addListener(_reloadAllPages);
     _initialSync();
+  }
+
+  /// Re-reads every mounted tab's data.
+  ///
+  /// Fires when something outside these pages rewrites the database — the
+  /// dashboard's one-tap report sync is the case that matters, since an import
+  /// replaces a whole semester and so moves the ground under all three tabs at
+  /// once. Pages the [PageView] has not built yet are simply null and read the
+  /// new data in their own `initState` when they are.
+  void _reloadAllPages() {
+    if (!mounted) return;
+    for (int i = 0; i < 3; i++) {
+      _pageState(i)?.reloadData();
+    }
   }
 
   /// Mirrors the controller's continuous position into [_pagePosition] every
@@ -142,6 +169,7 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    AppRefreshBus.instance.removeListener(_reloadAllPages);
     _pageController.removeListener(_onPageScroll);
     _pageController.dispose();
     _pagePosition.dispose();
@@ -170,12 +198,9 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
     final result = await CloudSyncService().syncBidirectional();
     if (result == 'restored') {
       debugPrint('☁️ Data updated from cloud! Refreshing UI...');
-      if (!mounted) return;
       // Every page, not just the visible one — they are all mounted now, and a
       // restore can have moved data under any of them.
-      for (int i = 0; i < 3; i++) {
-        _pageState(i)?.reloadData();
-      }
+      _reloadAllPages();
     }
   }
 
@@ -347,142 +372,207 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
               // mid-slide. Drives the masking-quality swap below.
               final double offTab =
                   (pagePosition - pagePosition.roundToDouble()).abs();
-              return GlassTabBar.bottom(
-                selectedIndex: _currentIndex,
-                // Maps page position 0…2 onto the pill's alignment space -1…1 —
-                // same mapping as computeAlignment, on a continuous position.
-                // (pos / (count - 1)) * 2 - 1; 2 is hard-coded to match the three
-                // hard-coded tabs below.
-                alignmentOverride: (pagePosition / 2).clamp(0.0, 1.0) * 2 - 1,
-                onTabSelected: _onTabSelected,
-                settings: glassSettings,
+              // Clearance for the Android 3-button system navigation bar.
+              //
+              // The app renders edge-to-edge, so on a device with a
+              // transparent system bar the window extends *behind* the
+              // buttons and this Scaffold's bottom edge is the physical
+              // screen edge. GlassTabBar's own `verticalPadding`
+              // ([GlassNavTheme.verticalInset]) is a fixed design margin
+              // measured from that edge, so the capsule was painted inside
+              // the system bar's band — back arrow over DASHBOARD, home over
+              // CALENDAR, recents over PROFILE.
+              //
+              // `viewPadding`, not `padding`: `padding` is *consumed* by
+              // ancestor SafeAreas and by the keyboard, so it can read 0 here
+              // even though the hardware inset is real, and it collapses when
+              // the keyboard is open. `viewPadding` is the raw inset the OS
+              // reports and no ancestor can eat it — it is the only value that
+              // means "how much of my window the system bar covers".
+              //
+              // It is 0 on gesture-navigation and opaque-bar devices (there
+              // the OS shrinks the window itself), so this Padding is a no-op
+              // and the layout there is byte-for-byte what it is today.
+              // Wrapping the bar rather than shrinking its internal
+              // `verticalPadding` keeps the capsule's height, radius, glass
+              // and horizontal insets untouched, and moves the hit region
+              // along with the paint — taps at the capsule's bottom edge
+              // still land on the nav item.
+              final double systemNavInset = MediaQuery.viewPaddingOf(
+                context,
+              ).bottom;
+              final Widget navBar = Padding(
+                key: const Key('bottom_nav_bar'),
+                padding: EdgeInsets.only(bottom: systemNavInset),
+                child: GlassTabBar.bottom(
+                  selectedIndex: _currentIndex,
+                  // Maps page position 0…2 onto the pill's alignment space -1…1 —
+                  // same mapping as computeAlignment, on a continuous position.
+                  // (pos / (count - 1)) * 2 - 1; 2 is hard-coded to match the three
+                  // hard-coded tabs below.
+                  alignmentOverride: (pagePosition / 2).clamp(0.0, 1.0) * 2 - 1,
+                  onTabSelected: _onTabSelected,
+                  settings: glassSettings,
 
-                // Proportions — a floating object, not a full-width toolbar.
-                barHeight: GlassNavTheme.barHeight,
-                barBorderRadius: GlassNavTheme.barRadius,
-                horizontalPadding: GlassNavTheme.horizontalInset,
-                verticalPadding: GlassNavTheme.verticalInset,
-                iconSize: GlassNavTheme.iconSize,
-                iconLabelSpacing: 3,
+                  // Proportions — a floating object, not a full-width toolbar.
+                  barHeight: GlassNavTheme.barHeight,
+                  barBorderRadius: GlassNavTheme.barRadius,
+                  horizontalPadding: GlassNavTheme.horizontalInset,
+                  verticalPadding: GlassNavTheme.verticalInset,
+                  iconSize: GlassNavTheme.iconSize,
+                  iconLabelSpacing: 3,
 
-                // ── The pill: the demo's look, this app's motion ──────────
-                //
-                // Look is upstream's. `indicatorSettings` is gone — that was the
-                // blur-0 / index-1.0 material that made the pill a flat tinted
-                // chip instead of a glass lens — so the pill takes the package's
-                // own material, tinted and masked exactly as the demo does it.
-                // `indicatorBorderRadius` and `indicatorExpansion` are unset for
-                // the same reason: the demo sets neither, and both were hand-fitted
-                // off [GlassNavTheme.barRadius].
-                // Neutral frosted chip rather than a blue tint; the selected
-                // icon/label colours below are untouched.
-                //
-                // The tint has to invert with the theme, because the pill is a step
-                // in brightness away from the bar and the bar's glass sits at
-                // opposite ends in the two themes. White at 0.12 is a visible lift
-                // on dark glass and *nothing at all* on light glass — which is what
-                // made the light-mode pill disappear — so light mode darkens by the
-                // same idea instead.
-                indicatorColor: brightness == Brightness.dark
-                    ? Colors.white.withValues(alpha: 0.12)
-                    : const Color(0xFF1F2126).withValues(alpha: 0.10),
+                  // ── The pill: the demo's look, this app's motion ──────────
+                  //
+                  // Look is upstream's. `indicatorSettings` is gone — that was the
+                  // blur-0 / index-1.0 material that made the pill a flat tinted
+                  // chip instead of a glass lens — so the pill takes the package's
+                  // own material, tinted and masked exactly as the demo does it.
+                  // `indicatorBorderRadius` and `indicatorExpansion` are unset for
+                  // the same reason: the demo sets neither, and both were hand-fitted
+                  // off [GlassNavTheme.barRadius].
+                  // Neutral frosted chip rather than a blue tint; the selected
+                  // icon/label colours below are untouched.
+                  //
+                  // The tint has to invert with the theme, because the pill is a step
+                  // in brightness away from the bar and the bar's glass sits at
+                  // opposite ends in the two themes. White at 0.12 is a visible lift
+                  // on dark glass and *nothing at all* on light glass — which is what
+                  // made the light-mode pill disappear — so light mode darkens by the
+                  // same idea instead.
+                  indicatorColor: brightness == Brightness.dark
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : const Color(0xFF1F2126).withValues(alpha: 0.10),
 
-                // The *travelling* pill, light mode only.
-                //
-                // `indicatorColor` above is only the resting chip. The moment the
-                // pill starts moving it cross-fades to the package's glass lens,
-                // whose default material is a near-transparent white — a lift, on a
-                // bar that is already the brightest thing on a light screen. That
-                // is the pill going faint mid-trip: not the chip's colour, the
-                // lens's. Light mode swaps in a flat chip that matches the resting
-                // one, so the cross-fade has nothing to give away.
-                //
-                // Dark mode passes null and keeps the package lens untouched — the
-                // default lift works there precisely because the bar is dark.
-                indicatorSettings: brightness == Brightness.dark
-                    ? null
-                    : GlassNavTheme.travellingPill(brightness),
-                // High-quality masking is the pill's most expensive frame by far:
-                // it clips two full-bar-width icon layers through
-                // `Clip.antiAliasWithSaveLayer` and rebuilds two jelly clip paths
-                // *every frame* the pill moves — the costliest raster op Flutter
-                // has, on the Impeller path. None of it is visible mid-slide: the
-                // "magic lens" reveal it buys only reads once the pill is parked
-                // over an icon. So it runs at rest and drops to the clip-free
-                // `.off` path the instant the pill is travelling.
-                //
-                // The swap is invisible because it happens at the extremes only.
-                // `.off` parks the selected icon as a static overlay at the target
-                // tab; `.high` reveals it through the moving lens. Those two
-                // coincide exactly when the pill is over a tab, so restoring `.high`
-                // within 0.02 of a whole tab (essentially parked) shows no jump.
-                // `_pagePosition` is an exact integer at rest, so at rest this is
-                // always `.high`.
-                maskingQuality: offTab < 0.02
-                    ? MaskingQuality.high
-                    : MaskingQuality.off,
+                  // The *travelling* pill, light mode only.
+                  //
+                  // `indicatorColor` above is only the resting chip. The moment the
+                  // pill starts moving it cross-fades to the package's glass lens,
+                  // whose default material is a near-transparent white — a lift, on a
+                  // bar that is already the brightest thing on a light screen. That
+                  // is the pill going faint mid-trip: not the chip's colour, the
+                  // lens's. Light mode swaps in a flat chip that matches the resting
+                  // one, so the cross-fade has nothing to give away.
+                  //
+                  // Dark mode passes null and keeps the package lens untouched — the
+                  // default lift works there precisely because the bar is dark.
+                  indicatorSettings: brightness == Brightness.dark
+                      ? null
+                      : GlassNavTheme.travellingPill(brightness),
+                  // High-quality masking is the pill's most expensive frame by far:
+                  // it clips two full-bar-width icon layers through
+                  // `Clip.antiAliasWithSaveLayer` and rebuilds two jelly clip paths
+                  // *every frame* the pill moves — the costliest raster op Flutter
+                  // has, on the Impeller path. None of it is visible mid-slide: the
+                  // "magic lens" reveal it buys only reads once the pill is parked
+                  // over an icon. So it runs at rest and drops to the clip-free
+                  // `.off` path the instant the pill is travelling.
+                  //
+                  // The swap is invisible because it happens at the extremes only.
+                  // `.off` parks the selected icon as a static overlay at the target
+                  // tab; `.high` reveals it through the moving lens. Those two
+                  // coincide exactly when the pill is over a tab, so restoring `.high`
+                  // within 0.02 of a whole tab (essentially parked) shows no jump.
+                  // `_pagePosition` is an exact integer at rest, so at rest this is
+                  // always `.high`.
+                  maskingQuality: offTab < 0.02
+                      ? MaskingQuality.high
+                      : MaskingQuality.off,
 
-                // Motion is unchanged from what this app already had.
-                //
-                // The package layers three deformations on top of the glide — a
-                // concave lens pinch, an icon scale-up, and a press bounce — and
-                // with only three tabs the trip is short enough that they all fire
-                // at once and read as the pill wobbling rather than moving. The
-                // metaball blend that stretches it toward the bar's edges is the
-                // fourth, and it costs a shared-layer composite every frame of the
-                // move. All four stay neutralised, so the motion is one thing:
-                // position.
-                //
-                // The one deformation kept is the jelly stretch, because it is the
-                // only one that describes the travel rather than decorating it: the
-                // pill elongates along its path and contracts on arrival, holding
-                // its area throughout. Upstream has that backwards — it squashes
-                // *along* the direction of motion, which took the pill to 0.6x
-                // width on the Dashboard↔Profile trip and read as it receding
-                // rather than accelerating. Fixed in the vendored copy of the
-                // package; see third_party/liquid_glass_widgets/README.attendease.md.
-                enableBlend: false,
-                indicatorPinchStrength: 0,
-                magnification: 1.0,
-                pressScale: 1.0,
+                  // Motion is unchanged from what this app already had.
+                  //
+                  // The package layers three deformations on top of the glide — a
+                  // concave lens pinch, an icon scale-up, and a press bounce — and
+                  // with only three tabs the trip is short enough that they all fire
+                  // at once and read as the pill wobbling rather than moving. The
+                  // metaball blend that stretches it toward the bar's edges is the
+                  // fourth, and it costs a shared-layer composite every frame of the
+                  // move. All four stay neutralised, so the motion is one thing:
+                  // position.
+                  //
+                  // The one deformation kept is the jelly stretch, because it is the
+                  // only one that describes the travel rather than decorating it: the
+                  // pill elongates along its path and contracts on arrival, holding
+                  // its area throughout. Upstream has that backwards — it squashes
+                  // *along* the direction of motion, which took the pill to 0.6x
+                  // width on the Dashboard↔Profile trip and read as it receding
+                  // rather than accelerating. Fixed in the vendored copy of the
+                  // package; see third_party/liquid_glass_widgets/README.attendease.md.
+                  enableBlend: false,
+                  indicatorPinchStrength: 0,
+                  magnification: 1.0,
+                  pressScale: 1.0,
 
-                selectedIconColor: GlassNavTheme.selectedIcon(brightness),
-                selectedLabelColor: GlassNavTheme.selectedLabel(brightness),
-                unselectedIconColor: unselectedContent,
-                unselectedLabelColor: unselectedContent,
-                labelFontSize: GlassNavTheme.labelSize,
-                selectedLabelStyle: GlassNavTheme.labelStyle(selected: true),
-                unselectedLabelStyle: GlassNavTheme.labelStyle(selected: false),
-
-                // No glowColor on any tab. The package's default halo is 32px blur
-                // at 0.6 opacity per tab, which is where the coloured haze across
-                // the bar came from.
-                //
-                // One painter per tab in two variants — outline resting, solid
-                // active — replacing the Material outlined/rounded pair. Mixing a
-                // hand-drawn set with Material's would put two icon vocabularies in
-                // one bar. See [_navIcon]: `filled` is the row, `active` is the
-                // animation, and they are not the same axis.
-                tabs: [
-                  GlassTab(
-                    icon: _navIcon(0, filled: false),
-                    activeIcon: _navIcon(0, filled: true),
-                    label: 'DASHBOARD',
-                    semanticLabel: 'Dashboard',
+                  selectedIconColor: GlassNavTheme.selectedIcon(brightness),
+                  selectedLabelColor: GlassNavTheme.selectedLabel(brightness),
+                  unselectedIconColor: unselectedContent,
+                  unselectedLabelColor: unselectedContent,
+                  labelFontSize: GlassNavTheme.labelSize,
+                  selectedLabelStyle: GlassNavTheme.labelStyle(selected: true),
+                  unselectedLabelStyle: GlassNavTheme.labelStyle(
+                    selected: false,
                   ),
-                  GlassTab(
-                    icon: _navIcon(1, filled: false),
-                    activeIcon: _navIcon(1, filled: true),
-                    label: 'CALENDAR',
-                    semanticLabel: 'Calendar',
+
+                  // No glowColor on any tab. The package's default halo is 32px blur
+                  // at 0.6 opacity per tab, which is where the coloured haze across
+                  // the bar came from.
+                  //
+                  // One painter per tab in two variants — outline resting, solid
+                  // active — replacing the Material outlined/rounded pair. Mixing a
+                  // hand-drawn set with Material's would put two icon vocabularies in
+                  // one bar. See [_navIcon]: `filled` is the row, `active` is the
+                  // animation, and they are not the same axis.
+                  tabs: [
+                    GlassTab(
+                      icon: _navIcon(0, filled: false),
+                      activeIcon: _navIcon(0, filled: true),
+                      label: 'DASHBOARD',
+                      semanticLabel: 'Dashboard',
+                    ),
+                    GlassTab(
+                      icon: _navIcon(1, filled: false),
+                      activeIcon: _navIcon(1, filled: true),
+                      label: 'CALENDAR',
+                      semanticLabel: 'Calendar',
+                    ),
+                    GlassTab(
+                      icon: _navIcon(2, filled: false),
+                      activeIcon: _navIcon(2, filled: true),
+                      label: 'PROFILE',
+                      semanticLabel: 'Profile',
+                    ),
+                  ],
+                ),
+              );
+
+              // Cap the bar to the content column on a desktop browser.
+              //
+              // Every signed-in web user lands on `/app/*` — the mobile UI in a
+              // desktop viewport — and `horizontalPadding` above is a fixed
+              // design inset measured from the screen edges. At 1568px that
+              // stretched the capsule nearly edge to edge and flung DASHBOARD
+              // and PROFILE into opposite corners, while the screens inside it
+              // stayed capped at 600/700. Matching [AppDimens.maxContentWide]
+              // keeps the bar under the content it belongs to.
+              //
+              // `Align(heightFactor: 1)` rather than `Center`: Scaffold lays a
+              // `bottomNavigationBar` out against a *bounded* full-height
+              // constraint, so a bare Center would expand to the whole viewport
+              // height, be reported as the bar's height, and leave the body no
+              // room at all. heightFactor pins the height to the child's own
+              // while the width still fills — and centres horizontally, which
+              // is the only axis this needs to touch.
+              //
+              // Below the cap this is a no-op, so every phone layout is
+              // unchanged.
+              return Align(
+                heightFactor: 1,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: AppDimens.maxContentWide,
                   ),
-                  GlassTab(
-                    icon: _navIcon(2, filled: false),
-                    activeIcon: _navIcon(2, filled: true),
-                    label: 'PROFILE',
-                    semanticLabel: 'Profile',
-                  ),
-                ],
+                  child: navBar,
+                ),
               );
             },
           ),
@@ -516,18 +606,21 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
           filled: filled,
           active: active,
           epoch: _iconEpoch,
+          keys: _iconKeys,
         );
       case 2:
         return AvatarLookingAroundIcon(
           filled: filled,
           active: active,
           epoch: _iconEpoch,
+          keys: _iconKeys,
         );
       default:
         return DashboardMorphIcon(
           filled: filled,
           active: active,
           epoch: _iconEpoch,
+          keys: _iconKeys,
         );
     }
   }

@@ -520,9 +520,13 @@ class TabIndicatorState extends State<TabIndicator>
     // A bar drag in progress (or settling after release) owns the pill; only
     // otherwise does the page-driven override place it. See [_dragOwnsPill].
     final bool driveByDrag = _dragOwnsPill;
+    final double selectedAlignment = computeTabAlignment(widget.tabIndex);
     final targetAlignment = driveByDrag
         ? tabXAlign
-        : (widget.alignmentOverride ?? computeTabAlignment(widget.tabIndex));
+        : (widget.alignmentOverride ?? selectedAlignment);
+    final bool pageDrivenTravel = !driveByDrag &&
+        widget.alignmentOverride != null &&
+        (widget.alignmentOverride! - selectedAlignment).abs() > 0.001;
 
     // Hand control back to the override once the page position has caught up to
     // the tab the drag released on, so the pill does not snap back to the old
@@ -666,6 +670,7 @@ class TabIndicatorState extends State<TabIndicator>
                               alignment: alignment,
                               thickness: thickness,
                               velocity: velocity,
+                              pageDrivenTravel: pageDrivenTravel,
                               backgroundRadius: backgroundRadius,
                               glassRadius: glassRadius,
                               indicatorColor: indicatorColor,
@@ -749,10 +754,29 @@ class TabIndicatorState extends State<TabIndicator>
     required Alignment alignment,
     required double thickness,
     required double velocity,
+    required bool pageDrivenTravel,
     required double backgroundRadius,
     required double glassRadius,
     required Color indicatorColor,
   }) {
+    // A slow page drag can keep the spring at rest while the pill is travelling.
+    // Give only that low-speed/low-thickness window a glass visibility floor;
+    // fade the floor out continuously as either motion or jelly thickness rises
+    // so the normal fast-swipe and tap paths hand off without a flash.
+    const double slowVelocityFull = 0.35;
+    const double slowVelocityNone = 0.9;
+    final double velocityProgress = ((velocity.abs() - slowVelocityFull) /
+            (slowVelocityNone - slowVelocityFull))
+        .clamp(0.0, 1.0);
+    final double slowVelocityFloor = 1.0 -
+        velocityProgress * velocityProgress * (3.0 - 2.0 * velocityProgress);
+    final double slowRimVisibility =
+        !pageDrivenTravel || tabIsDown ? 0.0 : slowVelocityFloor;
+    final double glassVisibility = math.max(thickness, slowRimVisibility);
+    final bool forceRim = glassVisibility > thickness + 0.001;
+    final double glassVelocity = glassVisibility > 0.0
+        ? velocity * (thickness / glassVisibility)
+        : velocity;
     return SizedBox(
       height: widget.barHeight,
       child: Stack(
@@ -788,9 +812,33 @@ class TabIndicatorState extends State<TabIndicator>
             ),
           ),
 
-          // Glass indicator — on top so it refracts the icon layer AND the glow beneath.
-          if (widget.visible && thickness > 0.05)
+          // AttendEase patch: the resting chip, painted unconditionally.
+          //
+          // This branch used to carry ONE indicator, gated on `thickness > 0.05`
+          // — and that gate is what made the pill vanish for the length of every
+          // page swipe.
+          //
+          // `thickness` is the jelly spring, and it only rises when the pill has
+          // *catching up* to do: see the SpringBuilder above, which asks for 1.0
+          // only while `tabIsDown` or while the spring is more than 0.05 from
+          // `targetAlignment`. A page-driven [alignmentOverride] satisfies
+          // neither. `tabIsDown` is false because the finger is on the page, not
+          // on the bar; and the override is fed to the VelocitySpringBuilder as
+          // its target with `active: true`, so it tracks with no lag and the
+          // separation never opens up. Both terms false → thickness 0 → no pill,
+          // for the whole gesture, in a single frame. That is the hard cut.
+          //
+          // [MaskingQuality.high] never showed the bug because it paints the
+          // chip and the lens as two separate passes and only the lens is gated.
+          // This mirrors that split, so both modes now paint a pill under the
+          // same condition — which is also what keeps the `.off`/`.high` swap
+          // mid-slide invisible.
+          //
+          // Keyed so a test can assert the pill's presence directly rather than
+          // inferring it from a decoration.
+          if (widget.visible)
             AnimatedGlassIndicator(
+              key: const Key('nav_selection_pill'),
               velocity: velocity,
               itemCount: widget.tabCount,
               alignment: alignment,
@@ -798,11 +846,38 @@ class TabIndicatorState extends State<TabIndicator>
               quality: widget.quality,
               indicatorColor: indicatorColor,
               isBackgroundIndicator: false,
+              paintBackground: true,
+              paintGlass: false,
               innerBlur: widget.innerBlur,
               borderRadius: thickness < 1 ? backgroundRadius : glassRadius,
               padding: const EdgeInsets.all(4),
               expansion: widget.indicatorExpansion,
               settings: widget.indicatorSettings,
+              stretchAlongMotion: true, // AttendEase patch
+              backgroundKey: widget.platformViewBackdrop
+                  ? _iconLayerKey
+                  : widget.backgroundKey,
+            ),
+
+          // Keep the existing rim visible for slow page drags without changing
+          // the spring thickness that drives every other pill animation.
+          if (widget.visible && (thickness > 0.05 || forceRim))
+            AnimatedGlassIndicator(
+              velocity: forceRim ? glassVelocity : velocity,
+              itemCount: widget.tabCount,
+              alignment: alignment,
+              thickness: thickness,
+              quality: widget.quality,
+              indicatorColor: indicatorColor,
+              isBackgroundIndicator: false,
+              paintBackground: false,
+              paintGlass: true,
+              innerBlur: widget.innerBlur,
+              borderRadius: thickness < 1 ? backgroundRadius : glassRadius,
+              padding: const EdgeInsets.all(4),
+              expansion: widget.indicatorExpansion,
+              settings: widget.indicatorSettings,
+              glassVisibilityOverride: forceRim ? glassVisibility : null,
               pinchStrength: widget.indicatorPinchStrength,
               stretchAlongMotion: true, // AttendEase patch
               backgroundKey: widget.platformViewBackdrop
@@ -903,7 +978,13 @@ class TabIndicatorState extends State<TabIndicator>
                   ),
 
                   // 1.5. Solid Indicator Background (drawn below icons so selected icons are vibrant)
+                  //
+                  // AttendEase patch: keyed to match the `.off` branch's resting
+                  // chip, so `find.byKey(Key('nav_selection_pill'))` locates the
+                  // pill in either masking mode and a swap between them cannot
+                  // silently drop it.
                   AnimatedGlassIndicator(
+                    key: const Key('nav_selection_pill'),
                     velocity: velocity,
                     itemCount: widget.tabCount,
                     alignment: alignment,

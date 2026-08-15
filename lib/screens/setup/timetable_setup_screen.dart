@@ -6,6 +6,7 @@ import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
 import '../../models/timetable_entry.dart';
+import '../../router/app_router.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../widgets/app_buttons.dart';
@@ -114,6 +115,13 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
   Future<void> _completeSetupAndNavigate() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('is_setup_complete', true);
+
+    // The router memoises "has setup data?" in a static cache. During
+    // onboarding that cache was set to false (no subjects existed yet). Now
+    // that subjects are persisted, refresh it — otherwise the /app/dashboard
+    // redirect below sees the stale `false` and bounces us straight back to
+    // /setup, restarting the wizard in an endless loop.
+    AppRouter.markSetupComplete();
 
     await CloudSyncService().backupDataToCloud();
 
@@ -243,9 +251,14 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                         child: DropdownButtonFormField<Subject>(
                           initialValue: _selectedSubject,
                           isExpanded: true,
-                          dropdownColor: theme.cardColor,
-                          style: TextStyle(
-                            color: theme.textTheme.bodyLarge?.color,
+                          dropdownColor:
+                              theme.dialogTheme.backgroundColor ??
+                              theme.cardColor,
+                          // Theme-derived: a DropdownButton replaces its text
+                          // style rather than merging, so a bare TextStyle here
+                          // left fontFamily null and the items painted blank on
+                          // web.
+                          style: theme.textTheme.bodyLarge?.copyWith(
                             fontWeight: FontWeight.w600,
                           ),
                           icon: Icon(
@@ -285,6 +298,23 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
                               ),
                             ),
                           ),
+                          // The closed field wraps to two lines so the chosen
+                          // subject stays readable at a larger system font.
+                          // Menu rows keep to one line — a DropdownMenuItem is
+                          // height-constrained and would overflow otherwise.
+                          selectedItemBuilder: (context) => _allSubjects
+                              .map(
+                                (s) => Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    s.name,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(height: 1.2),
+                                  ),
+                                ),
+                              )
+                              .toList(),
                           items: _allSubjects
                               .map(
                                 (s) => DropdownMenuItem(

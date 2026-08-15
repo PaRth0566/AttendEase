@@ -25,9 +25,91 @@
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme"
                 />
+
+            <!-- Keep an incoming PDF's URI out of Flutter's routing.
+
+                 With deep linking on, the Flutter embedding takes the launch
+                 intent's data URI and hands it to Dart as the *initial route*.
+                 go_router then tried to navigate to
+                 "content://com.whatsapp.provider.media/item/..." — no such
+                 route — and rendered its Page Not Found screen instead of the
+                 app, so the PDF handler never got a chance to run.
+
+                 A tapped PDF is not a navigation request; it is a file delivered
+                 to MainActivity, which reads it over the incoming_pdf channel.
+                 Turning this off restores the normal launch route and is what
+                 makes the feature work at all. The app declares no http/https
+                 App Links, so nothing else depends on it. -->
+            <meta-data
+                android:name="flutter_deeplinking_enabled"
+                android:value="false" />
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!-- "Open with" for attendance PDFs. Declared on MainActivity rather
+                 than a second activity because launchMode is singleTop: a tap
+                 while the app is already running arrives at onNewIntent instead
+                 of building a fresh task. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="content" android:mimeType="application/pdf"/>
+                <data android:scheme="file" android:mimeType="application/pdf"/>
+            </intent-filter>
+
+            <!-- The file managers that hand a PDF over under a generic or
+                 plainly wrong MIME type. Without this AttendEase is missing from
+                 the chooser on those devices, which is most of the point of the
+                 feature, so the filename is trusted instead of the type.
+                 A non-PDF that merely ends in .pdf reaches the parser and fails
+                 there with the normal error, which is the safe direction.
+
+                 host="*" is required for pathPattern to be meaningful, and rules
+                 out file:// URIs (which carry no host) — those are covered by
+                 the correctly-typed filter above, and Android has blocked them
+                 between apps since N anyway. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="content"/>
+                <data android:host="*"/>
+                <data android:mimeType="application/octet-stream"/>
+                <data android:mimeType="binary/octet-stream"/>
+                <data android:mimeType="*/*"/>
+                <data android:pathPattern=".*\\.pdf"/>
+                <data android:pathPattern=".*\\.PDF"/>
+            </intent-filter>
+
+            <!-- And the ones that send no type at all. A filter declaring any
+                 mimeType is skipped outright for a typeless intent, so those
+                 need a filter that declares none. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="content"/>
+                <data android:scheme="file"/>
+                <data android:host="*"/>
+                <data android:pathPattern=".*\\.pdf"/>
+                <data android:pathPattern=".*\\.PDF"/>
+            </intent-filter>
+
+            <!-- Share sheet: Gmail attachments and Chrome downloads offer Share
+                 rather than Open with. SEND_MULTIPLE takes the first PDF. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/pdf"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:mimeType="application/pdf"/>
             </intent-filter>
         </activity>
 

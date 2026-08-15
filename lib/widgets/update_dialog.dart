@@ -33,7 +33,9 @@ Future<void> showPatchNotesSheet(
     backgroundColor: Colors.transparent,
     builder: (_) => _PatchNotesSheet(notes: notes),
   );
-  if (markViewed) await UpdateService.instance.markPatchNotesViewed(notes.version);
+  if (markViewed) {
+    await UpdateService.instance.markPatchNotesViewed(notes.version);
+  }
 }
 
 Future<void> showPatchNotesHistory(BuildContext context) async {
@@ -94,7 +96,9 @@ class _UpdateSheetState extends State<_UpdateSheet> {
     } on UpdateException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'The update could not be completed.');
+      if (mounted) {
+        setState(() => _error = 'The update could not be completed.');
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -128,22 +132,37 @@ class _UpdateSheetState extends State<_UpdateSheet> {
               child: CircleAvatar(
                 radius: 30,
                 backgroundColor: theme.colorScheme.primary.withAlpha(24),
-                child: Icon(Icons.system_update_rounded, size: 30, color: theme.colorScheme.primary),
+                child: Icon(
+                  Icons.system_update_rounded,
+                  size: 30,
+                  color: theme.colorScheme.primary,
+                ),
               ),
             ),
             const SizedBox(height: 16),
             const Center(
-              child: Text('Update Available', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+              child: Text(
+                'Update Available',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+              ),
             ),
             const SizedBox(height: 6),
             Center(
               child: Text(
                 'Version ${widget.info.latestVersion}',
-                style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
             const SizedBox(height: 18),
-            Text(widget.info.notes.summary, style: const TextStyle(height: 1.45), maxLines: 6, overflow: TextOverflow.ellipsis),
+            Text(
+              widget.info.notes.summary,
+              style: const TextStyle(height: 1.45),
+              maxLines: 6,
+              overflow: TextOverflow.ellipsis,
+            ),
             if (_working) ...[
               const SizedBox(height: 20),
               Semantics(
@@ -159,7 +178,9 @@ class _UpdateSheetState extends State<_UpdateSheet> {
               ),
               const SizedBox(height: 8),
               Text(
-                _progress > 0 ? 'Downloading ${(_progress * 100).round()}%' : 'Preparing download...',
+                _progress > 0
+                    ? 'Downloading ${(_progress * 100).round()}%'
+                    : 'Preparing download...',
                 style: theme.textTheme.bodySmall,
               ),
             ],
@@ -167,7 +188,10 @@ class _UpdateSheetState extends State<_UpdateSheet> {
               const SizedBox(height: 14),
               Text(
                 _error!,
-                style: TextStyle(color: theme.colorScheme.error, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  color: theme.colorScheme.error,
+                  fontWeight: FontWeight.w600,
+                ),
                 semanticsLabel: 'Update error: ${_error!}',
               ),
             ],
@@ -176,7 +200,9 @@ class _UpdateSheetState extends State<_UpdateSheet> {
               width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: _working ? _cancel : _update,
-                icon: Icon(_working ? Icons.close_rounded : Icons.download_rounded),
+                icon: Icon(
+                  _working ? Icons.close_rounded : Icons.download_rounded,
+                ),
                 label: Text(_working ? 'Cancel Download' : 'Update'),
               ),
             ),
@@ -210,7 +236,11 @@ class _PatchNotesSheet extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.new_releases_rounded, color: theme.colorScheme.primary, size: 30),
+                  Icon(
+                    Icons.new_releases_rounded,
+                    color: theme.colorScheme.primary,
+                    size: 30,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -254,10 +284,22 @@ class _PatchNotesSheet extends StatelessWidget {
                     children: [
                       Padding(
                         padding: const EdgeInsets.only(top: 7),
-                        child: Container(width: 6, height: 6, decoration: BoxDecoration(color: theme.colorScheme.primary, shape: BoxShape.circle)),
+                        child: Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 10),
-                      Expanded(child: Text(change, style: const TextStyle(height: 1.4))),
+                      Expanded(
+                        child: Text(
+                          change,
+                          style: const TextStyle(height: 1.4),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -265,7 +307,10 @@ class _PatchNotesSheet extends StatelessWidget {
               const SizedBox(height: 8),
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton(onPressed: () => Navigator.pop(context), child: const Text('Done')),
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Done'),
+                ),
               ),
             ],
           ),
@@ -296,10 +341,20 @@ class _PatchNotesHistorySheet extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final notes = history[index];
                   return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 6,
+                    ),
                     leading: const Icon(Icons.article_outlined),
-                    title: Text('Version ${notes.version}', style: const TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: Text(notes.summary, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    title: Text(
+                      'Version ${notes.version}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    subtitle: Text(
+                      notes.summary,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     trailing: const Icon(Icons.chevron_right_rounded),
                     onTap: () => showPatchNotesSheet(context, notes),
                   );
@@ -316,18 +371,30 @@ class _SheetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
-      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.85),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.85,
+      ),
       decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
+        color:
+            theme.bottomSheetTheme.backgroundColor ??
+            theme.scaffoldBackgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
+        border: Border(top: BorderSide(color: theme.dividerColor)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 10),
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: Theme.of(context).dividerColor, borderRadius: BorderRadius.circular(2))),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: theme.dividerColor,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
           const SizedBox(height: 8),
           child,
         ],

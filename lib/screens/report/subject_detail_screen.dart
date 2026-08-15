@@ -177,6 +177,9 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
+        // Room for a two-line subject name (see the title below) — the default
+        // 56 clips the second line at a larger system font.
+        toolbarHeight: 72,
         // Deliberately not a Hero. The container transform already carries this
         // title up from the tapped card: it lays the page out full-size and
         // clips it to a rect that grows from the tile, so the AppBar rides
@@ -186,11 +189,15 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
         // easing — so it reached the top while the card was still expanding.
         title: Text(
           widget.subject.name,
-          maxLines: 1,
+          // Two lines so a full subject name is readable in the header rather
+          // than clipped to "Computer Science Practical…" at a larger font.
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: theme.textTheme.bodyLarge?.color,
             fontWeight: FontWeight.bold,
+            fontSize: 17,
+            height: 1.2,
           ),
         ),
         backgroundColor: Colors.transparent,
@@ -568,7 +575,6 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
                                     return await showAppDialog(
                                       context: context,
                                       builder: (ctx) => AlertDialog(
-                                        backgroundColor: theme.cardColor,
                                         title: Text(
                                           'Delete Record?',
                                           style: TextStyle(

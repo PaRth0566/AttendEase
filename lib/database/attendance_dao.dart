@@ -123,6 +123,24 @@ class AttendanceDao {
     );
   }
 
+  /// Deletes a single attendance record by its primary key.
+  ///
+  /// `(timetable_entry_id, date)` is UNIQUE, so [deleteAttendance] already
+  /// removes exactly one row — but only as long as every caller passes the
+  /// record's *full* date key, suffix included (`2026-08-11_2` is a subject's
+  /// second lecture that day, and `2026-08-11` is a different record). Deleting
+  /// by id takes that requirement off the caller, which is what lets the
+  /// calendar's undo restore the one row the user tapped and no other.
+  Future<void> deleteAttendanceById(int recordId) async {
+    final db = await DBHelper.instance.database;
+
+    await db.delete(
+      'attendance_records',
+      where: 'id = ?',
+      whereArgs: [recordId],
+    );
+  }
+
   Future<void> replaceImportedReportDates(
     int semester,
     Iterable<String> dates,
@@ -228,6 +246,13 @@ class AttendanceDao {
     int subjectId,
   ) async {
     final db = await DBHelper.instance.database;
+    // Schedule-sourced NC rows are included. They were filtered out here on the
+    // grounds that a gap-fill is "not a real attendance event", but the subject
+    // timeline is where a student looks to ask why a subject's total is lower
+    // than the week suggests — and the answer, "that planned lecture was not
+    // conducted", was the one row being withheld. The screen already renders
+    // them (orange, "Planned lecture was not conducted"), and they carry no
+    // weight in the percentage, which counts only P and A.
     final List<Map<String, dynamic>> maps = await db.rawQuery(
       '''
       SELECT a.timetable_entry_id, a.date, a.status, a.source, a.original_status
@@ -305,6 +330,25 @@ class AttendanceDao {
         for (final slot in planned) {
           final subjectId = (slot['subject_id'] as num).toInt();
           final plannedCount = (slot['lecture_count'] as num).toInt();
+
+          // No staleness test here, deliberately. The original guard skipped any
+          // subject the report did not mention on this date — which is the
+          // definition of a lecture that was not conducted, so it made NC
+          // unreachable in the only case it exists for.
+          //
+          // Replacing it with "has this subject been seen on this weekday
+          // elsewhere?" was no better: a subject that never appears in the
+          // report at all (dropped, or cancelled every week) is exactly the one
+          // whose planned lectures were not conducted, and that test skipped it.
+          //
+          // So the planned slot is trusted. This method only visits dates the
+          // report actually covers, and only fills slots the report leaves
+          // unaccounted for: if the timetable says the lecture was scheduled and
+          // the report does not record it, it was not conducted. The cost is a
+          // subject whose slot moved weekday mid-semester keeps producing NC on
+          // the old day until the timetable is corrected — visible, but harmless,
+          // since NC is excluded from every attendance calculation.
+
           final representedCountResult = await txn.rawQuery(
             '''
             SELECT COUNT(*) AS lecture_count

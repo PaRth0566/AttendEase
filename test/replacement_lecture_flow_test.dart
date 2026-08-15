@@ -17,7 +17,14 @@ void main() {
   databaseFactory = databaseFactoryFfi;
 
   test('July 25 replacement lecture stays authoritative end-to-end', () async {
-    final databasePath = p.join(await getDatabasesPath(), 'attendease.db');
+    // Private database: test files run concurrently and would otherwise fight
+    // over the shared default name.
+    DBHelper.databaseFileName = 'replacement_lecture_flow_test.db';
+    await DBHelper.resetForTest();
+    final databasePath = p.join(
+      await getDatabasesPath(),
+      DBHelper.databaseFileName,
+    );
     await deleteDatabase(databasePath);
 
     final subjectDao = SubjectDao();
@@ -142,7 +149,9 @@ void main() {
     // Identical to the native DAO stats for the shared subjects.
     expect(webStats['Operating Systems'], stats[osId]);
 
-    await (await DBHelper.instance.database).close();
+    // resetForTest rather than closing the handle directly: closing behind
+    // DBHelper's back leaves its cached connection pointing at a dead database.
+    await DBHelper.resetForTest();
     await deleteDatabase(databasePath);
   });
 }

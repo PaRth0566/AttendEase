@@ -31,11 +31,45 @@ import '../services/cloud_sync_service.dart';
 
 class AppRouter {
   static final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>();
+
+  /// Router-level cache of "does this user have setup data yet?".
+  ///
+  /// The redirect below is async and runs on every navigation, so we memoise
+  /// the (potentially slow) SQLite + cloud-restore lookup here. Because it is
+  /// static it survives for the life of the process — which means it MUST be
+  /// invalidated whenever the answer can change, otherwise the redirect keeps
+  /// bouncing the user to the stale destination.
+  ///
+  /// Two events change the answer:
+  ///   • setup completes (subjects now exist) — call [markSetupComplete]
+  ///   • the user signs in or out (different UID, different data) — call [invalidateDataCache]
   static bool? _hasDataCache;
+
+  /// Force the next redirect to re-check for setup data. Call on sign-in/out.
+  static void invalidateDataCache() => _hasDataCache = null;
+
+  /// The user just finished onboarding and their subjects are persisted, so
+  /// the router can skip the lookup entirely and let /app/* through.
+  static void markSetupComplete() => _hasDataCache = true;
 
   static final GoRouter router = GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: kIsWeb ? '/web/home' : '/',
+    // Never strand the user on go_router's Page Not Found screen.
+    //
+    // The case this exists for: a PDF opened from another app arrives as an
+    // intent whose data URI some Android builds hand to Flutter as the initial
+    // route. go_router cannot match "content://com.whatsapp.provider.media/..."
+    // and used to render a black error page — the app looked broken, and the
+    // handler that imports the report never ran. `flutter_deeplinking_enabled`
+    // is off in the manifest so this should no longer arrive at all; this is the
+    // backstop for the OEM that ignores it. Sending the user to the normal
+    // start route lets the redirect above sort out where they actually belong,
+    // and the PDF is delivered separately over the incoming_pdf channel.
+    onException: (context, state, router) {
+      debugPrint('Unroutable location ignored: ${state.uri}');
+      router.go(kIsWeb ? '/web/home' : '/');
+    },
     redirect: (context, state) async {
       final user = FirebaseAuth.instance.currentUser;
       final bool isLoggingIn = state.matchedLocation == '/login' ||

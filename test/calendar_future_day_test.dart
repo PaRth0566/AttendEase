@@ -22,10 +22,16 @@ void main() {
   });
 
   setUp(() async {
-    // Fresh database per test so seeded rows do not leak between runs.
-    final path = '${await getDatabasesPath()}/attendease.db';
+    // Fresh database per test so seeded rows do not leak between runs, under a
+    // name private to this file — test files run concurrently and sharing the
+    // default name makes them contend for one SQLite file.
+    //
+    // Reset before deleting, and await it: releasing the handle after the file
+    // is gone leaves DBHelper caching a connection to a deleted database.
+    DBHelper.databaseFileName = 'calendar_future_day_test.db';
+    await DBHelper.resetForTest();
+    final path = '${await getDatabasesPath()}/${DBHelper.databaseFileName}';
     await databaseFactory.deleteDatabase(path);
-    DBHelper.resetForTest();
   });
 
   test('a future in-range date projects the weekday timetable as virtual NU rows',

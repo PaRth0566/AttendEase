@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -17,6 +18,8 @@ import '../../theme/glass_nav_theme.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/glass_action_button.dart';
 import '../../widgets/app_overlays.dart';
+import '../../widgets/beak_tooltip.dart';
+import '../../widgets/callout_box.dart';
 import '../root/tab_page_state.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -61,10 +64,28 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
 
   int _activeSemester = 1;
 
+  /// How long "Undo" stays available after a delete.
+  ///
+  /// One constant so the confirmation dialog's copy, the snackbar's lifetime
+  /// and the countdown ring can never disagree about the window.
+  static const Duration _undoWindow = Duration(seconds: 5);
+
+  /// The record most recently deleted, kept so [_undoDelete] can put it back.
+  /// Cleared when the undo deadline expires or the snackbar is dismissed. In
+  /// memory only — a killed app forfeits the window.
+  _DeletedRecord? _lastDeleted;
+  Timer? _undoTimer;
+
   @override
   void initState() {
     super.initState();
     _initCalendarDates();
+  }
+
+  @override
+  void dispose() {
+    _undoTimer?.cancel();
+    super.dispose();
   }
 
   /// Re-reads the active semester and its start/end bounds from prefs and
@@ -124,9 +145,8 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
     final DateTime newFirst = normalize(parsedStart);
     final DateTime newLast = normalize(parsedEnd);
 
-    final bool changed = _activeSemester != sem ||
-        _firstDay != newFirst ||
-        _lastDay != newLast;
+    final bool changed =
+        _activeSemester != sem || _firstDay != newFirst || _lastDay != newLast;
     if (!changed) return false;
 
     if (!mounted) return false;
@@ -338,11 +358,291 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
     await _loadForDate(_selectedDay!);
   }
 
-  Future<void> _deleteRecord(int timetableEntryId, String date) async {
-    await _attendanceDao.deleteAttendance(timetableEntryId, date);
+  /// `2026-08-11_2` → `Mon, 11 Aug`.
+  ///
+  /// The `_n` suffix keys a subject's second lecture in a day. That is a storage
+  /// detail; it has no business in a sentence shown to the user.
+  String _prettyDate(String recordDate) {
+    final base = recordDate.split('_').first;
+    try {
+      return DateFormat('EEE, d MMM').format(DateTime.parse(base));
+    } catch (_) {
+      return base;
+    }
+  }
+
+  /// Step 1 — ask first, and show exactly *which* record is going.
+  ///
+  /// The record is rendered as the same status-dot + name + status-line card the
+  /// calendar row uses, because the mis-tap this dialog exists to catch is
+  /// "wrong row", not "wrong intent" — and a prose-only dialog cannot answer
+  /// which row you hit.
+  Future<bool> _confirmDelete({
+    required String subjectName,
+    required String statusLabel,
+    required Color statusColor,
+    required String prettyDate,
+  }) async {
+    final theme = Theme.of(context);
+    final c = context.appColors;
+
+    final bool? result = await showAppDialog<bool>(
+      context: context,
+      // An accidental tap outside must not silently complete an accidental
+      // delete. Cancel is one explicit button away.
+      barrierDismissible: false,
+      builder: (dialogCtx) => AlertDialog(
+        // Shape, elevation, title and content styles all come from dialogTheme.
+        title: const Text('Delete this record?'),
+        // Scrolls rather than overflows: AlertDialog lays its content out at
+        // intrinsic height, and at the 1.4 text scale showAppDialog allows, a
+        // card + callout + line of copy can outgrow a short viewport.
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── The record, as a card ─────────────────────────────
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimens.space12,
+                  vertical: AppDimens.space10,
+                ),
+                decoration: BoxDecoration(
+                  color: c.subtleSurface,
+                  borderRadius: AppDimens.brMd,
+                  border: Border.all(
+                    color: statusColor.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 10,
+                      height: 10,
+                      margin: const EdgeInsets.only(right: AppDimens.space12),
+                      decoration: BoxDecoration(
+                        color: statusColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            subjectName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              height: 1.25,
+                              color: theme.textTheme.bodyLarge?.color,
+                            ),
+                          ),
+                          const SizedBox(height: AppDimens.space2),
+                          Text(
+                            '$statusLabel · $prettyDate',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              height: 1.25,
+                              color: statusColor,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppDimens.space16),
+
+              // ── What it costs ─────────────────────────────────────
+              const CalloutBox(
+                kind: CalloutKind.danger,
+                title: 'This changes your attendance',
+                message:
+                    'The lecture is removed from this day, your Report & '
+                    'Analysis percentages are recalculated, and the change '
+                    'syncs to your cloud backup.',
+              ),
+              const SizedBox(height: AppDimens.space12),
+
+              Text(
+                'You can undo this for '
+                '${_undoWindow.inSeconds} seconds.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.textTheme.bodyMedium?.color?.withValues(
+                    alpha: 0.75,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            // c.danger, not Colors.red — the app has one red, and it is the
+            // same one the "Absent" dot on this very card is painted with.
+            style: ElevatedButton.styleFrom(
+              backgroundColor: c.danger,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            icon: const Icon(Icons.delete_outline_rounded, size: 18),
+            label: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// Step 2 — delete, but remember the whole row so Undo can restore it.
+  ///
+  /// Deleting drops the only copy of `original_status` (the PDF baseline), so a
+  /// re-import can never rebuild this record. Undo therefore re-inserts the
+  /// captured row verbatim rather than creating a fresh one.
+  Future<void> _deleteWithUndo({
+    required int recordId,
+    required int timetableEntryId,
+    required String date,
+    required String status,
+    required String statusLabel,
+    required String source,
+    required String? originalStatus,
+    required String subjectName,
+  }) async {
+    await _attendanceDao.deleteAttendanceById(recordId);
+
+    _lastDeleted = _DeletedRecord(
+      timetableEntryId: timetableEntryId,
+      date: date,
+      status: status,
+      statusLabel: statusLabel,
+      source: source,
+      originalStatus: originalStatus,
+      subjectName: subjectName,
+    );
+
+    if (!mounted) return;
     if (_selectedDay != null) await _loadForDate(_selectedDay!);
+    if (!mounted) return;
     await _fetchMonthData(_focusedDay);
     CloudSyncService().backupDataToCloud();
+
+    if (!mounted) return;
+    _showUndoSnackBar();
+  }
+
+  /// Step 3 — offer Undo for [_undoWindow], then let the delete stick.
+  void _showUndoSnackBar() {
+    final messenger = ScaffoldMessenger.of(context);
+    // One at a time. Queued undo bars would let the user tap Undo on a bar
+    // whose record is no longer the one _lastDeleted holds.
+    _undoTimer?.cancel();
+    _undoTimer = null;
+    messenger.hideCurrentSnackBar();
+
+    final deleted = _lastDeleted;
+    if (deleted == null) return;
+
+    final snack = messenger.showSnackBar(
+      SnackBar(
+        duration: _undoWindow,
+        // Shape, colour and floating behaviour all come from snackBarTheme.
+        // Only the margin is set here, and only by what the theme cannot know:
+        // the calendar's own floating "Add record" pill. See
+        // GlassNavTheme.snackBarPillClearance for why the nav bar itself needs
+        // no allowance.
+        margin: const EdgeInsets.only(
+          left: AppDimens.space16,
+          right: AppDimens.space16,
+          bottom: GlassNavTheme.snackBarPillClearance,
+        ),
+        content: Row(
+          children: [
+            const _UndoCountdownRing(duration: _undoWindow),
+            const SizedBox(width: AppDimens.space12),
+            Expanded(
+              child: Text(
+                '${deleted.subjectName} · ${deleted.statusLabel} deleted',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'Undo',
+          // Bound to *this* bar's record, not to whatever _lastDeleted holds
+          // when the tap lands. A bar that is already sliding out because a
+          // second delete replaced it is still briefly tappable, and reading
+          // the field there would restore the newer record instead of this one.
+          onPressed: () => _undoDelete(deleted),
+        ),
+      ),
+    );
+
+    // SnackBars with an action intentionally stay open while accessibility
+    // navigation is enabled. Keep the Undo affordance accessible, but enforce
+    // the product's five-second deadline independently of that framework rule.
+    _undoTimer = Timer(_undoWindow, () {
+      if (!mounted || !identical(_lastDeleted, deleted)) return;
+      _lastDeleted = null;
+      _undoTimer = null;
+      messenger.hideCurrentSnackBar();
+    });
+
+    // The delete sticks once the deadline expires (or the bar is dismissed).
+    //
+    // Identity-checked, not just null-checked: deleting a second record inside
+    // the window calls hideCurrentSnackBar() above, and *this* future is what
+    // completes as a result — a blind `_lastDeleted = null` would throw away
+    // the newer record and make the second delete un-undoable.
+    snack.closed.then((_) {
+      if (!mounted) return;
+      if (identical(_lastDeleted, deleted)) {
+        _lastDeleted = null;
+        _undoTimer?.cancel();
+        _undoTimer = null;
+      }
+    });
+  }
+
+  /// Restores [deleted] exactly as it was, if its undo window is still open.
+  ///
+  /// The identity check is the whole guard: a bar whose record has already been
+  /// superseded by a later delete, or whose window has elapsed, restores
+  /// nothing. Only one delete is undoable at a time, by design.
+  ///
+  /// The heatmap and the day list are re-derived from the database rather than
+  /// from a pre-delete snapshot: the row goes back with the same status, source
+  /// and baseline, so the queries behind them return exactly what they returned
+  /// before the delete — and a snapshot would be wrong anyway if the user paged
+  /// the calendar to another month during the undo window.
+  Future<void> _undoDelete(_DeletedRecord deleted) async {
+    if (!identical(_lastDeleted, deleted)) return;
+    _lastDeleted = null;
+    _undoTimer?.cancel();
+    _undoTimer = null;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    await _saveRecord(
+      deleted.timetableEntryId,
+      deleted.date,
+      deleted.status,
+      source: deleted.source,
+      originalStatus: deleted.originalStatus,
+    );
+    if (!mounted) return;
+    if (_selectedDay != null) await _loadForDate(_selectedDay!);
   }
 
   /// Pull-to-refresh: bidirectional cloud sync then reinitialize calendar
@@ -373,7 +673,6 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
     showAppModalSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
           final theme = Theme.of(context);
@@ -387,10 +686,11 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
               bottom: 24,
             ),
             decoration: BoxDecoration(
-              color: theme.cardColor,
+              color: theme.bottomSheetTheme.backgroundColor ?? theme.cardColor,
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(24),
               ),
+              border: Border.all(color: theme.dividerColor),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -442,8 +742,13 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                       ),
                     ),
                   ),
-                  dropdownColor: theme.cardColor,
-                  style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+                  dropdownColor:
+                      theme.dialogTheme.backgroundColor ?? theme.cardColor,
+                  // Theme-derived: a DropdownButton replaces its text style
+                  // rather than merging, so a bare TextStyle here left
+                  // fontFamily null and the items painted blank on web.
+                  //
+                  style: theme.textTheme.bodyLarge,
                   items: available
                       .map(
                         (s) => DropdownMenuItem(value: s, child: Text(s.name)),
@@ -608,26 +913,35 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
     );
   }
 
-  Widget _buildLegendItem(Color color, String title, String subtitle, ThemeData theme) {
+  Widget _buildLegendItem(
+    Color color,
+    String title,
+    String subtitle,
+    ThemeData theme,
+  ) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 5),
+        // No Flexible/Expanded here: the item reports its natural width so the
+        // parent FittedBox can measure the true one-line width of all four and
+        // scale the group as a unit. softWrap: false keeps a label on its own
+        // single line even while being measured unbounded.
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               title,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.visible,
               style: TextStyle(
                 fontSize: 11,
                 color: theme.textTheme.bodyLarge?.color,
@@ -637,6 +951,9 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
             ),
             Text(
               subtitle,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.visible,
               style: TextStyle(
                 fontSize: 9,
                 color: theme.textTheme.bodySmall?.color,
@@ -749,321 +1066,359 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                 children: [
                   // Calendar widget
                   Container(
-                  // Same header-to-content gap as Dashboard and Profile (§3).
-                  margin: const EdgeInsets.fromLTRB(
-                      10, AppDimens.headerContentGap, 10, 0),
-                  padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withAlpha(15)
-                        : Colors.grey.withAlpha(20),
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: Column(
-                    children: [
-                      !_isCalendarReady
-                          ? const SizedBox(
-                              height: 80,
-                              child: Center(child: CircularProgressIndicator()),
-                            )
-                          : TableCalendar(
-                              firstDay: _firstDay,
-                              lastDay: _lastDay,
-                              focusedDay: _focusedDay,
-                              selectedDayPredicate: (day) =>
-                                  isSameDay(_selectedDay, day),
-                              calendarFormat: CalendarFormat.month,
-                              availableCalendarFormats: const {
-                                CalendarFormat.month: 'Month',
-                              },
-                              // Match row height to the cell width (~width/7)
-                              // so each filled tile reads as a rounded square.
-                              rowHeight: (MediaQuery.sizeOf(context).width / 7.2)
-                                  .clamp(44.0, 58.0),
-                              daysOfWeekHeight: 16,
-                              headerStyle: HeaderStyle(
-                                formatButtonVisible: false,
-                                titleCentered: true,
-                                headerPadding: EdgeInsets.zero,
-                                titleTextStyle: TextStyle(
-                                  color: theme.textTheme.bodyLarge?.color,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
+                    // Same header-to-content gap as Dashboard and Profile (§3).
+                    margin: const EdgeInsets.fromLTRB(
+                      10,
+                      AppDimens.headerContentGap,
+                      10,
+                      0,
+                    ),
+                    padding: const EdgeInsets.fromLTRB(2, 0, 2, 0),
+                    decoration: BoxDecoration(
+                      color: isDark
+                          ? Colors.white.withAlpha(15)
+                          : Colors.grey.withAlpha(20),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Column(
+                      children: [
+                        !_isCalendarReady
+                            ? const SizedBox(
+                                height: 80,
+                                child: Center(
+                                  child: CircularProgressIndicator(),
                                 ),
-                                leftChevronIcon: Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: BoxDecoration(
-                                    color: isDark
-                                        ? Colors.white.withAlpha(25)
-                                        : Colors.grey.withAlpha(30),
-                                    shape: BoxShape.circle,
+                              )
+                            : TableCalendar(
+                                firstDay: _firstDay,
+                                lastDay: _lastDay,
+                                focusedDay: _focusedDay,
+                                selectedDayPredicate: (day) =>
+                                    isSameDay(_selectedDay, day),
+                                calendarFormat: CalendarFormat.month,
+                                availableCalendarFormats: const {
+                                  CalendarFormat.month: 'Month',
+                                },
+                                // Match row height to the cell width (~width/7)
+                                // so each filled tile reads as a rounded square.
+                                rowHeight:
+                                    (MediaQuery.sizeOf(context).width / 7.2)
+                                        .clamp(44.0, 58.0),
+                                daysOfWeekHeight: 16,
+                                headerStyle: HeaderStyle(
+                                  formatButtonVisible: false,
+                                  titleCentered: true,
+                                  headerPadding: EdgeInsets.zero,
+                                  titleTextStyle: TextStyle(
+                                    color: theme.textTheme.bodyLarge?.color,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
                                   ),
-                                  child: Icon(
-                                    Icons.chevron_left,
-                                    color: theme.iconTheme.color,
-                                    size: 15,
-                                  ),
-                                ),
-                                rightChevronIcon: Container(
-                                  padding: const EdgeInsets.all(3),
-                                  decoration: BoxDecoration(
-                                    color: isDark
-                                        ? Colors.white.withAlpha(25)
-                                        : Colors.grey.withAlpha(30),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.chevron_right,
-                                    color: theme.iconTheme.color,
-                                    size: 15,
-                                  ),
-                                ),
-                              ),
-                              daysOfWeekStyle: DaysOfWeekStyle(
-                                weekdayStyle: TextStyle(
-                                  color: theme.textTheme.bodyMedium?.color,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.2,
-                                ),
-                                weekendStyle: TextStyle(
-                                  color: theme.textTheme.bodyMedium?.color,
-                                  fontSize: 10.5,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.2,
-                                ),
-                                dowTextFormatter: (date, locale) =>
-                                    DateFormat.E(locale).format(date).toUpperCase(),
-                              ),
-                              calendarBuilders: CalendarBuilders(
-                                prioritizedBuilder: (context, day, focusedDay) {
-                                  final normalizedDay = DateTime.utc(
-                                    day.year,
-                                    day.month,
-                                    day.day,
-                                  );
-                                  final bool isSelected = isSameDay(
-                                    _selectedDay,
-                                    day,
-                                  );
-                                  final bool isToday = isSameDay(
-                                    DateTime.now(),
-                                    day,
-                                  );
-
-                                  final status = _monthStatuses[normalizedDay];
-                                  Color? bgColor;
-                                  Color? borderColor;
-                                  Color textColor =
-                                      theme.textTheme.bodyLarge?.color ??
-                                      Colors.black;
-                                  // Selection no longer has a fill to carry it,
-                                  // so it takes the same bold the current date
-                                  // gets — otherwise the only thing separating a
-                                  // picked day from an unpicked one is a 2px
-                                  // border it may already share with its status.
-                                  final FontWeight weight = isToday || isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.w600;
-
-                                  switch (status) {
-                                    case 'outside':
-                                      textColor = isDark
-                                          ? Colors.white.withAlpha(50)
-                                          : Colors.black.withAlpha(50);
-                                    case 'holiday':
-                                      bgColor = colorHolidayBg;
-                                      textColor =
-                                          theme.textTheme.bodyMedium?.color ??
-                                          Colors.grey;
-                                    case 'all_p':
-                                      bgColor = colorPresentBg;
-                                      borderColor = colorPresentBorder;
-                                    case 'all_a':
-                                      bgColor = colorAbsentBg;
-                                      borderColor = colorAbsentBorder;
-                                    case 'mixed':
-                                      bgColor = colorMixedBg;
-                                      borderColor = colorMixedBorder;
-                                    case 'all_nu':
-                                      bgColor = colorMixedBg;
-                                      borderColor = colorMixedBorder;
-                                  }
-
-                                  // Fill the whole grid cell with an equal
-                                  // margin on every side, so the gaps between
-                                  // day tiles are the same horizontally and
-                                  // vertically. A rounded rect gives the tile
-                                  // its soft-square shape.
-                                  Widget dayCell({
-                                    required Color? fill,
-                                    required Border? border,
-                                    required Widget child,
-                                  }) {
-                                    return Container(
-                                      width: double.infinity,
-                                      height: double.infinity,
-                                      margin: const EdgeInsets.all(3),
-                                      decoration: BoxDecoration(
-                                        color: fill,
-                                        border: border,
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: child,
-                                    );
-                                  }
-
-                                  // The date itself. Today is marked by a short
-                                  // rounded underline beneath the number rather
-                                  // than a border or a disc, which leaves the
-                                  // border free to mean one thing only —
-                                  // selection — so a selected day that is not
-                                  // today can no longer be confused with the
-                                  // current date. An underline also sits clear
-                                  // of the tile's attendance fill instead of
-                                  // covering it, which is what the old solid
-                                  // chip (and its 8px blurred shadow, the glow)
-                                  // got wrong.
-                                  //
-                                  // The stack is 14px of text + 3 gap + 3 rule =
-                                  // ~26, safe at every row height: rowHeight
-                                  // clamps to 44…58 and dayCell insets 3 a side,
-                                  // so the cell is never shorter than 38.
-                                  Widget label = Text(
-                                    '${day.day}',
-                                    style: TextStyle(
-                                      color: textColor,
-                                      fontWeight: weight,
-                                      fontSize: 14,
+                                  leftChevronIcon: Container(
+                                    padding: const EdgeInsets.all(3),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.white.withAlpha(25)
+                                          : Colors.grey.withAlpha(30),
+                                      shape: BoxShape.circle,
                                     ),
-                                  );
-                                  if (isToday) {
-                                    label = Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        label,
-                                        const SizedBox(height: 3),
-                                        Container(
-                                          width: 16,
-                                          height: 3,
-                                          decoration: BoxDecoration(
-                                            color: theme.colorScheme.primary,
-                                            borderRadius:
-                                                BorderRadius.circular(3),
+                                    child: Icon(
+                                      Icons.chevron_left,
+                                      color: theme.iconTheme.color,
+                                      size: 15,
+                                    ),
+                                  ),
+                                  rightChevronIcon: Container(
+                                    padding: const EdgeInsets.all(3),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.white.withAlpha(25)
+                                          : Colors.grey.withAlpha(30),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.chevron_right,
+                                      color: theme.iconTheme.color,
+                                      size: 15,
+                                    ),
+                                  ),
+                                ),
+                                daysOfWeekStyle: DaysOfWeekStyle(
+                                  weekdayStyle: TextStyle(
+                                    color: theme.textTheme.bodyMedium?.color,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.2,
+                                  ),
+                                  weekendStyle: TextStyle(
+                                    color: theme.textTheme.bodyMedium?.color,
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.2,
+                                  ),
+                                  dowTextFormatter: (date, locale) =>
+                                      DateFormat.E(
+                                        locale,
+                                      ).format(date).toUpperCase(),
+                                ),
+                                calendarBuilders: CalendarBuilders(
+                                  prioritizedBuilder: (context, day, focusedDay) {
+                                    final normalizedDay = DateTime.utc(
+                                      day.year,
+                                      day.month,
+                                      day.day,
+                                    );
+                                    final bool isSelected = isSameDay(
+                                      _selectedDay,
+                                      day,
+                                    );
+                                    final bool isToday = isSameDay(
+                                      DateTime.now(),
+                                      day,
+                                    );
+
+                                    final status =
+                                        _monthStatuses[normalizedDay];
+                                    Color? bgColor;
+                                    Color? borderColor;
+                                    Color textColor =
+                                        theme.textTheme.bodyLarge?.color ??
+                                        Colors.black;
+                                    // Selection no longer has a fill to carry it,
+                                    // so it takes the same bold the current date
+                                    // gets — otherwise the only thing separating a
+                                    // picked day from an unpicked one is a 2px
+                                    // border it may already share with its status.
+                                    final FontWeight weight =
+                                        isToday || isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.w600;
+
+                                    switch (status) {
+                                      case 'outside':
+                                        textColor = isDark
+                                            ? Colors.white.withAlpha(50)
+                                            : Colors.black.withAlpha(50);
+                                      case 'holiday':
+                                        bgColor = colorHolidayBg;
+                                        textColor =
+                                            theme.textTheme.bodyMedium?.color ??
+                                            Colors.grey;
+                                      case 'all_p':
+                                        bgColor = colorPresentBg;
+                                        borderColor = colorPresentBorder;
+                                      case 'all_a':
+                                        bgColor = colorAbsentBg;
+                                        borderColor = colorAbsentBorder;
+                                      case 'mixed':
+                                        bgColor = colorMixedBg;
+                                        borderColor = colorMixedBorder;
+                                      case 'all_nu':
+                                        bgColor = colorMixedBg;
+                                        borderColor = colorMixedBorder;
+                                    }
+
+                                    // Fill the whole grid cell with an equal
+                                    // margin on every side, so the gaps between
+                                    // day tiles are the same horizontally and
+                                    // vertically. A rounded rect gives the tile
+                                    // its soft-square shape.
+                                    Widget dayCell({
+                                      required Color? fill,
+                                      required Border? border,
+                                      required Widget child,
+                                    }) {
+                                      return Container(
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                        margin: const EdgeInsets.all(3),
+                                        decoration: BoxDecoration(
+                                          color: fill,
+                                          border: border,
+                                          borderRadius: BorderRadius.circular(
+                                            10,
                                           ),
                                         ),
-                                      ],
-                                    );
-                                  }
+                                        alignment: Alignment.center,
+                                        child: child,
+                                      );
+                                    }
 
-                                  return dayCell(
-                                    fill: bgColor,
-                                    border: isSelected
-                                        ? Border.all(
-                                            color: theme.colorScheme.primary,
-                                            width: 2,
-                                          )
-                                        : borderColor != null
-                                        ? Border.all(
-                                            color: borderColor,
-                                            width: 1.2,
-                                          )
-                                        : null,
-                                    child: label,
-                                  );
+                                    // The date itself. Today is marked by a short
+                                    // rounded underline beneath the number rather
+                                    // than a border or a disc, which leaves the
+                                    // border free to mean one thing only —
+                                    // selection — so a selected day that is not
+                                    // today can no longer be confused with the
+                                    // current date. An underline also sits clear
+                                    // of the tile's attendance fill instead of
+                                    // covering it, which is what the old solid
+                                    // chip (and its 8px blurred shadow, the glow)
+                                    // got wrong.
+                                    //
+                                    // The stack is 14px of text + 3 gap + 3 rule =
+                                    // ~26, safe at every row height: rowHeight
+                                    // clamps to 44…58 and dayCell insets 3 a side,
+                                    // so the cell is never shorter than 38.
+                                    Widget label = Text(
+                                      '${day.day}',
+                                      style: TextStyle(
+                                        color: textColor,
+                                        fontWeight: weight,
+                                        fontSize: 14,
+                                      ),
+                                    );
+                                    if (isToday) {
+                                      label = Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          label,
+                                          const SizedBox(height: 3),
+                                          Container(
+                                            width: 16,
+                                            height: 3,
+                                            decoration: BoxDecoration(
+                                              color: theme.colorScheme.primary,
+                                              borderRadius:
+                                                  BorderRadius.circular(3),
+                                            ),
+                                          ),
+                                        ],
+                                      );
+                                    }
+
+                                    return dayCell(
+                                      fill: bgColor,
+                                      border: isSelected
+                                          ? Border.all(
+                                              color: theme.colorScheme.primary,
+                                              width: 2,
+                                            )
+                                          : borderColor != null
+                                          ? Border.all(
+                                              color: borderColor,
+                                              width: 1.2,
+                                            )
+                                          : null,
+                                      child: label,
+                                    );
+                                  },
+                                ),
+                                onDaySelected: (selectedDay, focusedDay) {
+                                  if (!isSameDay(_selectedDay, selectedDay)) {
+                                    setState(() {
+                                      _selectedDay = selectedDay;
+                                      _focusedDay = focusedDay;
+                                    });
+                                    _loadForDate(selectedDay);
+                                  }
+                                },
+                                onPageChanged: (focusedDay) {
+                                  // Keep focus inside the semester range; a page
+                                  // at the very edge can report a day just past
+                                  // the bound, which TableCalendar's base asserts.
+                                  final clamped = focusedDay.isBefore(_firstDay)
+                                      ? _firstDay
+                                      : (focusedDay.isAfter(_lastDay)
+                                            ? _lastDay
+                                            : focusedDay);
+                                  _focusedDay = clamped;
+                                  _fetchMonthData(clamped);
                                 },
                               ),
-                              onDaySelected: (selectedDay, focusedDay) {
-                                if (!isSameDay(_selectedDay, selectedDay)) {
-                                  setState(() {
-                                    _selectedDay = selectedDay;
-                                    _focusedDay = focusedDay;
-                                  });
-                                  _loadForDate(selectedDay);
-                                }
-                              },
-                              onPageChanged: (focusedDay) {
-                                // Keep focus inside the semester range; a page
-                                // at the very edge can report a day just past
-                                // the bound, which TableCalendar's base asserts.
-                                final clamped = focusedDay.isBefore(_firstDay)
-                                    ? _firstDay
-                                    : (focusedDay.isAfter(_lastDay)
-                                          ? _lastDay
-                                          : focusedDay);
-                                _focusedDay = clamped;
-                                _fetchMonthData(clamped);
-                              },
+
+                        // Divider above legend
+                        if (_isCalendarReady)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+                            child: Divider(
+                              height: 1,
+                              thickness: 1,
+                              color: c.cardBorder,
                             ),
-
-                      // Divider above legend
-                      if (_isCalendarReady)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
-                          child: Divider(
-                            height: 1,
-                            thickness: 1,
-                            color: c.cardBorder,
                           ),
-                        ),
 
-                      // Legend
-                      if (_isCalendarReady)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              _buildLegendItem(
-                                c.success,
-                                'All Present',
-                                'Attended all',
-                                theme,
+                        // Legend
+                        if (_isCalendarReady)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
+                            // The legend must read as a single row on every
+                            // device. Three things guarantee that:
+                            //  1. the row is pinned to its own text scale (below)
+                            //     so a large system font cannot widen it;
+                            //  2. mainAxisSize.min + explicit gutters — under a
+                            //     FittedBox the main axis is unbounded, where
+                            //     spaceBetween is undefined and used to leave a
+                            //     few pixels of overflow;
+                            //  3. scaleDown as the final fit, which on a narrow
+                            //     phone trims a few percent rather than wrapping.
+                            child: MediaQuery(
+                              data: MediaQuery.of(
+                                context,
+                              ).copyWith(textScaler: TextScaler.linear(1.0)),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.center,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    _buildLegendItem(
+                                      c.success,
+                                      'All Present',
+                                      'Attended all',
+                                      theme,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    _buildLegendItem(
+                                      c.danger,
+                                      'All Absent',
+                                      'Absent all',
+                                      theme,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    _buildLegendItem(
+                                      c.warning,
+                                      'Mixed',
+                                      'Partial attendance',
+                                      theme,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    _buildLegendItem(
+                                      isDark
+                                          ? Colors.white.withAlpha(100)
+                                          : Colors.grey,
+                                      'Off',
+                                      'No classes',
+                                      theme,
+                                    ),
+                                  ],
+                                ),
                               ),
-                              _buildLegendItem(
-                                c.danger,
-                                'All Absent',
-                                'Absent all',
-                                theme,
-                              ),
-                              _buildLegendItem(
-                                c.warning,
-                                'Mixed',
-                                'Partial attendance',
-                                theme,
-                              ),
-                              _buildLegendItem(
-                                isDark ? Colors.white.withAlpha(100) : Colors.grey,
-                                'Off',
-                                'No classes',
-                                theme,
-                              ),
-                            ],
+                            ),
                           ),
-                        ),
-                    ],
-                  ),
-                ),
-
-                // Selected day label
-                if (_selectedDay != null)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-                    child: Text(
-                      DateFormat('EEEE, MMMM d, yyyy').format(_selectedDay!),
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.bodyLarge?.color,
-                      ),
+                      ],
                     ),
                   ),
 
-                // Records list. Flows within the page scroll (no Expanded):
-                // the list shrink-wraps and the transient states get a fixed
-                // height so the AnimatedSwitcher cross-fade has a stable box.
-                AnimatedSwitcher(
+                  // Selected day label
+                  if (_selectedDay != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+                      child: Text(
+                        DateFormat('EEEE, MMMM d, yyyy').format(_selectedDay!),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: theme.textTheme.bodyLarge?.color,
+                        ),
+                      ),
+                    ),
+
+                  // Records list. Flows within the page scroll (no Expanded):
+                  // the list shrink-wraps and the transient states get a fixed
+                  // height so the AnimatedSwitcher cross-fade has a stable box.
+                  AnimatedSwitcher(
                     duration: AppMotion.standard,
                     switchInCurve: AppMotion.enter,
                     switchOutCurve: AppMotion.exit,
@@ -1113,8 +1468,7 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                             // owning its own viewport, so the whole screen is
                             // one pull-to-refresh surface (§ calendar refresh).
                             shrinkWrap: true,
-                            physics:
-                                const NeverScrollableScrollPhysics(),
+                            physics: const NeverScrollableScrollPhysics(),
                             padding: EdgeInsets.fromLTRB(
                               AppDimens.space16,
                               AppDimens.space4,
@@ -1175,6 +1529,27 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                               // Can revert to NU only when the PDF itself reported NU here.
                               final canRevertToNu =
                                   !isVirtual && originalStatus == 'NU' && !isNU;
+                              // Delete is for *marked* attendance only.
+                              //
+                              // NU has no mark to remove — deleting a stored NU
+                              // just destroys the PDF baseline that lets you tap
+                              // P/A on it, and a virtual NU has no row at all.
+                              // NC is a fact the report asserted (the lecture
+                              // never happened) rather than something you
+                              // marked, and it carries no weight in any
+                              // percentage, so removing it would change nothing
+                              // but the day's list.
+                              final canDelete =
+                                  !isVirtual && (isPresent || status == 'A');
+                              final deleteBlockedReason =
+                                  !isVirtual && isNotConducted
+                                  // Deliberately short: this rides in a
+                                  // one-line bubble, and the row it points at
+                                  // already says "Not Conducted" an inch to the
+                                  // left — repeating it here would cost the
+                                  // single line and say nothing new.
+                                  ? 'From your report — can’t be deleted'
+                                  : null;
                               final c = context.appColors;
                               // Future rows are a read-only preview; a neutral
                               // dot rather than the warning colour NU picks (§4).
@@ -1231,14 +1606,22 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.start,
                                             children: [
+                                              // Wraps to a second line rather
+                                              // than ellipsizing: the whole
+                                              // point of the row is knowing
+                                              // which subject it is, and at a
+                                              // larger font setting a single
+                                              // line cut most names to
+                                              // "Software Eng…". The card grows
+                                              // a line instead.
                                               Text(
                                                 subjectName,
-                                                maxLines: 1,
-                                                overflow:
-                                                    TextOverflow.ellipsis,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
                                                   fontSize: 15,
                                                   fontWeight: FontWeight.w600,
+                                                  height: 1.25,
                                                   color: theme
                                                       .textTheme
                                                       .bodyLarge
@@ -1268,12 +1651,12 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                                                           : (isPresent
                                                                 ? 'Present'
                                                                 : 'Absent')),
-                                                maxLines: 1,
-                                                overflow:
-                                                    TextOverflow.ellipsis,
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w500,
+                                                  height: 1.25,
                                                   color: statusColor,
                                                 ),
                                               ),
@@ -1321,7 +1704,8 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                                                       recordDate,
                                                       'P',
                                                       originalStatus:
-                                                          originalStatus ?? 'NU',
+                                                          originalStatus ??
+                                                          'NU',
                                                     );
                                                     await _loadForDate(
                                                       _selectedDay!,
@@ -1340,7 +1724,8 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                                                       recordDate,
                                                       'A',
                                                       originalStatus:
-                                                          originalStatus ?? 'NU',
+                                                          originalStatus ??
+                                                          'NU',
                                                     );
                                                     await _loadForDate(
                                                       _selectedDay!,
@@ -1385,10 +1770,14 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                                                   ),
                                                 ],
                                               ],
-                                              // Virtual (timetable-filled) rows have nothing stored to
-                                              // delete — they reappear from the timetable anyway.
-                                              if (!isVirtual) ...[
-                                                const SizedBox(width: 6),
+                                              // Every row reserves the delete
+                                              // icon's width, whether or not it
+                                              // renders one. Dropping it on NU
+                                              // rows instead would shift their
+                                              // P/A pills 42px right and leave
+                                              // the trailing column ragged.
+                                              const SizedBox(width: 6),
+                                              if (canDelete)
                                                 SizedBox(
                                                   width: 36,
                                                   child: IconButton(
@@ -1401,17 +1790,90 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                                                           .bodyMedium
                                                           ?.color,
                                                     ),
-                                                    onPressed: () =>
-                                                        _deleteRecord(
-                                                          timetableId,
-                                                          recordDate,
-                                                        ),
+                                                    tooltip: 'Delete record',
+                                                    onPressed: () async {
+                                                      final statusLabel =
+                                                          isPresent
+                                                          ? 'Present'
+                                                          : 'Absent';
+                                                      final ok =
+                                                          await _confirmDelete(
+                                                            subjectName:
+                                                                subjectName,
+                                                            statusLabel:
+                                                                statusLabel,
+                                                            // The row's own
+                                                            // colour, so the
+                                                            // dialog's dot
+                                                            // matches the card
+                                                            // that was tapped.
+                                                            statusColor:
+                                                                statusColor,
+                                                            prettyDate:
+                                                                _prettyDate(
+                                                                  recordDate,
+                                                                ),
+                                                          );
+                                                      if (!ok) return;
+                                                      if (!mounted) return;
+                                                      await _deleteWithUndo(
+                                                        recordId: recordId,
+                                                        timetableEntryId:
+                                                            timetableId,
+                                                        // The raw key —
+                                                        // storage, not display.
+                                                        date: recordDate,
+                                                        status: status,
+                                                        statusLabel:
+                                                            statusLabel,
+                                                        source:
+                                                            record['source']
+                                                                as String? ??
+                                                            'manual',
+                                                        originalStatus:
+                                                            originalStatus,
+                                                        subjectName:
+                                                            subjectName,
+                                                      );
+                                                    },
                                                     visualDensity:
                                                         VisualDensity.compact,
                                                     padding: EdgeInsets.zero,
                                                   ),
-                                                ),
-                                              ],
+                                                )
+                                              else if (deleteBlockedReason !=
+                                                  null)
+                                                SizedBox(
+                                                  width: 36,
+                                                  child: BeakTooltip(
+                                                    // Touch-first: a
+                                                    // long-press-only tooltip
+                                                    // is undiscoverable, so the
+                                                    // explanation would never
+                                                    // be read.
+                                                    message:
+                                                        deleteBlockedReason,
+                                                    child: Icon(
+                                                      Icons
+                                                          .delete_outline_rounded,
+                                                      size: 20,
+                                                      // 0.35 reads as "present
+                                                      // but off"; the card's own
+                                                      // border alpha (80/255)
+                                                      // read as a glitch on the
+                                                      // dark theme.
+                                                      color: theme
+                                                          .textTheme
+                                                          .bodyMedium
+                                                          ?.color
+                                                          ?.withValues(
+                                                            alpha: 0.35,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                )
+                                              else
+                                                const SizedBox(width: 36),
                                             ],
                                           ),
                                       ],
@@ -1441,9 +1903,12 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
     return GestureDetector(
       onTap: onTap,
       // Min width keeps the 'P'/'A'/'NU' pills the same size as the wider
-      // 'Present'/'Absent' pills so clusters line up across rows.
+      // 'Present'/'Absent' pills so clusters line up across rows. The max is
+      // what stops a larger system font from inflating the 'Present' pill until
+      // it crowds the subject name out of the row — past that the label
+      // ellipsizes and the name keeps its space.
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 40),
+        constraints: const BoxConstraints(minWidth: 40, maxWidth: 92),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -1463,6 +1928,100 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
               color: selected ? color : theme.textTheme.bodyMedium?.color,
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A deleted attendance record plus everything needed to put it back.
+///
+/// The whole row is captured, not just its key: `original_status` — the PDF
+/// baseline that decides the "Manual" badge and whether the row can be reverted
+/// to NU — lives only in `attendance_records`, so once the row is gone no
+/// re-import can reconstruct it. Undo re-inserts these values verbatim.
+class _DeletedRecord {
+  const _DeletedRecord({
+    required this.timetableEntryId,
+    required this.date,
+    required this.status,
+    required this.statusLabel,
+    required this.source,
+    required this.originalStatus,
+    required this.subjectName,
+  });
+
+  final int timetableEntryId;
+
+  /// The full storage key, `_n` suffix included — the record's identity.
+  final String date;
+
+  /// 'P' or 'A'; delete is not offered on any other status.
+  final String status;
+
+  /// 'Present' or 'Absent' — so the snackbar names what went, not just where.
+  final String statusLabel;
+  final String source;
+
+  /// The PDF baseline. Unrecoverable once the row is deleted.
+  final String? originalStatus;
+  final String subjectName;
+}
+
+/// A ring that drains over [duration], showing how long Undo remains available.
+///
+/// A window the user cannot see is a guess. Purely decorative: the SnackBar's
+/// own `duration` is what actually closes the bar — this only visualises it.
+class _UndoCountdownRing extends StatelessWidget {
+  const _UndoCountdownRing({required this.duration});
+
+  final Duration duration;
+
+  @override
+  Widget build(BuildContext context) {
+    const double size = 20;
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color progressColor = isDark
+        ? const Color(0xFF62D488)
+        : context.appColors.success;
+    final Color trackColor = isDark
+        ? const Color(0xFF303833)
+        : const Color(0xFFD7DED9);
+    final Color outlineColor = isDark
+        ? const Color(0xFF77827B)
+        : const Color(0xFF84928A);
+
+    Widget framed(Widget child) {
+      return SizedBox(
+        width: size,
+        height: size,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            border: Border.all(color: outlineColor, width: 1),
+          ),
+          child: Padding(padding: const EdgeInsets.all(2), child: child),
+        ),
+      );
+    }
+
+    // Nothing to watch drain when the OS has "remove animations" on, and a
+    // ring frozen at full would misreport the window as untouched.
+    if (MediaQuery.of(context).disableAnimations) {
+      return framed(Icon(Icons.timer_outlined, size: 13, color: progressColor));
+    }
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 1, end: 0),
+      duration: duration,
+      // Linear on purpose: an eased countdown lies about the time remaining.
+      curve: Curves.linear,
+      builder: (context, value, child) => framed(
+        CircularProgressIndicator(
+          value: value,
+          strokeWidth: 2,
+          backgroundColor: trackColor,
+          valueColor: AlwaysStoppedAnimation<Color>(progressColor),
         ),
       ),
     );

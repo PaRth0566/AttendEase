@@ -62,6 +62,13 @@ android {
         }
     }
 
+    // Android lint has almost nothing to inspect in a Flutter app (MainActivity only),
+    // and lintVitalAnalyzeRelease intermittently fails on Windows when its cached
+    // jars are still held open by a Gradle/lint worker process. Skip it on release.
+    lint {
+        checkReleaseBuilds = false
+    }
+
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")

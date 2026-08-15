@@ -53,11 +53,16 @@ Widget _harness({
   );
 }
 
+/// The pill's alignment, read off the keyed resting chip.
+///
+/// `.off` mode paints two indicators — the resting chip and, while the jelly
+/// spring is up, the travelling lens — so a bare `AnimatedGlassIndicator` type
+/// match plus `.first` would be silently order-dependent. Both carry the same
+/// `alignment`, but the key says which one is meant. See
+/// `bottom_nav_pill_test.dart` for why the chip exists.
 double _pillX(WidgetTester tester) {
-  final dynamic indicator = tester
-      .widgetList(find.byWidgetPredicate(
-          (w) => w.runtimeType.toString() == 'AnimatedGlassIndicator'))
-      .first;
+  final dynamic indicator =
+      tester.widget(find.byKey(const Key('nav_selection_pill')));
   return (indicator.alignment as Alignment).x;
 }
 

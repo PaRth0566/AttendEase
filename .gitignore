@@ -37,6 +37,7 @@ local.properties
 .pub-cache/
 .pub/
 /build/
+/android/build/
 /coverage/
 
 # Symbolication related
@@ -68,4 +69,13 @@ opencode.json
 card-expand-animation-prompt.md
 *.prompt.md
 devtools_options.yaml
+
+# AI agent tooling. Kept locally for working on this repo; never part of the
+# app, its build, or a release — so it stays out of the published history.
+.agents/
+skills-lock.json
+.claude/
+
+# Firebase Hosting deploy cache
+.firebase/
 

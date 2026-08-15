@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../database/db_helper.dart';
+import '../router/app_router.dart';
 
 /// A sign-in failure with a message that is safe to show to the user directly.
 ///
@@ -30,6 +31,12 @@ class AuthService {
   // ✅ NEW: Get current user ID easily
   String? get currentUserId => _auth.currentUser?.uid;
 
+  Future<void> _signOutGoogleProvider() async {
+    // Web Google login uses FirebaseAuth.signInWithPopup(), not this plugin.
+    if (kIsWeb) return;
+    await _googleSignIn.signOut();
+  }
+
   /// Sentinel used to signal "the user backed out of the Google chooser".
   /// This is not an error and must not surface a message.
   static const cancelledCode = 'cancelled';
@@ -42,7 +49,9 @@ class AuthService {
         final GoogleAuthProvider googleProvider = GoogleAuthProvider();
         // Force account selection every time
         googleProvider.setCustomParameters({'prompt': 'select_account'});
-        final UserCredential userCredential = await _auth.signInWithPopup(googleProvider);
+        final UserCredential userCredential = await _auth.signInWithPopup(
+          googleProvider,
+        );
         return userCredential.user;
       }
 
@@ -80,8 +89,9 @@ class AuthService {
         idToken: googleAuth.idToken,
       );
 
-      final UserCredential userCredential =
-          await _auth.signInWithCredential(credential);
+      final UserCredential userCredential = await _auth.signInWithCredential(
+        credential,
+      );
       return userCredential.user;
     } on AuthFailure {
       rethrow;
@@ -160,10 +170,7 @@ class AuthService {
   Future<User?> signInWithEmail(String email, String password) async {
     try {
       final UserCredential userCredential = await _auth
-          .signInWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+          .signInWithEmailAndPassword(email: email.trim(), password: password);
       final user = userCredential.user;
       if (user != null && !user.emailVerified) {
         // Re-check against the server before rejecting: `emailVerified` on a
@@ -185,7 +192,8 @@ class AuthService {
           await _auth.signOut();
           throw FirebaseAuthException(
             code: 'email-not-verified',
-            message: 'Please verify your email before logging in. '
+            message:
+                'Please verify your email before logging in. '
                 'We just sent a new verification link to ${email.trim()}.',
           );
         }
@@ -203,9 +211,9 @@ class AuthService {
     try {
       final UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
+            email: email.trim(),
+            password: password,
+          );
 
       // Automatically send a verification email
       await userCredential.user?.sendEmailVerification();
@@ -240,26 +248,51 @@ class AuthService {
     // already destroyed the local data, or the user is left signed in with an
     // empty database and no way to recover it.
     try {
-      await _googleSignIn.signOut();
+      await _signOutGoogleProvider().timeout(const Duration(seconds: 5));
     } catch (e) {
       debugPrint('Google sign-out failed: ${e.runtimeType}');
     }
-    await _auth.signOut();
+    await _auth.signOut().timeout(const Duration(seconds: 10));
 
     // ── WIPE LOCAL DATA TO PREVENT LEAKING BETWEEN ACCOUNTS ──
+    //
+    // Not guarded by `kIsWeb`. The web build has a real database too —
+    // db_helper.dart opens one through `databaseFactoryFfiWeb`, backed by
+    // IndexedDB — so this must not be skipped there. Skipping it left the
+    // signed-out user's subjects on disk, and because the router re-queries
+    // `_hasDataCache` after `invalidateDataCache()` below it found that stale
+    // data and admitted the next user straight into it: one account seeing
+    // another's attendance on a shared browser.
+    //
+    // The try/catch already covers a database that will not open, so running
+    // the wipe on every platform cannot turn a failed wipe into a failed
+    // sign-out.
     try {
-      if (!kIsWeb) {
-        final db = await DBHelper.instance.database;
-        await db.delete('attendance_records');
-        await db.delete('timetable');
-        await db.delete('subjects');
-        await db.delete('imported_report_dates');
-      }
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
+      final db = await DBHelper.instance.database.timeout(
+        const Duration(seconds: 5),
+      );
+      await db.delete('attendance_records').timeout(const Duration(seconds: 5));
+      await db.delete('timetable').timeout(const Duration(seconds: 5));
+      await db.delete('subjects').timeout(const Duration(seconds: 5));
+      final importedReportDatesDelete = db.delete('imported_report_dates');
+      await importedReportDatesDelete.timeout(const Duration(seconds: 5));
     } catch (e) {
       debugPrint('Failed to wipe local data on logout: ${e.runtimeType}');
     }
+
+    try {
+      final prefs = await SharedPreferences.getInstance().timeout(
+        const Duration(seconds: 5),
+      );
+      await prefs.clear().timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('Failed to clear preferences on logout: ${e.runtimeType}');
+    }
+
+    // Local data was just wiped, so the router's memoised "has setup data?"
+    // answer is stale. Clear it so the next signed-in user is re-evaluated
+    // from scratch rather than inheriting the previous session's verdict.
+    AppRouter.invalidateDataCache();
   }
 
   // 6. ✅ NEW: SIGN IN ANONYMOUSLY (GUEST MODE)

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
 import 'dart:ui';
+import '../../services/auth_service.dart';
 import '../../theme/container_transform.dart';
 
 class SetupChoiceScreen extends StatelessWidget {
@@ -22,9 +23,29 @@ class SetupChoiceScreen extends StatelessWidget {
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Log Out',
             onPressed: () async {
-              await FirebaseAuth.instance.signOut();
-              if (context.mounted) {
-                context.go('/login');
+              final authService = AuthService();
+              try {
+                await authService.signOut().timeout(
+                  const Duration(seconds: 20),
+                );
+                if (context.mounted) {
+                  context.go(kIsWeb ? '/web/home' : '/login');
+                }
+              } catch (e) {
+                // Local cleanup may time out after Firebase already signed out.
+                if (authService.currentUser == null) {
+                  if (context.mounted) {
+                    context.go(kIsWeb ? '/web/home' : '/login');
+                  }
+                  return;
+                }
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Could not log out. Please try again.'),
+                    ),
+                  );
+                }
               }
             },
           ),
@@ -36,7 +57,12 @@ class SetupChoiceScreen extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 540),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.only(left: 24, right: 24, top: 48, bottom: 24),
+              padding: const EdgeInsets.only(
+                left: 24,
+                right: 24,
+                top: 48,
+                bottom: 24,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -80,7 +106,8 @@ class SetupChoiceScreen extends StatelessWidget {
                   _buildGlassCard(
                     context: context,
                     title: "Smart PDF Extraction",
-                    subtitle: "Upload your SAP attendance PDF to automatically detect subjects and current attendance.",
+                    subtitle:
+                        "Upload your SAP attendance PDF to automatically detect subjects and current attendance.",
                     icon: Icons.auto_awesome_rounded,
                     onTap: () => context.go('/setup/upload'),
                   ),
@@ -91,7 +118,8 @@ class SetupChoiceScreen extends StatelessWidget {
                   _buildGlassCard(
                     context: context,
                     title: "Manual Configuration",
-                    subtitle: "Manually input your subjects, criteria, and timetable step-by-step.",
+                    subtitle:
+                        "Manually input your subjects, criteria, and timetable step-by-step.",
                     icon: Icons.draw_rounded,
                     onTap: () => context.go('/setup/basic'),
                   ),
@@ -137,10 +165,7 @@ class SetupChoiceScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: backgroundColor,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: borderColor,
-                    width: 1.5,
-                  ),
+                  border: Border.all(color: borderColor, width: 1.5),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
@@ -148,7 +173,9 @@ class SetupChoiceScreen extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withValues(alpha: 0.15),
+                        color: theme.colorScheme.primary.withValues(
+                          alpha: 0.15,
+                        ),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(

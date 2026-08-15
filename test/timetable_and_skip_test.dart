@@ -481,8 +481,81 @@ void main() {
         today: DateTime(2026, 7, 20), // Mon
       )!;
 
-      // Nothing left unrecorded today, so there is nothing to offer skipping.
-      expect(plan.days[0].verdict, SkipVerdict.noClasses);
+      // Nothing left unrecorded today, so there is nothing to offer skipping —
+      // but the day was in session, so it is `settled`, not `noClasses`.
+      expect(plan.days[0].verdict, SkipVerdict.settled);
+    });
+
+    test('an NU lecture today is still weighed, not treated as recorded', () {
+      // Regression: today used to be forced to `noClasses` because ANY row
+      // dated today — including NU and NC, which getAttendanceStats does not
+      // count — marked the subject as already recorded. An NU is conducted but
+      // unmarked, so it must still be weighed as a skippable lecture.
+      final plan = computeWeekSkipPlan(
+        subjectStats: {
+          1: {'attended': 4, 'total': 4},
+        },
+        subjectRequired: {1: 75},
+        subjectHistory: {
+          1: [
+            {'date': '2026-07-06', 'status': 'P'},
+            {'date': '2026-07-13', 'status': 'P'},
+            {'date': '2026-07-20', 'status': 'NU'}, // today, conducted, unmarked
+          ],
+        },
+        overallRequired: 75,
+        today: DateTime(2026, 7, 20), // Mon
+      )!;
+
+      // 4/4 leaves one lecture of slack, so today is genuinely skippable.
+      expect(plan.days[0].verdict, SkipVerdict.skippable);
+      expect(plan.days[0].lectureCount, 1);
+    });
+
+    test('an NC lecture today settles the slot without charging attendance', () {
+      final plan = computeWeekSkipPlan(
+        subjectStats: {
+          1: {'attended': 3, 'total': 4},
+        },
+        subjectRequired: {1: 75},
+        subjectHistory: {
+          1: [
+            {'date': '2026-07-06', 'status': 'P'},
+            {'date': '2026-07-13', 'status': 'P'},
+            {'date': '2026-07-20', 'status': 'NC'}, // today, never happened
+          ],
+        },
+        overallRequired: 75,
+        today: DateTime(2026, 7, 20), // Mon
+      )!;
+
+      expect(plan.days[0].verdict, SkipVerdict.settled);
+    });
+
+    test('one of two same-day lectures marked leaves the other in play', () {
+      // Twice-on-Monday subject with only one of today's two lectures marked.
+      // A per-subject flag would retire both and wrongly report `settled`.
+      final plan = computeWeekSkipPlan(
+        subjectStats: {
+          1: {'attended': 10, 'total': 10},
+        },
+        subjectRequired: {1: 75},
+        subjectHistory: {
+          1: [
+            {'date': '2026-07-06', 'status': 'P'},
+            {'date': '2026-07-06_2', 'status': 'P'},
+            {'date': '2026-07-13', 'status': 'P'},
+            {'date': '2026-07-13_2', 'status': 'P'},
+            {'date': '2026-07-20', 'status': 'P'}, // today, first of two marked
+          ],
+        },
+        overallRequired: 75,
+        today: DateTime(2026, 7, 20), // Mon
+      )!;
+
+      // One lecture still outstanding, and 10/10 affords missing it.
+      expect(plan.days[0].verdict, SkipVerdict.skippable);
+      expect(plan.days[0].lectureCount, 1);
     });
 
     test('NU on a past day is not re-added as a future lecture', () {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
+import 'app_dimens.dart';
 import 'app_theme.dart';
 
 /// Glass material and content colours for the bottom navigation bar.
@@ -65,6 +66,26 @@ class GlassNavTheme {
   /// too quiet for a primary action. 12 keeps the same weight and tracking so
   /// the pill still reads as the same typographic family.
   static const double actionLabelSize = 12;
+
+  /// Bottom margin a floating `SnackBar` needs on a screen that also floats an
+  /// action pill (the calendar's "Add record").
+  ///
+  /// Measured from Scaffold's *own* bottom clearance, not from the screen edge —
+  /// which is the whole subtlety. `ScaffoldMessenger` presents a SnackBar in the
+  /// **root** Scaffold of a nested set, and that Scaffold already subtracts its
+  /// `bottomNavigationBar`'s full height (`2 * verticalInset + barHeight`) plus
+  /// the system inset before positioning a floating bar. So the nav bar is
+  /// covered for free, and a margin that added it back would push the bar a bar
+  /// height and a half up the screen.
+  ///
+  /// What is *not* covered is the action pill: it is the inner Scaffold's
+  /// floating action button, invisible to the root Scaffold's layout. The pill's
+  /// bottom edge lands exactly on the nav bar's reserved region — it stands
+  /// [actionGap] off the bar's glass, and the region extends [verticalInset]
+  /// above that glass, and the two are equal by construction — so clearing the
+  /// pill costs exactly its own height, plus a gap to sit in.
+  static const double snackBarPillClearance =
+      actionHeight + AppDimens.space12;
 
   /// The glass material — thin and genuinely translucent.
   ///
@@ -288,8 +309,15 @@ class GlassNavTheme {
   }
 
   /// Labels are small, so they lean on weight and tracking as much as colour.
+  ///
+  /// [AppTheme.fontFamily] is spelled out rather than inherited. This style is
+  /// handed straight to `GlassTabBar`, not merged into a `DefaultTextStyle`, so
+  /// with `fontFamily` left null it resolved to Roboto — which CanvasKit fetches
+  /// from fonts.gstatic.com instead of shipping, so a blocked or slow fetch left
+  /// the nav labels laid out and unpainted.
   static TextStyle labelStyle({required bool selected}) {
     return TextStyle(
+      fontFamily: AppTheme.fontFamily,
       fontSize: labelSize,
       fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
       letterSpacing: 0.5,

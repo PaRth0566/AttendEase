@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
+import '../../router/app_router.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../services/update_service.dart';
@@ -24,7 +25,6 @@ import '../../widgets/smooth_theme_switch.dart';
 import '../../widgets/theme_crossfade.dart';
 import '../../widgets/update_dialog.dart';
 import '../root/tab_page_state.dart';
-
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -177,8 +177,9 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
               ),
               Text(
                 'Active Semester',
-                style: theme.textTheme.titleMedium
-                    ?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: AppDimens.space12),
               ...List.generate(8, (i) {
@@ -195,14 +196,15 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                   title: Text(
                     'Semester $sem',
                     style: TextStyle(
-                      fontWeight:
-                          isCurrent ? FontWeight.bold : FontWeight.w500,
+                      fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
                       color: isCurrent ? theme.colorScheme.primary : null,
                     ),
                   ),
                   trailing: isCurrent
-                      ? Icon(Icons.check_rounded,
-                          color: theme.colorScheme.primary)
+                      ? Icon(
+                          Icons.check_rounded,
+                          color: theme.colorScheme.primary,
+                        )
                       : null,
                   onTap: () => Navigator.of(ctx).pop(sem),
                 );
@@ -225,7 +227,9 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
   Future<void> _checkForUpdates() async {
     if (kIsWeb) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('In-app updates are available on Android.')),
+        const SnackBar(
+          content: Text('In-app updates are available on Android.'),
+        ),
       );
       return;
     }
@@ -237,9 +241,9 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
       final update = await UpdateService.instance.checkForUpdate();
       if (!mounted) return;
       if (update == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Already up to date.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Already up to date.')));
       } else {
         await UpdateService.instance.runExclusiveSheet(
           () => showUpdateBottomSheet(context, update),
@@ -247,12 +251,16 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
       }
     } on UpdateException catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
       }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not check for updates. Please try again.')),
+          const SnackBar(
+            content: Text('Could not check for updates. Please try again.'),
+          ),
         );
       }
     } finally {
@@ -281,12 +289,17 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
             child: const Text('Stay Logged In'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(dialogCtx, true),
-            child: const Text(
-              'Log Out Anyway',
-              style: TextStyle(color: Colors.white),
+            // The label's colour rides on the button's own foregroundColor
+            // rather than a raw TextStyle on the Text, so no call site here
+            // constructs a TextStyle from scratch — the pattern that resets
+            // fontFamily to null wherever the receiving widget replaces its
+            // style instead of merging.
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
             ),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Log Out Anyway'),
           ),
         ],
       ),
@@ -313,12 +326,12 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(dialogCtx, true),
-            child: const Text(
-              'Log Out & Delete',
-              style: TextStyle(color: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
             ),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Log Out & Delete'),
           ),
         ],
       ),
@@ -326,8 +339,8 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
   }
 
   Future<void> _handleLogout() async {
-    final rootContext = context; // capture before dialog opens
-    showAppDialog(
+    final rootContext = context;
+    final confirmed = await showAppDialog<bool>(
       context: rootContext,
       barrierDismissible: false,
       builder: (dialogCtx) => AlertDialog(
@@ -341,74 +354,93 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () async {
-              Navigator.pop(dialogCtx); // close confirmation dialog
-
-              // Back up BEFORE tearing anything down, and only continue if it
-              // worked. signOut() wipes the local database to stop one
-              // account's attendance leaking into the next, so logging out on
-              // a failed backup would destroy unsynced data with no copy
-              // anywhere. Guests have no cloud document at all, so their
-              // backup always reports false — they are handled separately.
-              final user = FirebaseAuth.instance.currentUser;
-              final isGuest = user?.isAnonymous ?? false;
-
-              if (!isGuest) {
-                showAppDialog(
-                  context: rootContext,
-                  barrierDismissible: false,
-                  builder: (_) => const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  ),
-                );
-
-                bool backedUp = false;
-                try {
-                  backedUp = await CloudSyncService().backupDataToCloud();
-                } catch (e) {
-                  debugPrint('Logout backup failed: $e');
-                }
-
-                // Dismiss the spinner dialog.
-                if (rootContext.mounted) Navigator.of(rootContext).pop();
-
-                if (!backedUp) {
-                  if (!rootContext.mounted) return;
-                  final proceed = await _confirmLogoutWithoutBackup(rootContext);
-                  if (proceed != true) return;
-                }
-              } else {
-                if (!rootContext.mounted) return;
-                final proceed = await _confirmGuestLogout(rootContext);
-                if (proceed != true) return;
-              }
-
-              if (rootContext.mounted) {
-                showAppDialog(
-                  context: rootContext,
-                  barrierDismissible: false,
-                  builder: (_) => const Center(
-                    child: CircularProgressIndicator(color: Colors.white),
-                  ),
-                );
-              }
-
-              try {
-                // Wipes local data and clears prefs internally.
-                await AuthService().signOut();
-              } catch (e) {
-                debugPrint('Logout failed: $e');
-              }
-
-              if (!rootContext.mounted) return;
-              rootContext.go(kIsWeb ? '/web/home' : '/login');
-            },
-            child: const Text('Log Out', style: TextStyle(color: Colors.white)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: const Text('Log Out'),
           ),
         ],
       ),
     );
+
+    if (confirmed != true || !rootContext.mounted) return;
+
+    // Back up before sign-out because AuthService wipes local user data. Every
+    // progress route is owned and closed through the same root navigator; the
+    // profile itself lives under a nested shell navigator on web.
+    final user = FirebaseAuth.instance.currentUser;
+    final isGuest = user?.isAnonymous ?? false;
+
+    if (!isGuest) {
+      final rootNavigator = AppRouter.rootNavigatorKey.currentState;
+      showAppDialog<void>(
+        context: rootContext,
+        barrierDismissible: false,
+        builder: (_) =>
+            const Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
+
+      bool backedUp = false;
+      try {
+        backedUp = await CloudSyncService().backupDataToCloud().timeout(
+          const Duration(seconds: 20),
+        );
+      } catch (e) {
+        debugPrint('Logout backup failed: $e');
+      } finally {
+        if (rootNavigator?.mounted ?? false) rootNavigator!.pop();
+      }
+
+      if (!backedUp) {
+        if (!rootContext.mounted) return;
+        final proceed = await _confirmLogoutWithoutBackup(rootContext);
+        if (proceed != true) return;
+      }
+    } else {
+      if (!rootContext.mounted) return;
+      final proceed = await _confirmGuestLogout(rootContext);
+      if (proceed != true || !rootContext.mounted) return;
+    }
+
+    final rootNavigator = AppRouter.rootNavigatorKey.currentState;
+    if (rootNavigator == null || !rootNavigator.mounted) return;
+    showAppDialog<void>(
+      context: rootNavigator.context,
+      barrierDismissible: false,
+      builder: (_) =>
+          const Center(child: CircularProgressIndicator(color: Colors.white)),
+    );
+
+    Object? logoutError;
+    try {
+      await AuthService().signOut().timeout(const Duration(seconds: 20));
+    } catch (e) {
+      logoutError = e;
+      debugPrint('Logout failed: $e');
+    } finally {
+      if (rootNavigator.mounted) rootNavigator.pop();
+    }
+
+    // A timeout does not cancel Firebase's future, so check the authoritative
+    // auth state before reporting a failure or deciding where to navigate.
+    if (FirebaseAuth.instance.currentUser == null) {
+      if (rootContext.mounted) {
+        rootContext.go(kIsWeb ? '/web/home' : '/login');
+      }
+      return;
+    }
+
+    if (logoutError != null && rootContext.mounted) {
+      ScaffoldMessenger.of(rootContext).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not log out. Check your connection and try again.',
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -437,109 +469,114 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                       // height as bottom padding under extendBody).
                       16 + MediaQuery.paddingOf(context).bottom,
                     ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Hero card: identity + attendance breakdown, and the only
-                  // semester switcher (§5). Its own bottom margin replaces the
-                  // old SizedBox(32) + Active Semester row.
-                  _heroCard(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Hero card: identity + attendance breakdown, and the only
+                        // semester switcher (§5). Its own bottom margin replaces the
+                        // old SizedBox(32) + Active Semester row.
+                        _heroCard(),
 
-                  _themeToggleTile(),
+                        _themeToggleTile(),
 
-                  _profileTile(
-                    icon: Icons.person_rounded,
-                    title: 'Edit Profile & Dates',
-                    onTap: () => context.go('/app/profile/basic'),
-                  ),
-
-                  _profileTile(
-                    icon: Icons.book_rounded,
-                    title: 'Edit Subjects (Sem $semester)',
-                    onTap: () => context.go('/app/profile/subjects'),
-                  ),
-
-                  _profileTile(
-                    icon: Icons.schedule_rounded,
-                    title: 'Edit Timetable (Sem $semester)',
-                    onTap: () => context.go('/app/profile/timetable'),
-                  ),
-
-                  _profileTile(
-                    icon: Icons.rule_rounded,
-                    title: 'Attendance Preferences',
-                    onTap: () => context.go('/app/profile/criteria'),
-                  ),
-
-                  _profileTile(
-                    icon: Icons.bar_chart_rounded,
-                    title: 'Reports & Analytics',
-                    onTap: () => context.go('/app/profile/report'),
-                  ),
-
-                  _profileTile(
-                    icon: Icons.cloud_sync_rounded,
-                    title: 'Sync New Attendance Report',
-                    onTap: () => context.go('/app/profile/refresh-pdf'),
-                  ),
-
-                  // Carries its own 12px bottom margin, matching the tiles'
-                  // rhythm — no extra spacers, which made its gap wider before.
-                  BackupSyncCard(onSyncComplete: _loadProfileData),
-
-                  _profileTile(
-                    icon: Icons.manage_accounts_rounded,
-                    title: 'Account Settings',
-                    onTap: () => context.go('/app/profile/account'),
-                  ),
-
-                  _profileTile(
-                    icon: Icons.bug_report_rounded,
-                    title: 'Report a Bug',
-                    onTap: () => context.go('/app/profile/bug-report'),
-                  ),
-
-                  _profileTile(
-                    icon: Icons.system_update_rounded,
-                    title: _checkingForUpdate ? 'Checking for updates…' : 'Check for Updates',
-                    enabled: !_checkingForUpdate,
-                    trailing: _checkingForUpdate
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : null,
-                    onTap: _checkForUpdates,
-                  ),
-
-                  _profileTile(
-                    icon: Icons.logout_rounded,
-                    title: 'Log Out',
-                    isRedAlert: true,
-                    onTap: _handleLogout,
-                  ),
-
-                  // Centred under the cards. The Log Out tile already carries
-                  // 12px below it, so only a small extra gap here, and a modest
-                  // tail before the nav-bar clearance padding.
-                  if (_appVersion.isNotEmpty) ...[
-                    const SizedBox(height: AppDimens.space4),
-                    Center(
-                      child: Text(
-                        'Version $_appVersion',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: theme.textTheme.bodyMedium?.color?.withAlpha(150),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                        _profileTile(
+                          icon: Icons.person_rounded,
+                          title: 'Edit Profile & Dates',
+                          onTap: () => context.go('/app/profile/basic'),
                         ),
-                      ),
+
+                        _profileTile(
+                          icon: Icons.book_rounded,
+                          title: 'Edit Subjects (Sem $semester)',
+                          onTap: () => context.go('/app/profile/subjects'),
+                        ),
+
+                        _profileTile(
+                          icon: Icons.schedule_rounded,
+                          title: 'Edit Timetable (Sem $semester)',
+                          onTap: () => context.go('/app/profile/timetable'),
+                        ),
+
+                        _profileTile(
+                          icon: Icons.rule_rounded,
+                          title: 'Attendance Preferences',
+                          onTap: () => context.go('/app/profile/criteria'),
+                        ),
+
+                        _profileTile(
+                          icon: Icons.bar_chart_rounded,
+                          title: 'Reports & Analytics',
+                          onTap: () => context.go('/app/profile/report'),
+                        ),
+
+                        _profileTile(
+                          icon: Icons.cloud_sync_rounded,
+                          title: 'Sync New Attendance Report',
+                          onTap: () => context.go('/app/profile/refresh-pdf'),
+                        ),
+
+                        // Carries its own 12px bottom margin, matching the tiles'
+                        // rhythm — no extra spacers, which made its gap wider before.
+                        BackupSyncCard(onSyncComplete: _loadProfileData),
+
+                        _profileTile(
+                          icon: Icons.manage_accounts_rounded,
+                          title: 'Account Settings',
+                          onTap: () => context.go('/app/profile/account'),
+                        ),
+
+                        _profileTile(
+                          icon: Icons.bug_report_rounded,
+                          title: 'Report a Bug',
+                          onTap: () => context.go('/app/profile/bug-report'),
+                        ),
+
+                        _profileTile(
+                          icon: Icons.system_update_rounded,
+                          title: _checkingForUpdate
+                              ? 'Checking for updates…'
+                              : 'Check for Updates',
+                          enabled: !_checkingForUpdate,
+                          trailing: _checkingForUpdate
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : null,
+                          onTap: _checkForUpdates,
+                        ),
+
+                        _profileTile(
+                          icon: Icons.logout_rounded,
+                          title: 'Log Out',
+                          isRedAlert: true,
+                          onTap: _handleLogout,
+                        ),
+
+                        // Centred under the cards. The Log Out tile already carries
+                        // 12px below it, so only a small extra gap here, and a modest
+                        // tail before the nav-bar clearance padding.
+                        if (_appVersion.isNotEmpty) ...[
+                          const SizedBox(height: AppDimens.space4),
+                          Center(
+                            child: Text(
+                              'Version $_appVersion',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withAlpha(150),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: AppDimens.space8),
+                      ],
                     ),
-                  ],
-                  const SizedBox(height: AppDimens.space8),
-                ],
-              ),
                   ),
                 ),
               ),
@@ -559,11 +596,11 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
         theme.textTheme.bodyMedium?.color ?? theme.colorScheme.onSurface;
 
     Widget vRule() => Container(
-          width: 1,
-          height: 36,
-          margin: const EdgeInsets.symmetric(horizontal: AppDimens.space12),
-          color: theme.dividerColor,
-        );
+      width: 1,
+      height: 36,
+      margin: const EdgeInsets.symmetric(horizontal: AppDimens.space8),
+      color: theme.dividerColor,
+    );
 
     return Container(
       width: double.infinity,
@@ -579,6 +616,9 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
           Padding(
             padding: const EdgeInsets.all(AppDimens.space16),
             child: Row(
+              // Top-aligned: the name and course now wrap, and centring pushed
+              // the avatar and the semester chip to the middle of a tall block.
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
                   width: 56,
@@ -604,13 +644,17 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Two lines: a full name is the one thing this card must
+                      // show, and one line clipped most of them to "VIVEK VY…"
+                      // at a larger system font.
                       Text(
                         name.toUpperCase(),
-                        maxLines: 1,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: theme.textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                           letterSpacing: 0.2,
+                          height: 1.2,
                         ),
                       ),
                       if (course.isNotEmpty) ...[
@@ -619,8 +663,10 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                           course,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(color: secondary),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: secondary,
+                            height: 1.25,
+                          ),
                         ),
                       ],
                       if (_yearLabel.isNotEmpty) ...[
@@ -628,16 +674,20 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.calendar_today_rounded,
-                                size: 14, color: secondary),
+                            Icon(
+                              Icons.calendar_today_rounded,
+                              size: 14,
+                              color: secondary,
+                            ),
                             const SizedBox(width: 6),
                             Flexible(
                               child: Text(
                                 _yearLabel,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall
-                                    ?.copyWith(color: secondary),
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: secondary,
+                                ),
                               ),
                             ),
                           ],
@@ -662,29 +712,54 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
             padding: const EdgeInsets.all(AppDimens.space16),
             child: Row(
               children: [
-                // col 1 — icon tile
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 44,
-                      height: 44,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withAlpha(28),
-                        borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+                // col 1 — icon tile. Fixed width so its caption cannot widen
+                // the column past the icon and push the fixed-layout row into a
+                // horizontal overflow on devices at a larger text scale; the
+                // caption wraps/scales within this footprint instead.
+                SizedBox(
+                  width: 56,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withAlpha(28),
+                          borderRadius: BorderRadius.circular(
+                            AppDimens.radiusMd,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.percent_rounded,
+                          color: theme.colorScheme.primary,
+                          size: 22,
+                        ),
                       ),
-                      child: Icon(Icons.percent_rounded,
-                          color: theme.colorScheme.primary, size: 22),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Overall\nAttendance',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.labelSmall
-                          ?.copyWith(color: secondary, height: 1.2),
-                    ),
-                  ],
+                      const SizedBox(height: 6),
+                      // Scaled down rather than wrapped: "Attendance" on its own
+                      // is wider than this 56px column once the device's text
+                      // scale is up, and left to wrap it broke into a third line
+                      // ("Attendanc" / "e"). FittedBox hands the text unbounded
+                      // width so the explicit newline is the only break, then
+                      // shrinks the pair to fit — the same treatment the figure
+                      // in the next column already gets.
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          'Overall\nAttendance',
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          softWrap: false,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: secondary,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 vRule(),
                 // col 2 — figure + status pill
@@ -697,8 +772,9 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                         textAlign: TextAlign.center,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: secondary),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: secondary,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       FittedBox(
@@ -714,11 +790,14 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                       const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: statusColor.withAlpha(30),
-                          borderRadius:
-                              BorderRadius.circular(AppDimens.radiusPill),
+                          borderRadius: BorderRadius.circular(
+                            AppDimens.radiusPill,
+                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -731,11 +810,15 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                               color: statusColor,
                             ),
                             const SizedBox(width: 4),
-                            Text(
-                              statusLabel,
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: statusColor,
-                                fontWeight: FontWeight.w600,
+                            Flexible(
+                              child: Text(
+                                statusLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: statusColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ],
@@ -767,8 +850,9 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                               statusLabel,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall
-                                  ?.copyWith(fontWeight: FontWeight.w600),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
@@ -776,8 +860,9 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                       const SizedBox(height: 2),
                       Text(
                         'Target: ${_requiredTarget.toStringAsFixed(1)}%',
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: secondary),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: secondary,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       _targetBar(theme, statusColor),
@@ -825,8 +910,11 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                 turns: _semesterPickerOpen ? 0.5 : 0.0,
                 duration: AppMotion.standard,
                 curve: AppMotion.morph,
-                child: Icon(Icons.keyboard_arrow_down_rounded,
-                    size: 18, color: primary),
+                child: Icon(
+                  Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color: primary,
+                ),
               ),
             ],
           ),
@@ -884,8 +972,9 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
               alignment: Alignment((target * 2 - 1).clamp(-1.0, 1.0), 0),
               child: Text(
                 '${_requiredTarget.toStringAsFixed(0)}%',
-                style: theme.textTheme.labelSmall
-                    ?.copyWith(color: theme.textTheme.bodyMedium?.color),
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.textTheme.bodyMedium?.color,
+                ),
               ),
             ),
           ],
@@ -979,7 +1068,9 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
             shape: RoundedRectangleBorder(
               borderRadius: AppDimens.brMd,
               side: BorderSide(
-                color: isRedAlert ? Colors.red.withAlpha(76) : theme.dividerColor,
+                color: isRedAlert
+                    ? Colors.red.withAlpha(76)
+                    : theme.dividerColor,
               ),
             ),
             child: ListTile(
@@ -993,10 +1084,13 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: isRedAlert ? Colors.red : theme.textTheme.bodyLarge?.color,
+                  color: isRedAlert
+                      ? Colors.red
+                      : theme.textTheme.bodyLarge?.color,
                 ),
               ),
-              trailing: trailing ??
+              trailing:
+                  trailing ??
                   Icon(
                     Icons.arrow_forward_ios,
                     size: 16,

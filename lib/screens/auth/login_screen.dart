@@ -8,12 +8,18 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../database/db_helper.dart';
+import '../../router/app_router.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../theme/app_dimens.dart';
 import '../../theme/container_transform.dart';
 import '../../utils/db_utils.dart';
 import 'package:go_router/go_router.dart';
+
+/// Which sign-in path is currently in flight. Used to scope the loading
+/// spinner to the button the user actually pressed, and to disable the other
+/// buttons for the duration without showing them a spinner.
+enum _LoadingAction { email, google, guest }
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -28,8 +34,15 @@ class _LoginScreenState extends State<LoginScreen> {
   final AuthService _authService = AuthService();
   final CloudSyncService _syncService = CloudSyncService();
 
-  bool _isLoading = false;
+  // Track which sign-in action is currently loading (if any).
+  // Prevents the spinner from appearing on the wrong button when Guest is
+  // tapped but the Log In button shows the indicator.
+  _LoadingAction? _loadingAction;
   bool _obscurePassword = true;
+
+  /// True while any sign-in path is in flight — used to disable every button
+  /// and raise the modal barrier, regardless of which action is loading.
+  bool get _isLoading => _loadingAction != null;
 
   // ── Login throttling ──────────────────────────────────────
   static const int _maxAttempts = 5;
@@ -43,11 +56,16 @@ class _LoginScreenState extends State<LoginScreen> {
       _lockoutUntil != null && DateTime.now().isBefore(_lockoutUntil!);
 
   void _startLockout() {
-    _lockoutUntil = DateTime.now().add(const Duration(seconds: _lockoutSeconds));
+    _lockoutUntil = DateTime.now().add(
+      const Duration(seconds: _lockoutSeconds),
+    );
     _lockoutRemaining = _lockoutSeconds;
     _lockoutTimer?.cancel();
     _lockoutTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!mounted) { timer.cancel(); return; }
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
       setState(() {
         _lockoutRemaining--;
         if (_lockoutRemaining <= 0) {
@@ -76,9 +94,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handlePostLogin(User? user) async {
     if (user == null) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _loadingAction = null);
       return;
     }
+
+    // A new UID just signed in. Any "has setup data?" answer the router cached
+    // for a previous session (or for the pre-login empty state) is now stale —
+    // clear it so the router re-checks this user's data instead of bouncing
+    // them on the old answer.
+    AppRouter.invalidateDataCache();
 
     final creationTime = user.metadata.creationTime;
     final lastSignIn = user.metadata.lastSignInTime;
@@ -88,10 +112,13 @@ class _LoginScreenState extends State<LoginScreen> {
       final daysSinceCreation = DateTime.now().difference(creationTime).inDays;
       if (daysSinceCreation >= 30) {
         try {
-          await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .delete();
           await user.delete();
           await _authService.signOut();
-          
+
           final prefs = await SharedPreferences.getInstance();
           await prefs.clear();
 
@@ -104,11 +131,13 @@ class _LoginScreenState extends State<LoginScreen> {
         } catch (_) {}
 
         if (!mounted) return;
-        setState(() => _isLoading = false);
+        setState(() => _loadingAction = null);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Guest session expired (>30 days). Your local data was deleted.'),
+              content: Text(
+                'Guest session expired (>30 days). Your local data was deleted.',
+              ),
               duration: Duration(seconds: 4),
             ),
           );
@@ -124,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (isBrandNewUser) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      setState(() => _loadingAction = null);
       context.go('/setup');
       return;
     }
@@ -173,16 +202,26 @@ class _LoginScreenState extends State<LoginScreen> {
             await db.delete('attendance_records');
 
             for (var row in (data['subjects'] as List<dynamic>? ?? [])) {
-              await db.insert('subjects', DbUtils.sanitizeRow(Map<String, dynamic>.from(row)),
-                  conflictAlgorithm: ConflictAlgorithm.replace);
+              await db.insert(
+                'subjects',
+                DbUtils.sanitizeRow(Map<String, dynamic>.from(row)),
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
             }
             for (var row in (data['timetable'] as List<dynamic>? ?? [])) {
-              await db.insert('timetable', DbUtils.sanitizeRow(Map<String, dynamic>.from(row)),
-                  conflictAlgorithm: ConflictAlgorithm.replace);
+              await db.insert(
+                'timetable',
+                DbUtils.sanitizeRow(Map<String, dynamic>.from(row)),
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
             }
-            for (var row in (data['attendance_records'] as List<dynamic>? ?? [])) {
-              await db.insert('attendance_records', DbUtils.sanitizeRow(Map<String, dynamic>.from(row)),
-                  conflictAlgorithm: ConflictAlgorithm.replace);
+            for (var row
+                in (data['attendance_records'] as List<dynamic>? ?? [])) {
+              await db.insert(
+                'attendance_records',
+                DbUtils.sanitizeRow(Map<String, dynamic>.from(row)),
+                conflictAlgorithm: ConflictAlgorithm.replace,
+              );
             }
           }
 
@@ -213,7 +252,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     if (!mounted) return;
-    setState(() => _isLoading = false);
+    setState(() => _loadingAction = null);
 
     if (hasRestored || hasLocalData) {
       context.go('/app/dashboard');
@@ -240,7 +279,9 @@ class _LoginScreenState extends State<LoginScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('No internet connection. Please connect to log in.'),
+              content: Text(
+                'No internet connection. Please connect to log in.',
+              ),
             ),
           );
         }
@@ -248,7 +289,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }
 
-    setState(() => _isLoading = true);
+    setState(() => _loadingAction = _LoadingAction.email);
     try {
       User? user = await _authService.signInWithEmail(
         _emailController.text.trim(),
@@ -257,7 +298,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _failedAttempts = 0; // Reset on success
       await _handlePostLogin(user);
     } on FirebaseAuthException catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _loadingAction = null);
       // An unverified email is a state, not a bad credential — it must not
       // count toward the lockout or the user gets locked out of the very
       // screen that tells them to check their inbox.
@@ -288,14 +329,13 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(errorMessage),
-            backgroundColor: Colors.red.shade600,
             duration: const Duration(seconds: 5),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _loadingAction = null);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Login failed. Please try again.')),
         );
@@ -312,7 +352,9 @@ class _LoginScreenState extends State<LoginScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('No internet connection. Please connect to log in.'),
+              content: Text(
+                'No internet connection. Please connect to log in.',
+              ),
             ),
           );
         }
@@ -320,12 +362,12 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }
 
-    setState(() => _isLoading = true);
+    setState(() => _loadingAction = _LoadingAction.google);
     try {
       User? user = await _authService.signInWithGoogle();
       await _handlePostLogin(user);
     } on AuthFailure catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _loadingAction = null);
       // Dismissing the account chooser is not a failure — say nothing.
       if (e.code == AuthService.cancelledCode ||
           e.code == 'sign_in_canceled' ||
@@ -336,14 +378,13 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(e.message),
-            backgroundColor: Colors.red.shade600,
             duration: const Duration(seconds: 6),
           ),
         );
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _loadingAction = null);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Google Sign-In failed. Please try again.'),
@@ -364,7 +405,9 @@ class _LoginScreenState extends State<LoginScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('No internet connection. Please connect to log in.'),
+              content: Text(
+                'No internet connection. Please connect to log in.',
+              ),
             ),
           );
         }
@@ -372,12 +415,12 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }
 
-    setState(() => _isLoading = true);
+    setState(() => _loadingAction = _LoadingAction.guest);
     try {
       User? user = await _authService.signInGuest();
       if (user == null) {
         if (mounted) {
-          setState(() => _isLoading = false);
+          setState(() => _loadingAction = null);
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Guest Login failed. Please try again.'),
@@ -389,7 +432,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await _handlePostLogin(user); // Routes them properly!
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() => _loadingAction = null);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Guest Login failed. Please try again.'),
@@ -413,205 +456,236 @@ class _LoginScreenState extends State<LoginScreen> {
               child: SingleChildScrollView(
                 padding: EdgeInsets.symmetric(
                   horizontal: MediaQuery.of(context).size.width > 600 ? 40 : 24,
-                  vertical: 32, // Add top padding to prevent hugging the top edge
+                  vertical:
+                      32, // Add top padding to prevent hugging the top edge
                 ),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 480),
                   child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Image.asset(
-                        'assets/icon/app_icon2.png',
-                        height: 88,
-                        width: 88,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    Text(
-                      'Welcome to AttendEase',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: theme.textTheme.bodyLarge?.color,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Log in to sync and manage your attendance',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: theme.textTheme.bodyMedium?.color,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 48),
-
-                    TextField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      style: TextStyle(color: theme.textTheme.bodyLarge?.color),
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.email_outlined),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    TextField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      style: TextStyle(color: theme.textTheme.bodyLarge?.color),
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                          ),
-                          tooltip: _obscurePassword ? 'Show password' : 'Hide password',
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Image.asset(
+                          'assets/icon/app_icon2.png',
+                          height: 88,
+                          width: 88,
+                          fit: BoxFit.contain,
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 20),
 
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: ContainerTransformAnchor(
-                        borderRadius: AppDimens.radiusSm,
-                        child: TextButton(
-                          onPressed: () {
-                            context.push('/forgot-password');
-                          },
-                          child: Text(
-                            'Forgot Password?',
-                            style: TextStyle(color: theme.colorScheme.primary),
+                      Text(
+                        'Welcome to AttendEase',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: theme.textTheme.bodyLarge?.color,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Log in to sync and manage your attendance',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: theme.textTheme.bodyMedium?.color,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 48),
+
+                      TextField(
+                        controller: _emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        style: theme.textTheme.bodyLarge,
+                        decoration: const InputDecoration(
+                          labelText: 'Email',
+                          prefixIcon: Icon(Icons.email_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: _obscurePassword,
+                        style: theme.textTheme.bodyLarge,
+                        decoration: InputDecoration(
+                          labelText: 'Password',
+                          prefixIcon: const Icon(Icons.lock_outline),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            tooltip: _obscurePassword
+                                ? 'Show password'
+                                : 'Hide password',
+                            onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
 
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed:
-                            (_isLockedOut || _isLoading) ? null : _loginWithEmail,
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ContainerTransformAnchor(
+                          borderRadius: AppDimens.radiusSm,
+                          child: TextButton(
+                            onPressed: () {
+                              context.push('/forgot-password');
+                            },
+                            child: const Text(
+                              // No style: textButtonTheme already paints this
+                              // `colorScheme.primary` at 14/w600. The raw
+                              // TextStyle it replaces only restated that colour.
+                              'Forgot Password?',
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: (_isLockedOut || _isLoading)
+                              ? null
+                              : _loginWithEmail,
+                          child: _loadingAction == _LoadingAction.email
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : _isLockedOut
+                              ? Text('Try again in ${_lockoutRemaining}s')
+                              : const Text('Log In'),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      Row(
+                        children: [
+                          const Expanded(child: Divider()),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              'OR',
+                              style: TextStyle(
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
+                            ),
+                          ),
+                          const Expanded(child: Divider()),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+
+                      OutlinedButton.icon(
+                        onPressed: _isLoading ? null : _loginWithGoogle,
+                        icon: _loadingAction == _LoadingAction.google
+                            ? SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: theme.colorScheme.primary,
+                                ),
                               )
-                            : _isLockedOut
-                                ? Text('Try again in ${_lockoutRemaining}s')
-                                : const Text('Log In'),
+                            : Image.asset(
+                                'assets/icon/google_logo.png',
+                                height: 24,
+                              ),
+                        label: Text(
+                          'Continue with Google',
+                          style: TextStyle(
+                            color: theme.textTheme.bodyLarge?.color,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          side: BorderSide(color: theme.dividerColor),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
 
-                    Row(
-                      children: [
-                        const Expanded(child: Divider()),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'OR',
+                      const SizedBox(height: 16),
+
+                      // 🔥 NEW: Continue as Guest Button 🔥
+                      OutlinedButton.icon(
+                        onPressed: _isLoading ? null : _loginAsGuest,
+                        icon: _loadingAction == _LoadingAction.guest
+                            ? SizedBox(
+                                height: 24,
+                                width: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: theme.colorScheme.primary,
+                                ),
+                              )
+                            : Icon(
+                                Icons.person_outline_rounded,
+                                color: theme.colorScheme.primary,
+                                size: 24,
+                              ),
+                        label: Text(
+                          'Continue as Guest',
+                          style: TextStyle(
+                            color: theme.colorScheme.primary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          side: BorderSide(
+                            color: theme.colorScheme.primary.withAlpha(100),
+                            width: 1.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 32),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "Don't have an account?",
                             style: TextStyle(
                               color: theme.textTheme.bodyMedium?.color,
                             ),
                           ),
-                        ),
-                        const Expanded(child: Divider()),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    OutlinedButton.icon(
-                      onPressed: _isLoading ? null : _loginWithGoogle,
-                      icon: Image.asset(
-                        'assets/icon/google_logo.png',
-                        height: 24,
-                      ),
-                      label: Text(
-                        'Continue with Google',
-                        style: TextStyle(
-                          color: theme.textTheme.bodyLarge?.color,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        side: BorderSide(color: theme.dividerColor),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // 🔥 NEW: Continue as Guest Button 🔥
-                    OutlinedButton.icon(
-                      onPressed: _isLoading ? null : _loginAsGuest,
-                      icon: Icon(
-                        Icons.person_outline_rounded,
-                        color: theme.colorScheme.primary,
-                        size: 24,
-                      ),
-                      label: Text(
-                        'Continue as Guest',
-                        style: TextStyle(
-                          color: theme.colorScheme.primary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        side: BorderSide(
-                            color: theme.colorScheme.primary.withAlpha(100),
-                            width: 1.5
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 32),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          "Don't have an account?",
-                          style: TextStyle(
-                            color: theme.textTheme.bodyMedium?.color,
-                          ),
-                        ),
-                        ContainerTransformAnchor(
-                          borderRadius: AppDimens.radiusSm,
-                          child: TextButton(
-                            onPressed: () => context.push('/signup'),
-                            child: Text(
-                              'Sign up',
-                              style: TextStyle(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.bold,
+                          ContainerTransformAnchor(
+                            borderRadius: AppDimens.radiusSm,
+                            child: TextButton(
+                              onPressed: () => context.push('/signup'),
+                              child: Text(
+                                'Sign up',
+                                style: TextStyle(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

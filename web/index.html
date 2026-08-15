@@ -18,6 +18,13 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <!-- Without this a mobile browser assumes a ~980px layout viewport and scales
+       the whole page down to fit, so the app never actually renders at mobile
+       width — which is why the desktop-width bugs in DESKTOP_WEB_FIX_PLAN.md
+       were not caught on a phone browser either. viewport-fit=cover lets the
+       page extend under the notch/home indicator, matching the edge-to-edge
+       rendering the app already sets up natively. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="description" content="AttendEase - a privacy-conscious attendance tracker with PDF insights and cloud sync.">
   <meta name="google-signin-client_id" content="645842511929-jr72m5715907vmh716ja48eer2k4dgto.apps.googleusercontent.com">
 
@@ -32,6 +39,72 @@
 
   <title>AttendEase</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    /* Flutter web routes text input through real <input>/<textarea> elements
+       overlaid on the canvas. The browser styles those natively, which shows
+       through as artefacts around Flutter TextFields:
+
+         - `outline` is the focus ring (blue in Chrome).
+         - `border` is the input's own default border — this is the rounded
+           blue-when-focused / grey-when-idle capsule that appeared inside the
+           target fields. Clearing `outline` alone does not remove it.
+         - `appearance` stops the platform widget look (and the number-input
+           spinners) from being reintroduced.
+
+       Flutter paints the real field on the canvas underneath, so the overlaid
+       element must be visually inert — background and border included. */
+    input,
+    textarea,
+    [contenteditable="true"],
+    flt-text-editing-host input,
+    flt-text-editing-host textarea,
+    .flt-text-editing {
+      outline: none !important;
+      border: none !important;
+      box-shadow: none !important;
+      background: transparent !important;
+      -webkit-appearance: none !important;
+      appearance: none !important;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Number inputs also render increment/decrement spinners, which would sit
+       on top of the canvas-painted field. */
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none !important;
+      margin: 0 !important;
+    }
+
+    input[type="number"] {
+      -moz-appearance: textfield !important;
+    }
+
+    /* ── First-paint background ────────────────────────────────────────────
+       Until Flutter's engine has downloaded, compiled and rendered its first
+       frame, the page is genuinely empty. Painting the app's own scaffold
+       colour straight from HTML means that gap reads as the app still loading
+       rather than as a white flash followed by a dark page.
+
+       There is deliberately no logo or spinner here. The previous placeholder
+       showed web/icons/Icon-192.png, which at the time was still Flutter's
+       default template artwork, so it flashed the Flutter logo on every cold
+       load. Those icons are branded now, but the bare background is kept: it
+       cannot go stale the way an image reference can.
+
+       Defaults to the light background and switches via prefers-color-scheme,
+       which matches ThemeMode.system on a fresh visit. */
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: #F1F5F9;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      html, body { background-color: #020617; }
+    }
+  </style>
 </head>
 <body>
   <script>

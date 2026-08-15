@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../services/local_pdf_parser.dart';
-import '../../services/cloud_sync_service.dart';
-
-import '../../services/pdf_attendance_import_service.dart';
+import '../../services/app_refresh_bus.dart';
+import '../../services/attendance_report_sync_service.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
 import '../../widgets/callout_box.dart';
 import '../../widgets/pdf_source_widgets.dart';
+import '../../widgets/report_replace_dialog.dart';
 
 class RefreshPdfScreen extends StatefulWidget {
   const RefreshPdfScreen({super.key});
@@ -22,65 +19,82 @@ class RefreshPdfScreen extends StatefulWidget {
 
 class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
   bool _isUploading = false;
-  String _statusMessage = 'Select your latest attendance PDF to sync new records.';
+  String _statusMessage =
+      'Select your latest attendance PDF to sync new records.';
   bool _isDone = false;
 
+  /// Picks and imports a report through [AttendanceReportSyncService] — the same
+  /// path the dashboard's circular sync button takes, so the two cannot drift.
   Future<void> _pickAndRefresh() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-        withData: true,
+      final result = await const AttendanceReportSyncService().pickAndSync(
+        onStage: (stage) {
+          if (!mounted) return;
+          setState(() {
+            _isUploading = true;
+            _isDone = false;
+            _statusMessage = switch (stage) {
+              ReportSyncStage.reading => 'Reading your attendance report...',
+              ReportSyncStage.updating => 'Updating your records...',
+              ReportSyncStage.saving => 'Saving to cloud...',
+            };
+          });
+        },
+        // A report for someone else's course cannot be folded into this one, so
+        // the import stops here and asks before anything is written.
+        confirmReplace: (mismatch) async {
+          if (!mounted) return false;
+          return confirmReportReplace(context, mismatch);
+        },
       );
-      if (result == null || result.files.isEmpty) return;
+      if (!mounted) return;
 
-      final fileBytes = result.files.first.bytes;
-      if (fileBytes == null) {
-        _showError('Could not read the selected PDF file.');
+      // A dismissed file picker, or a declined replacement: nothing imported,
+      // nothing to report.
+      if (result == null) {
+        setState(() {
+          _isUploading = false;
+          _statusMessage =
+              'Select your latest attendance PDF to sync new records.';
+        });
         return;
       }
 
-      setState(() {
-        _isUploading = true;
-        _isDone = false;
-        _statusMessage = 'Reading your attendance report...';
-      });
-
-      final Map<String, dynamic> data =
-          await LocalPdfParser.extractAttendanceFromPdf(fileBytes);
-
-      setState(() => _statusMessage = 'Updating your records...');
-      await _applyData(data);
-
-      setState(() => _statusMessage = 'Saving to cloud...');
-      await CloudSyncService().backupDataToCloud();
+      // The tabs behind this screen are still mounted, so they are told to
+      // re-read rather than left showing the previous report.
+      AppRefreshBus.instance.refreshAll();
 
       setState(() {
         _isUploading = false;
         _isDone = true;
-        _statusMessage = 'Done! Your attendance records have been updated.';
+        _statusMessage = result.replacedPreviousData
+            ? 'Done! Your data has been replaced with the new report.'
+            : 'Done! Your attendance records have been updated.';
       });
     } catch (e) {
       if (mounted) {
         setState(() {
           _isUploading = false;
-          _statusMessage = 'Select your latest attendance PDF to sync new records.';
+          _statusMessage =
+              'Select your latest attendance PDF to sync new records.';
         });
-        // Determine a user-friendly message based on the error type
-        String friendlyMsg;
-        final raw = e.toString();
-        if (e is FormatException) {
-          // The parser now throws a user-friendly message — use it directly
-          friendlyMsg = e.message;
-        } else if (raw.contains('No such file') || raw.contains('FileSystemException')) {
-          friendlyMsg = 'The selected file could not be accessed. Please try selecting it again.';
-        } else {
-          friendlyMsg = 'Something went wrong. Please try again with a valid attendance PDF.';
-        }
+        // The snackbar surface follows the active theme; the danger colour
+        // rides on the icon rather than flooding the bar.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(friendlyMsg),
-            backgroundColor: Colors.red.shade600,
+            content: Row(
+              children: [
+                Icon(
+                  Icons.error_outline_rounded,
+                  size: 20,
+                  color: context.appColors.danger,
+                ),
+                const SizedBox(width: AppDimens.space12),
+                Expanded(
+                  child: Text(AttendanceReportSyncService.friendlyError(e)),
+                ),
+              ],
+            ),
             duration: const Duration(seconds: 5),
           ),
         );
@@ -88,58 +102,23 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
     }
   }
 
-  int _parseSemesterNumber(String s, int fallback) {
-    final digitMatch = RegExp(r'\b([1-8])\b').firstMatch(s);
-    if (digitMatch != null) return int.parse(digitMatch.group(1)!);
-    if (RegExp(r'\bviii\b').hasMatch(s)) return 8;
-    if (RegExp(r'\bvii\b').hasMatch(s))  return 7;
-    if (RegExp(r'\bvi\b').hasMatch(s))   return 6;
-    if (RegExp(r'\biv\b').hasMatch(s))   return 4;
-    if (RegExp(r'\bv\b').hasMatch(s))    return 5;
-    if (RegExp(r'\biii\b').hasMatch(s))  return 3;
-    if (RegExp(r'\bii\b').hasMatch(s))   return 2;
-    if (RegExp(r'\bi\b').hasMatch(s))    return 1;
-    return fallback;
-  }
-
   Future<void> _launchSAPPortal() async {
     final Uri url = Uri.parse('https://sdc-sppap1.svkm.ac.in:50001/irj/portal');
     if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
       if (mounted) {
+        final c = context.appColors;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Could not launch SAP Portal.'),
-            backgroundColor: Colors.red.shade600,
+            content: Row(
+              children: [
+                Icon(Icons.error_outline_rounded, size: 20, color: c.danger),
+                const SizedBox(width: AppDimens.space12),
+                const Expanded(child: Text('Could not launch SAP Portal.')),
+              ],
+            ),
           ),
         );
       }
-    }
-  }
-
-  Future<void> _applyData(Map<String, dynamic> data) async {
-    final prefs = await SharedPreferences.getInstance();
-    final activeSemester = prefs.getInt('semester') ?? 1;
-    
-    final semStr = data['semester']?.toString().toLowerCase().trim() ?? '';
-    int targetSemester = activeSemester;
-    if (semStr.isNotEmpty) {
-       targetSemester = _parseSemesterNumber(semStr, activeSemester);
-    }
-
-    // Automatically switch the user to the newly uploaded semester
-    await prefs.setInt('semester', targetSemester);
-
-    await PdfAttendanceImportService().replaceSemesterFromParsedPdf(
-      data: data,
-      semester: targetSemester,
-    );
-  }
-
-  void _showError(String msg) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(msg), backgroundColor: Colors.red.shade600),
-      );
     }
   }
 
@@ -178,7 +157,7 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                     subtitle: _isDone
                         ? 'Your attendance records have been updated.'
                         : 'Import your latest attendance PDF and keep your '
-                            'records up to date.',
+                              'records up to date.',
                     steps: const [
                       PdfSourceStep('Select PDF'),
                       PdfSourceStep('Review'),
@@ -201,7 +180,8 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                     Column(
                       children: [
                         CircularProgressIndicator(
-                            color: theme.colorScheme.primary),
+                          color: theme.colorScheme.primary,
+                        ),
                         const SizedBox(height: 16),
                         Text(
                           _statusMessage,
@@ -219,22 +199,29 @@ class _RefreshPdfScreenState extends State<RefreshPdfScreen> {
                       child: ElevatedButton.icon(
                         onPressed: () => Navigator.pop(context, true),
                         icon: const Icon(Icons.arrow_back_rounded, size: 20),
-                        label: const Text('Back to Dashboard',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold)),
+                        label: const Text(
+                          'Back to Dashboard',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 18),
                           shape: RoundedRectangleBorder(
-                              borderRadius:
-                                  BorderRadius.circular(AppDimens.radiusLg)),
+                            borderRadius: BorderRadius.circular(
+                              AppDimens.radiusLg,
+                            ),
+                          ),
                         ),
                       ),
                     )
                   else ...[
                     Text(
                       'Choose PDF Source',
-                      style: theme.textTheme.titleLarge
-                          ?.copyWith(fontWeight: FontWeight.bold),
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(

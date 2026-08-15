@@ -74,12 +74,13 @@ SkipPlan computeSkipPlan({
     counts[base] = (counts[base] ?? 0) + 1;
     if (latest == null || dt.isAfter(latest)) latest = dt;
   }
-  if (latest == null)
+  if (latest == null) {
     return SkipPlan(
       maxSkips: maxSkips,
       dates: const [],
       countPerDate: const {},
     );
+  }
 
   // A weekday is "active" if the subject recurs there (>= 2 distinct dates) and
   // was seen within the last 3 weeks of history — dropping stale slots from a
@@ -139,6 +140,11 @@ enum SkipVerdict {
 
   /// Nothing scheduled (e.g. Sunday, or a free weekday).
   noClasses,
+
+  /// Classes were scheduled and every one of them is already marked, so there
+  /// is nothing left to decide. Distinct from [noClasses]: the day was in
+  /// session. Normally today, once attendance has been taken.
+  settled,
 
   /// Earlier this week — already happened, so it isn't on offer.
   past,
@@ -203,11 +209,13 @@ class WeekSkipPlan {
 /// counts only when the subject recurs there (≥2 distinct dates) and was seen
 /// within 21 days of that subject's latest record — stale slots from a
 /// schedule that shifted mid-semester drop out. Lectures-per-day comes from the
-/// most recent occurrence, reflecting the current week. `NC` rows are excluded
-/// because no lecture actually happened.
+/// most recent *complete* occurrence: [today] is excluded while it is still in
+/// progress, since a partially-marked day would undercount the slot. `NC` rows
+/// are excluded because no lecture actually happened.
 Map<int, List<int>> _inferWeeklySchedule(
-  Map<int, List<Map<String, dynamic>>> subjectHistory,
-) {
+  Map<int, List<Map<String, dynamic>>> subjectHistory, {
+  DateTime? today,
+}) {
   final latestBySubject = <int, DateTime>{};
   final weekdayDates = <int, Map<int, Set<String>>>{};
   final weekdayCounts = <int, Map<int, Map<String, int>>>{};
@@ -241,7 +249,21 @@ Map<int, List<int>> _inferWeeklySchedule(
       if (!dates.any((d) => !DateTime.parse(d).isBefore(recentCutoff))) {
         continue;
       }
-      final mostRecent = (dates.toList()..sort()).last;
+      // Lectures-per-day comes from the most recent *complete* occurrence, so
+      // today is skipped while it is still in progress. Reading the count off a
+      // partially-marked today undercounts the slot: a twice-on-Monday subject
+      // with only its first lecture recorded looked like a once-on-Monday
+      // subject, that single slot was then retired as already settled, and the
+      // outstanding second lecture disappeared from the week's plan.
+      //
+      // Falls back to the most recent day when today is the only occurrence —
+      // one sample is still better than assuming a single lecture.
+      final sortedDates = dates.toList()..sort();
+      final todayKey = today == null ? null : _dateKey(today);
+      final mostRecent = sortedDates.lastWhere(
+        (d) => d != todayKey,
+        orElse: () => sortedDates.last,
+      );
       final count =
           weekdayCounts[weekdayEntry.key]![subjectEntry.key]![mostRecent] ?? 1;
       schedule
@@ -278,6 +300,12 @@ String _dateKey(DateTime d) =>
 /// baked into [subjectStats], so a Monday you actually bunked automatically
 /// makes Saturday's verdict harsher.
 ///
+/// **Today:** lectures already marked `P`/`A`/`NC` are retired from today's
+/// hypothetical — the first two are already inside [subjectStats] and `NC` never
+/// happened. If that retires every lecture, today is [SkipVerdict.settled], not
+/// [SkipVerdict.noClasses]: the day was in session, there is just nothing left
+/// to decide.
+///
 /// **Rollover:** on Sunday the whole current week is spent (Sunday is a holiday
 /// in this app), so the *coming* week is returned instead and [
 /// WeekSkipPlan.isNextWeek] is true.
@@ -296,7 +324,7 @@ WeekSkipPlan? computeWeekSkipPlan({
   required double overallRequired,
   required DateTime today,
 }) {
-  final schedule = _inferWeeklySchedule(subjectHistory);
+  final schedule = _inferWeeklySchedule(subjectHistory, today: today);
   if (schedule.isEmpty) return null;
 
   final todayDate = DateTime(today.year, today.month, today.day);
@@ -316,17 +344,25 @@ WeekSkipPlan? computeWeekSkipPlan({
     total[entry.key] = entry.value['total'] ?? 0;
   }
 
-  /// Subject ids that already have a record for a given date — used so today's
-  /// already-marked lectures aren't counted a second time in the hypothetical.
-  final recordedToday = <int>{};
+  /// Per-subject count of today's lectures that are already settled, so they
+  /// aren't weighed a second time in the hypothetical.
+  ///
+  /// Only `P`/`A` (already inside [subjectStats], which counts exactly those two)
+  /// and `NC` (the lecture never happened, so it carries no attendance weight)
+  /// settle a slot. `NU` is deliberately excluded: it means conducted but not yet
+  /// marked, so it is still an unaccounted lecture the projection must weigh.
+  ///
+  /// Counted rather than a per-subject flag: on a day with two lectures of the
+  /// same subject, marking one must retire one slot, not both.
+  final settledToday = <int, int>{};
   final todayKey = _dateKey(todayDate);
   for (final entry in subjectHistory.entries) {
     for (final record in entry.value) {
       final base = ((record['date'] as String?) ?? '').split('_').first;
-      if (base == todayKey) {
-        recordedToday.add(entry.key);
-        break;
-      }
+      if (base != todayKey) continue;
+      final status = record['status'] as String?;
+      if (status != 'P' && status != 'A' && status != 'NC') continue;
+      settledToday[entry.key] = (settledToday[entry.key] ?? 0) + 1;
     }
   }
 
@@ -373,10 +409,23 @@ WeekSkipPlan? computeWeekSkipPlan({
     // to be wrong.
     var lectures = schedule[date.weekday] ?? const <int>[];
 
-    // Today's already-recorded lectures are part of `subjectStats` already;
-    // re-adding them would double-count.
-    if (date == todayDate && recordedToday.isNotEmpty) {
-      lectures = lectures.where((sid) => !recordedToday.contains(sid)).toList();
+    // Today's already-settled lectures are accounted for already; re-adding
+    // them would double-count. Retires one slot per settled record so a
+    // twice-a-day subject with one lecture marked keeps the other in play.
+    var settledCount = 0;
+    if (date == todayDate && settledToday.isNotEmpty) {
+      final remaining = {...settledToday};
+      final kept = <int>[];
+      for (final sid in lectures) {
+        final left = remaining[sid] ?? 0;
+        if (left > 0) {
+          remaining[sid] = left - 1;
+          settledCount++;
+        } else {
+          kept.add(sid);
+        }
+      }
+      lectures = kept;
     }
 
     if (lectures.isEmpty) {
@@ -384,7 +433,13 @@ WeekSkipPlan? computeWeekSkipPlan({
         WeekSkipDay(
           date: date,
           lectureCount: 0,
-          verdict: SkipVerdict.noClasses,
+          // A day whose lectures are all already marked *did* have classes —
+          // calling it "not in session" would be a plain falsehood, and on
+          // today that is the common case rather than an edge one. There is
+          // nothing left to offer, so it is not skippable either.
+          verdict: settledCount > 0
+              ? SkipVerdict.settled
+              : SkipVerdict.noClasses,
         ),
       );
       continue;

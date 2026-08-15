@@ -23,23 +23,46 @@ const List<String> _names = ['dash', 'cal', 'prof'];
 
 /// The bar as RootScreen configures it. [iconIndex] is RootScreen's
 /// `_iconIndex`, [pagePosition] its `_pagePosition`, [epoch] its `_iconEpoch`.
+///
+/// [keys] is RootScreen's `_iconKeys`; pass one instance across every pump of a
+/// single run, as RootScreen holds one for the life of the bar. [maskingQuality]
+/// is pinned by default, but [dynamicMasking] reproduces RootScreen's real
+/// behaviour — `.off` while the pill travels, `.high` once it parks.
 Widget _harness({
   required int iconIndex,
   required double pagePosition,
   int epoch = 1,
+  NavIconKeys? keys,
+  bool dynamicMasking = false,
 }) {
   Widget icon(int i, bool filled) {
     final bool active = iconIndex == i;
     return switch (i) {
-      1 => CalendarDaysIcon(filled: filled, active: active, epoch: epoch),
+      1 => CalendarDaysIcon(
+        filled: filled,
+        active: active,
+        epoch: epoch,
+        keys: keys,
+      ),
       2 => AvatarLookingAroundIcon(
         filled: filled,
         active: active,
         epoch: epoch,
+        keys: keys,
       ),
-      _ => DashboardMorphIcon(filled: filled, active: active, epoch: epoch),
+      _ => DashboardMorphIcon(
+        filled: filled,
+        active: active,
+        epoch: epoch,
+        keys: keys,
+      ),
     };
   }
+
+  final double offTab = (pagePosition - pagePosition.roundToDouble()).abs();
+  final MaskingQuality masking = dynamicMasking && offTab >= 0.02
+      ? MaskingQuality.off
+      : MaskingQuality.high;
 
   return LiquidGlassWidgets.wrap(
     child: MaterialApp(
@@ -59,7 +82,7 @@ Widget _harness({
             horizontalPadding: GlassNavTheme.horizontalInset,
             verticalPadding: GlassNavTheme.verticalInset,
             iconSize: GlassNavTheme.iconSize,
-            maskingQuality: MaskingQuality.high,
+            maskingQuality: masking,
             enableBlend: false,
             indicatorPinchStrength: 0,
             magnification: 1.0,
@@ -236,5 +259,64 @@ void main() {
     log.clear();
     await mountFresh(tester, active: false, epoch: 2);
     expect(log.where((e) => e.startsWith('play')), isEmpty);
+  });
+
+  // The reported bug: Dashboard→Profile played the avatar cycle twice.
+  //
+  // The tests above pin `maskingQuality` to `.high`, which is exactly why they
+  // missed it. RootScreen drops to `.off` while the pill travels and restores
+  // `.high` once it parks, and `TabIndicator` picks its whole render tree with a
+  // `switch` on that — the two branches put the icon rows under different
+  // parents at different depths. So the restore at the end of a trip rebuilt the
+  // icons rather than updating them; the rebuilt copy was born active at an
+  // epoch it had no memory of playing, and the cycle already running restarted.
+  // Dashboard→Profile showed it plainly because that trip crosses two tabs, so
+  // the restore lands well inside the 1100 ms cycle.
+  //
+  // `NavIconKeys` makes the rebuild a reparent instead, so the State and its
+  // controller survive and the single cycle plays through.
+  testWidgets('a tab change plays each icon copy exactly once', (tester) async {
+    for (int from = 0; from < 3; from++) {
+      for (int to = 0; to < 3; to++) {
+        if (from == to) continue;
+
+        // One NavIconKeys for the whole run, as RootScreen holds one per bar.
+        final NavIconKeys keys = NavIconKeys();
+        Widget frame(int iconIndex, double pos, int epoch) => _harness(
+          iconIndex: iconIndex,
+          pagePosition: pos,
+          epoch: epoch,
+          keys: keys,
+          dynamicMasking: true,
+        );
+
+        await tester.pumpWidget(frame(from, from.toDouble(), 1));
+        await tester.pumpAndSettle();
+        log.clear();
+
+        const int steps = 20;
+        for (int s = 1; s <= steps; s++) {
+          final double pos = from + (to - from) * (s / steps);
+          final bool arrived = pos.round() == to;
+          await tester.pumpWidget(frame(arrived ? to : from, pos, arrived ? 2 : 1));
+          await tester.pump(const Duration(milliseconds: 16));
+        }
+        await tester.pump(const Duration(milliseconds: 2600));
+
+        final List<String> played = log
+            .where((e) => e.startsWith('play '))
+            .map((e) => e.substring(5))
+            .toList();
+
+        // Exactly two entries, not four: one per copy of the destination.
+        expect(
+          played..sort(),
+          ['${_names[to]}/FILL', '${_names[to]}/rest'],
+          reason:
+              '${_names[from]} -> ${_names[to]} should play each copy once; a '
+              'repeated label here is the double-play bug back.',
+        );
+      }
+    }
   });
 }

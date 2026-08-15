@@ -54,37 +54,6 @@ class PrimaryButton extends StatelessWidget {
   }
 }
 
-/// Full-width secondary (outlined) action button.
-class SecondaryButton extends StatelessWidget {
-  const SecondaryButton({
-    super.key,
-    required this.label,
-    required this.onPressed,
-    this.icon,
-    this.expanded = true,
-  });
-
-  final String label;
-  final VoidCallback? onPressed;
-  final IconData? icon;
-  final bool expanded;
-
-  @override
-  Widget build(BuildContext context) {
-    final button = icon != null
-        ? OutlinedButton.icon(
-            onPressed: onPressed,
-            icon: Icon(icon, size: 18),
-            label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-          )
-        : OutlinedButton(
-            onPressed: onPressed,
-            child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-          );
-    return expanded ? SizedBox(width: double.infinity, child: button) : button;
-  }
-}
-
 /// The Back + Next button pair used across the setup wizard screens.
 /// Replaces four near-identical inline `Row(OutlinedButton, ElevatedButton)`.
 class SetupNavButtons extends StatelessWidget {

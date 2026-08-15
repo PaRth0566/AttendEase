@@ -30,12 +30,23 @@ class DBHelper {
     _databaseFuture = null;
   }
 
+  /// Database filename. Overridable so each test file can own a private
+  /// database.
+  ///
+  /// `flutter test` runs test *files* concurrently in separate isolates, but
+  /// they share one temp directory — so every file that opened the default name
+  /// was contending for the same SQLite file, and whichever lost the race died
+  /// with "database is locked". Pointing each file at its own name removes the
+  /// contention entirely rather than trying to serialise the runs.
+  @visibleForTesting
+  static String databaseFileName = 'attendease.db';
+
   Future<Database> _initDatabase() async {
     if (kIsWeb) {
       // Use web factory for sqflite on the web
       var factory = databaseFactoryFfiWeb;
       return await factory.openDatabase(
-        'attendease.db',
+        databaseFileName,
         options: OpenDatabaseOptions(
           version: 8,
           onConfigure: _onConfigure,
@@ -46,7 +57,7 @@ class DBHelper {
     }
 
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'attendease.db');
+    final path = join(dbPath, databaseFileName);
 
     return await openDatabase(
       path,

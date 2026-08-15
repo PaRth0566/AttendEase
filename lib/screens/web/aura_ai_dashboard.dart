@@ -36,7 +36,10 @@ class AuraAIDashboard extends StatelessWidget {
         ? 0.0 
         : (totalAttended / totalLectures) * 100;
 
-    final isMobile = AppBreakpoints.isMobile(context);
+    // Web breakpoint (768), not the app's 600: this dashboard only ever renders
+    // inside the web shell, and at 600-767 the app boundary handed a
+    // phone-width browser the desktop padding and type scale.
+    final isMobile = AppBreakpoints.isWebMobile(context);
 
     return Padding(
       padding: EdgeInsets.symmetric(
@@ -131,7 +134,7 @@ class AuraAIDashboard extends StatelessWidget {
             })(),
     };
 
-    final bool isSmallMobile = AppBreakpoints.isMobile(context);
+    final bool isSmallMobile = AppBreakpoints.isWebMobile(context);
     final double cardPadding = isSmallMobile ? 16.0 : 32.0;
 
     Color progressColor;
@@ -282,15 +285,20 @@ class AuraAIDashboard extends StatelessWidget {
                                     ),
                                   ),
                                   const SizedBox(height: 4),
-                                  RichText(
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    text: TextSpan(
+                                  // Text.rich, not RichText: RichText does not
+                                  // inherit DefaultTextStyle, so it renders
+                                  // with no fontFamily and falls back to
+                                  // Roboto — which CanvasKit does not bundle,
+                                  // so it painted no glyphs on web.
+                                  Text.rich(
+                                    TextSpan(
                                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: progressColor),
                                       children: [
                                         TextSpan(text: 'Target: ${overallTarget.toStringAsFixed(0)}%  •  $totalAttended/$totalLectures'),
                                       ]
-                                    )
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ]
                               ),
@@ -389,7 +397,7 @@ class AuraAIDashboard extends StatelessWidget {
   }
 
   Widget _buildRightColumn(BuildContext context, bool isDark) {
-    final isMobile = AppBreakpoints.isMobile(context);
+    final isMobile = AppBreakpoints.isWebMobile(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -542,10 +550,13 @@ class AuraAIDashboard extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Flexible(
-                              child: RichText(
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                text: TextSpan(
+                              // Text.rich, not RichText: RichText does not
+                              // inherit DefaultTextStyle, so it renders with no
+                              // fontFamily and falls back to Roboto — which
+                              // CanvasKit does not bundle, so it painted no
+                              // glyphs on web.
+                              child: Text.rich(
+                                TextSpan(
                                     text: '$attended / $total ',
                                     style: TextStyle(
                                         fontSize: 16,
@@ -562,6 +573,8 @@ class AuraAIDashboard extends StatelessWidget {
                                                   ? const Color(0xFF94A3B8)
                                                   : const Color(0xFF64748B))),
                                     ]),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             const SizedBox(width: 8),

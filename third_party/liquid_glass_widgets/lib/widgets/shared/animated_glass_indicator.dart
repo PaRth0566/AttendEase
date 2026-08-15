@@ -33,6 +33,10 @@ class AnimatedGlassIndicator extends StatelessWidget {
   /// 0 = resting, >0 = dragging/animating.
   final double thickness;
 
+  /// Overrides only glass-pass visibility, leaving interaction geometry and
+  /// the spring-driven animation unchanged.
+  final double? glassVisibilityOverride;
+
   /// Rendering quality (standard/premium).
   final GlassQuality quality;
 
@@ -129,6 +133,7 @@ class AnimatedGlassIndicator extends StatelessWidget {
     required this.itemCount,
     required this.alignment,
     required this.thickness,
+    this.glassVisibilityOverride,
     required this.quality,
     required this.indicatorColor,
     required this.isBackgroundIndicator,
@@ -309,25 +314,28 @@ class AnimatedGlassIndicator extends StatelessWidget {
     // 2. Glass Indicator (Active/Dragging state)
     // We fade the glass in/out by setting `visibility` on the settings rather
     // than wrapping the widget in `Opacity`.
-    final fade = thickness.clamp(0.0, 1.0);
+    final interactionFade = thickness.clamp(0.0, 1.0);
+    final glassFade =
+        (glassVisibilityOverride ?? interactionFade).clamp(0.0, 1.0);
     final base =
         settings != null ? _mergeWithBase(settings!) : baseIndicatorSettings;
 
     // Stabilise the pinch UV shift against jelly spring micro-oscillation.
     //
     // The spring targets thickness=1.0 when active and overshoots, leaving
-    // `fade` oscillating in the 0.9–1.0 range while the pill settles.
-    // Using `fade` directly as the pinch multiplier amplifies this oscillation
+    // `interactionFade` oscillating in the 0.9–1.0 range while the pill settles.
+    // Using it directly as the pinch multiplier amplifies this oscillation
     // into the UV warp, making icons/labels jitter visibly through the lens.
     //
     // The quadratic ease-out formula 1−(1−f)² compresses the near-1.0
     // oscillation range from ±0.10 → ±0.01 (≈10× reduction) while still
-    // mapping 0→0 and 1→1 cleanly. `visibility` is left on the raw `fade`
-    // so glass opacity still tracks the spring naturally — only the UV
-    // distortion is stabilised.
-    final stablePinchFade = 1.0 - (1.0 - fade) * (1.0 - fade);
+    // mapping 0→0 and 1→1 cleanly. The interaction value still drives the
+    // stabilised UV distortion, while glass opacity may be held independently
+    // for a rim-only pass.
+    final stablePinchFade =
+        1.0 - (1.0 - interactionFade) * (1.0 - interactionFade);
     final effectiveSettings = base
-        .copyWith(visibility: fade)
+        .copyWith(visibility: glassFade)
         .copyWithPinch(stablePinchFade * pinchStrength);
 
     final shape = useSuperellipse
@@ -363,7 +371,7 @@ class AnimatedGlassIndicator extends StatelessWidget {
     // with a RepaintBoundary, the pre-computed AA will misalign with the pixel
     // grid during the transform, causing stair-stepping on the edges.
     final interactiveIndicator =
-        thickness > 0.01 ? glassWidget : const SizedBox.expand();
+        glassFade > 0.01 ? glassWidget : const SizedBox.expand();
 
     // Standard: background inside Transform to get jelly physics
     final glassChild = Stack(
@@ -371,7 +379,7 @@ class AnimatedGlassIndicator extends StatelessWidget {
       children: [
         if (paintBackground && isStdPath && backgroundOpacity > 0)
           backgroundIndicator,
-        if (paintGlass && fade > 0.05) interactiveIndicator,
+        if (paintGlass && glassFade > 0.05) interactiveIndicator,
       ],
     );
 

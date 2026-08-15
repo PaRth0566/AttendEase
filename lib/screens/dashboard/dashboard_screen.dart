@@ -16,9 +16,12 @@ import '../../theme/app_theme.dart';
 import '../../theme/container_transform.dart';
 import '../../utils/calculation_utils.dart';
 import '../root/tab_page_state.dart';
+import '../../widgets/beak_bubble.dart';
 import '../../widgets/callout_box.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/pressable.dart';
+import '../../widgets/sap_portal_button.dart';
+import '../../widgets/sync_report_button.dart';
 
 /// Whether the dashboard's progress sweeps — the overall ring and every subject
 /// bar — have already played in this process.
@@ -237,8 +240,9 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
     int total,
     double requiredPercent,
   ) {
-    if (total == 0)
+    if (total == 0) {
       return {'text': 'No classes recorded yet.', 'isSafe': true, 'skips': 0};
+    }
     double reqFrac = requiredPercent / 100;
     double currentPercent = (attended / total) * 100;
     if (currentPercent >= requiredPercent) {
@@ -294,6 +298,11 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         title: Text('Dashboard', style: theme.textTheme.headlineSmall),
+        // The pair reads left to right in the order of the task: fetch the
+        // report from SAP, then import it here. One-tap import refreshes every
+        // tab through [AppRefreshBus], so `_loadDashboardData` here is not what
+        // updates the screen — this page is reloaded along with the others.
+        actions: const [SapPortalAction(), SyncReportAction()],
       ),
       body: Center(
         child: ConstrainedBox(
@@ -532,51 +541,6 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
 
 // ── Private widgets ──────────────────────────────────────────────────────────
 
-/// The "Semester 5" pill at the top of the overall card.
-///
-/// Blue, not a status colour: which semester you are looking at is navigation
-/// context, not a verdict. Green or red here would read as a judgement on the
-/// semester itself and compete with the ring, which is the one thing on this
-/// card that should carry status colour.
-class _SemesterBadge extends StatelessWidget {
-  const _SemesterBadge({required this.semester});
-
-  final int semester;
-
-  /// The app's system blue, the same one the nav bar and buttons use.
-  static const _accent = AppTheme.primaryBlue;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimens.space10,
-        vertical: AppDimens.space6,
-      ),
-      decoration: BoxDecoration(
-        color: _accent.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _accent.withValues(alpha: 0.5)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.school_rounded, size: 16, color: _accent),
-          const SizedBox(width: AppDimens.space6),
-          Text(
-            'Semester $semester',
-            style: const TextStyle(
-              color: _accent,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// The headline verdict under the percentage: "You can safely skip the next
 /// **15** lectures."
 ///
@@ -612,6 +576,11 @@ class _InsightFooter extends StatelessWidget {
       TextSpan(text: text.substring(0, match.start)),
       TextSpan(
         text: match.group(0),
+        // A bare TextStyle is correct here, unlike the widget-level `style:`
+        // call sites §2.4 of  replaced. A child TextSpan
+        // *merges* into its parent span (inherit defaults to true), so this is
+        // a colour+weight delta on the root span's style and the font family
+        // comes through from it. Nothing to derive from the theme.
         style: TextStyle(color: accent, fontWeight: FontWeight.w800),
       ),
       TextSpan(text: text.substring(match.end)),
@@ -676,27 +645,6 @@ class _SkippableDaysSection extends StatelessWidget {
   /// must not silently relabel these columns.
   static const _labels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
-  /// `Wed & Fri are free if you attend the rest of the week.`
-  ///
-  /// The conditional wording is not optional: every verdict here assumes the
-  /// non-green days are attended as planned, and a "free day" that isn't is the
-  /// most costly error this feature can make.
-  String _summary() {
-    final free = plan.skippableDays
-        .map((d) => DateFormat('EEE').format(d.date))
-        .toList();
-    if (free.isEmpty) {
-      return plan.isNextWeek
-          ? 'No full days off next week — keep attending.'
-          : 'No full days off this week — keep attending.';
-    }
-    final names = free.length == 1
-        ? free.first
-        : '${free.take(free.length - 1).join(', ')} & ${free.last}';
-    final verb = free.length == 1 ? 'is' : 'are';
-    return '$names $verb free if you attend the rest of the week.';
-  }
-
   /// The verdict explanation shown in the day's popover. Pure string builder —
   /// the presentation (an anchored [GlassPopover]) lives in [_DayCell].
   String _message(WeekSkipDay day) {
@@ -715,6 +663,8 @@ class _SkippableDaysSection extends StatelessWidget {
             'if you attend the rest of the week.';
       case SkipVerdict.noClasses:
         return 'No classes on $when.';
+      case SkipVerdict.settled:
+        return "$when's attendance is already marked — nothing left to skip.";
       case SkipVerdict.past:
         return '$when has already passed.';
     }
@@ -781,7 +731,39 @@ class _SkippableDaysSection extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: AppDimens.space16),
+        const SizedBox(height: AppDimens.space4),
+        // Verdict icons in their own Row — separated from the tiles Row so
+        // the AspectRatio squares never cause a cross-axis overflow on
+        // narrow screens.
+        Row(
+          children: [
+            for (var i = 0; i < plan.days.length; i++)
+              Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: i == 0 ? 0 : AppDimens.space4,
+                    right: i == plan.days.length - 1 ? 0 : AppDimens.space4,
+                  ),
+                  child: Icon(
+                    switch (plan.days[i].verdict) {
+                      SkipVerdict.skippable => Icons.check_circle_outline_rounded,
+                      SkipVerdict.unsafe || SkipVerdict.past => Icons.cancel_outlined,
+                      // Marked-and-done reads as a completed day, not as an
+                      // out-of-session dash.
+                      SkipVerdict.settled => Icons.task_alt_rounded,
+                      SkipVerdict.noClasses => Icons.remove_circle_outline_rounded,
+                    },
+                    size: 14,
+                    color: plan.days[i].verdict == SkipVerdict.skippable
+                        ? c.success
+                        : (theme.textTheme.bodyLarge?.color ?? c.success)
+                            .withValues(alpha: _iconAlpha(plan.days[i])),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: AppDimens.space12),
         // The glyphs are the only thing distinguishing the three verdicts for a
         // colourblind reader, so they need naming somewhere. One line with `|`
         // dividers, exactly as in the reference; FittedBox scales the whole row
@@ -805,6 +787,12 @@ class _SkippableDaysSection extends StatelessWidget {
               ),
               _legendDivider(theme),
               _LegendItem(
+                glyph: Icons.task_alt_rounded,
+                label: 'Already marked',
+                color: theme.textTheme.bodySmall?.color ?? c.danger,
+              ),
+              _legendDivider(theme),
+              _LegendItem(
                 glyph: Icons.remove_circle_outline_rounded,
                 label: 'Not in session',
                 color: theme.textTheme.bodySmall?.color ?? c.danger,
@@ -820,9 +808,26 @@ class _SkippableDaysSection extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: AppDimens.space10),
         child: Text(
           '|',
-          style: TextStyle(color: theme.dividerColor, fontSize: 14),
+          // bodyMedium is already 14, so this is the same glyph at the same
+          // size — derived from the theme rather than hand-built. See
+          // 
+          style: theme.textTheme.bodyMedium?.copyWith(color: theme.dividerColor),
         ),
       );
+
+  /// Alpha for a verdict icon in the separated icons row. Mirrors the logic
+  /// that was previously inline in [_DayCell.build].
+  double _iconAlpha(WeekSkipDay day) {
+    final double contentAlpha = switch (day.verdict) {
+      SkipVerdict.past => 0.35,
+      SkipVerdict.noClasses => 0.5,
+      // Settled sits between the two: a real day that happened, but with no
+      // decision left, so it reads more present than an empty one.
+      SkipVerdict.settled => 0.75,
+      SkipVerdict.skippable || SkipVerdict.unsafe => 1.0,
+    };
+    return contentAlpha * 0.7;
+  }
 }
 
 /// One "glyph — meaning" pair in the week strip's key.
@@ -1020,7 +1025,7 @@ class _DayCellState extends State<_DayCell> {
         child: TapRegion(
           groupId: widget.popover.groupId,
           onTapOutside: (_) => _removePopover(),
-          child: _SkipPopoverBubble(
+          child: BeakBubble(
             width: bubbleWidth,
             beakCenterX: beakCenterX,
             message: widget.message,
@@ -1045,6 +1050,8 @@ class _DayCellState extends State<_DayCell> {
             : '$date, not safe to skip, ${widget.blockingSubject} would drop below target';
       case SkipVerdict.noClasses:
         return '$date, no classes';
+      case SkipVerdict.settled:
+        return '$date, attendance already marked, nothing left to skip';
       case SkipVerdict.past:
         return '$date, already passed';
     }
@@ -1064,11 +1071,12 @@ class _DayCellState extends State<_DayCell> {
 
     // `past` fades via the text/border alpha rather than an Opacity wrapper, so
     // the tile border keeps its own alpha budget independent of the text.
-    final double contentAlpha = isPast
-        ? 0.35
-        : day.verdict == SkipVerdict.noClasses
-        ? 0.5
-        : 1.0;
+    final double contentAlpha = switch (day.verdict) {
+      SkipVerdict.past => 0.35,
+      SkipVerdict.noClasses => 0.5,
+      SkipVerdict.settled => 0.75,
+      SkipVerdict.skippable || SkipVerdict.unsafe => 1.0,
+    };
 
     // Skippable days are outlined in green with a whisper of fill; everything
     // else is a plain hairline box, exactly as in the reference.
@@ -1086,14 +1094,6 @@ class _DayCellState extends State<_DayCell> {
     // hairline; one resting only on recorded facts is solid.
     final double borderWidth = day.dependsOnFuture && isSkippable ? 0.8 : 1.2;
 
-    // Circled glyphs matching the legend. Past days show a faded ✗ so the
-    // glyph row is never empty and the strip baseline stays even.
-    final IconData glyph = switch (day.verdict) {
-      SkipVerdict.skippable => Icons.check_circle_outline_rounded,
-      SkipVerdict.unsafe || SkipVerdict.past => Icons.cancel_outlined,
-      SkipVerdict.noClasses => Icons.remove_circle_outline_rounded,
-    };
-
     return Semantics(
       label: _semanticLabel(),
       button: true,
@@ -1104,32 +1104,44 @@ class _DayCellState extends State<_DayCell> {
         groupId: widget.popover.groupId,
         child: GestureDetector(
         onTap: _togglePopover,
-        // The whole column is the tap target, not just the tile.
         behavior: HitTestBehavior.opaque,
-        // Excludes only the visual children — the initial, the date numeral and
-        // the glyph, which read as "W / 29 / check mark" and say nothing. It
-        // must sit *inside* the GestureDetector so the button stays activatable.
+        // Excludes only the visual children — the initial and the date numeral,
+        // which read as "W / 29" and say nothing. It must sit *inside* the
+        // GestureDetector so the button stays activatable.
         child: ExcludeSemantics(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // The tile: weekday name over date number, bordered box.
-              // AspectRatio(1) makes it square from the Expanded width.
-              // The inner Column must NOT use mainAxisSize.min — that gives
-              // children unbounded height and breaks AspectRatio.
-              // _tileKey measures this tile so the popover anchors under it.
-              AspectRatio(
-                aspectRatio: 1,
-                child: AnimatedContainer(
-                  key: _tileKey,
-                  duration: AppMotion.duration(context, AppMotion.fast),
-                  curve: AppMotion.enter,
-                  decoration: BoxDecoration(
-                    color: fill,
-                    borderRadius: AppDimens.brSm,
-                    border: Border.all(color: border, width: borderWidth),
-                  ),
+          // The tile: weekday name over date number, bordered box.
+          // AspectRatio(1) makes it square from the Expanded width.
+          // The weekday/date stack sits inside a FittedBox (below), which
+          // measures it unbounded and scales it down to fit the square — so
+          // the inner Column uses mainAxisSize.min and can never overflow the
+          // tile even at max text scale on a narrow device.
+          // _tileKey measures this tile so the popover anchors under it.
+          child: AspectRatio(
+            aspectRatio: 1,
+            child: AnimatedContainer(
+              key: _tileKey,
+              duration: AppMotion.duration(context, AppMotion.fast),
+              curve: AppMotion.enter,
+              decoration: BoxDecoration(
+                color: fill,
+                borderRadius: AppDimens.brSm,
+                border: Border.all(color: border, width: borderWidth),
+              ),
+              // FittedBox scales the weekday-over-date stack down to fit the
+              // square on devices whose text scale (or a narrow width) would
+              // otherwise push the Column past the tile's height and trip a
+              // vertical overflow. Where it already fits, scaleDown is a no-op,
+              // so devices that render fine are untouched. Padding keeps a hair
+              // of breathing room from the border at any scale.
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 2,
+                  vertical: 2,
+                ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
@@ -1148,9 +1160,6 @@ class _DayCellState extends State<_DayCell> {
                         '${day.date.day}',
                         style: TextStyle(
                           fontSize: 16,
-                          // "You are here", carried by weight alone. A ring or
-                          // dash would nest a second outline inside the green
-                          // skippable border and read as one thick smudge.
                           fontWeight: isToday
                               ? FontWeight.w900
                               : FontWeight.w700,
@@ -1161,156 +1170,13 @@ class _DayCellState extends State<_DayCell> {
                   ),
                 ),
               ),
-              const SizedBox(height: AppDimens.space4),
-              Icon(
-                glyph,
-                size: 14,
-                color: isSkippable
-                    ? c.success
-                    : on.withValues(alpha: contentAlpha * 0.7),
-              ),
-            ],
-          ),
-        ),
-      ),
-      ),
-    );
-  }
-}
-
-/// A static bubble with an upward beak, shown below a day tile.
-///
-/// Deliberately plain: it fades in place and does not expand or morph. Colours
-/// are theme-adaptive — the app's card surface and border — so it reads as a
-/// small card in both light and dark themes. The fill, border and beak are
-/// drawn as one unioned path so the outline runs continuously around the beak
-/// with no seam across its base.
-class _SkipPopoverBubble extends StatelessWidget {
-  const _SkipPopoverBubble({
-    required this.width,
-    required this.beakCenterX,
-    required this.message,
-  });
-
-  final double width;
-
-  /// Horizontal position (from the bubble's left edge) the beak points from.
-  final double beakCenterX;
-  final String message;
-
-  static const double _beakW = 16;
-  static const double _beakH = 8;
-  static const double _borderWidth = 1;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final c = context.appColors;
-    final Color bg = theme.cardColor;
-    final Color fg = theme.textTheme.bodyMedium?.color ?? bg;
-
-    return TweenAnimationBuilder<double>(
-      duration: AppMotion.duration(context, AppMotion.fast),
-      curve: AppMotion.enter,
-      tween: Tween(begin: 0, end: 1),
-      builder: (context, t, child) => Opacity(opacity: t, child: child),
-      child: SizedBox(
-        width: width,
-        child: CustomPaint(
-          painter: _PopoverPainter(
-            fill: bg,
-            border: c.cardBorder,
-            borderWidth: _borderWidth,
-            radius: AppDimens.radiusMd,
-            beakCenterX: beakCenterX,
-            beakWidth: _beakW,
-            beakHeight: _beakH,
-          ),
-          // Top inset leaves room for the beak; the rest is the text padding.
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppDimens.space12,
-              _beakH + AppDimens.space10,
-              AppDimens.space12,
-              AppDimens.space10,
-            ),
-            child: Text(
-              message,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: fg,
-                fontWeight: FontWeight.w500,
-                height: 1.3,
-              ),
             ),
           ),
         ),
       ),
+      ),
     );
   }
-}
-
-/// Paints the popover silhouette — a rounded rect body with an upward beak —
-/// as a single unioned path, then fills, shadows and strokes it so the border
-/// is continuous and there is no seam where the beak meets the body.
-class _PopoverPainter extends CustomPainter {
-  const _PopoverPainter({
-    required this.fill,
-    required this.border,
-    required this.borderWidth,
-    required this.radius,
-    required this.beakCenterX,
-    required this.beakWidth,
-    required this.beakHeight,
-  });
-
-  final Color fill;
-  final Color border;
-  final double borderWidth;
-  final double radius;
-  final double beakCenterX;
-  final double beakWidth;
-  final double beakHeight;
-
-  Path _buildPath(Size size) {
-    final body = Path()
-      ..addRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(0, beakHeight, size.width, size.height - beakHeight),
-          Radius.circular(radius),
-        ),
-      );
-    // Base dips 0.5px into the body so the union merges cleanly.
-    final beak = Path()
-      ..moveTo(beakCenterX, 0)
-      ..lineTo(beakCenterX - beakWidth / 2, beakHeight + 0.5)
-      ..lineTo(beakCenterX + beakWidth / 2, beakHeight + 0.5)
-      ..close();
-    return Path.combine(PathOperation.union, body, beak);
-  }
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final path = _buildPath(size);
-    canvas.drawShadow(path, Colors.black, 4, false);
-    canvas.drawPath(path, Paint()..color = fill);
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = border
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = borderWidth,
-    );
-  }
-
-  @override
-  bool shouldRepaint(_PopoverPainter old) =>
-      old.fill != fill ||
-      old.border != border ||
-      old.borderWidth != borderWidth ||
-      old.radius != radius ||
-      old.beakCenterX != beakCenterX ||
-      old.beakWidth != beakWidth ||
-      old.beakHeight != beakHeight;
 }
 
 class _SubjectCard extends StatelessWidget {
@@ -1365,9 +1231,14 @@ class _SubjectCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      // Top-aligned so a name that wraps to two lines keeps the
+                      // percentage on its first line rather than floating it to
+                      // the vertical middle of the block.
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               // The matching end of this was a Hero flying to
                               // the detail screen's AppBar title. It fought
@@ -1381,19 +1252,30 @@ class _SubjectCard extends StatelessWidget {
                               // fit lets a short name take only its own width so
                               // the chevron follows it, and a long one still
                               // ellipsizes at the same limit.
+                              // Two lines: the subject name is the card's
+                              // subject, and one line ellipsized most real
+                              // names ("Computer Science Practical VIII…") at a
+                              // larger system font. The card grows instead.
                               Flexible(
                                 child: Text(
                                   subject.name,
-                                  maxLines: 1,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.titleSmall,
+                                  style: theme.textTheme.titleSmall
+                                      ?.copyWith(height: 1.25),
                                 ),
                               ),
                               const SizedBox(width: AppDimens.space4),
-                              Icon(
-                                Icons.chevron_right_rounded,
-                                size: 18,
-                                color: theme.dividerColor,
+                              // Nudged down onto the first line's optical
+                              // centre, since the row is now top-aligned for
+                              // wrapping names.
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Icon(
+                                  Icons.chevron_right_rounded,
+                                  size: 18,
+                                  color: theme.dividerColor,
+                                ),
                               ),
                             ],
                           ),

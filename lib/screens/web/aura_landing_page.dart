@@ -250,9 +250,13 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                   color: const Color(0xFF6366F1),
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.only(
-                      bottom: 100,
-                    ), // padding for mobile nav
+                    // Reserve room for the floating bottom nav only where it
+                    // actually renders — the same condition guards the bar
+                    // below. Unconditionally, desktop got 100px of dead space
+                    // under the disclaimer.
+                    padding: EdgeInsets.only(
+                      bottom: AppBreakpoints.isWebMobile(context) ? 100 : 0,
+                    ),
                     child: _buildCurrentTab(isDark),
                   ),
                 ),
@@ -540,7 +544,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                       message: 'Download Android App',
                       child: IconButton(
                         onPressed: () => launchUrl(
-                          Uri.parse('https://github.com/PaRth0566/AttendEase/releases/download/v1.0.4/AttendEase.apk'),
+                          Uri.parse('https://github.com/PaRth0566/AttendEase/releases/download/v1.0.5/AttendEase.apk'),
                           mode: LaunchMode.externalApplication,
                         ),
                         icon: Icon(
@@ -1058,13 +1062,40 @@ class _AuraLandingPageState extends State<AuraLandingPage>
 
     final double spacing = isMobile ? 12 : 24;
 
-    return Wrap(
-      spacing: spacing,
-      runSpacing: spacing,
-      alignment: WrapAlignment.center,
-      children: features
-          .map((f) => _featureCard(isDark, f.$1, f.$2, f.$3, f.$4, isMobile))
-          .toList(),
+    // Measure the width the cards actually get rather than deriving it from
+    // the screen width. The Wrap sits inside a 16/24 gutter *and* a 1024
+    // ConstrainedBox, so screen-width arithmetic disagreed with reality: at
+    // 1024-1072 the four-column maths still used the full window width, so the
+    // row totalled wider than the 1024 clamp and the last card wrapped alone.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double available = constraints.maxWidth;
+        // Four across on desktop, two on tablet and phone.
+        final int columns = AppBreakpoints.isWebDesktop(context) ? 4 : 2;
+        // Subtract the inter-card gaps before dividing, so columns * cardW plus
+        // the gaps lands exactly on the available width instead of just over it.
+        final double cardW =
+            (available - spacing * (columns - 1)) / columns;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          alignment: WrapAlignment.center,
+          children: features
+              .map(
+                (f) => _featureCard(
+                  isDark,
+                  f.$1,
+                  f.$2,
+                  f.$3,
+                  f.$4,
+                  isMobile,
+                  cardW,
+                ),
+              )
+              .toList(),
+        );
+      },
     );
   }
 
@@ -1075,21 +1106,8 @@ class _AuraLandingPageState extends State<AuraLandingPage>
     String desc,
     Color accent,
     bool isMobile,
+    double cardW,
   ) {
-    // Raw width is needed here for the column arithmetic, not just a branch.
-    final w = AppBreakpoints.widthOf(context);
-    double cardW = double.infinity;
-
-    if (AppBreakpoints.isWebDesktop(context)) {
-      cardW =
-          ((w > AppBreakpoints.tablet ? AppBreakpoints.tablet : w) - 120) / 4;
-    } else if (!AppBreakpoints.isWebMobile(context)) {
-      cardW = (w - 72) / 2;
-    } else {
-      // 2 columns on mobile
-      cardW = (w - 32 - 12) / 2; // 32 is screen padding, 12 is spacing
-    }
-
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(

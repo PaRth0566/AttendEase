@@ -27,13 +27,13 @@ literals at the call sites with no parameter on `GlassTabBar` reaching them, so
 there is no way to change this from outside the package.
 
 Every edit is tagged `AttendEase patch` — `grep -rn "AttendEase patch" lib/` finds
-all of them. There are five, in three files:
+all of them. There are six, in three files:
 
 | File | Change |
 | --- | --- |
 | `lib/utils/draggable_indicator_physics.dart` | Adds `stretchAlongMotion` to `buildJellyTransform`. Default `false` reproduces upstream exactly; `true` elongates by `1 + 0.3·d` along the path and takes the perpendicular scale as the reciprocal, so the shape holds its area. |
 | `lib/widgets/shared/animated_glass_indicator.dart` | Adds a `stretchAlongMotion` field (default `false`) and forwards it to the transform. |
-| `lib/widgets/surfaces/shared/tab_bar_bottom_internal.dart` | Passes `true` at four sites: the `JellyClipper` transform and all three `AnimatedGlassIndicator` constructions. |
+| `lib/widgets/surfaces/shared/tab_bar_bottom_internal.dart` | Passes `true` at five sites: the `JellyClipper` transform and all four `AnimatedGlassIndicator` constructions. |
 
 Nothing else in the package changes behaviour, because the flag defaults to
 `false` everywhere it is not passed — `GlassSlider`, `GlassSegmentedControl` and
@@ -86,10 +86,45 @@ released tab (`|override − tabXAlign| < 0.02`), so the page-follow resumes wit
 no snap-back. Consumers that pass no override never set the flag and keep the
 plain `tabXAlign` path.
 
+## The third patch — the resting pill in `MaskingQuality.off`
+
+The selection pill vanished for the whole length of every page swipe. Icon and
+label kept their selected blue; only the capsule went. It returned, animated,
+once the page settled. Slow drags made it obvious — 2.7 s with no pill — but it
+happened on every swipe.
+
+`.off` mode carried **one** `AnimatedGlassIndicator`, gated on `thickness > 0.05`.
+`thickness` is the jelly spring, and the `SpringBuilder` above only asks for
+`1.0` while `tabIsDown || (alignment.x − targetAlignment).abs() > 0.05`. A
+page-driven `alignmentOverride` satisfies neither term: `tabIsDown` is false
+because the finger is on the page rather than the bar, and the override is fed
+to the `VelocitySpringBuilder` as its *target* with `active: true`, so it tracks
+with no lag and that 0.05 separation never opens. Both terms false → `thickness`
+0 → the sole indicator not built. A hard cut, in one frame.
+
+`.high` never showed it because it paints the chip and the lens as two separate
+passes and gates only the lens. `.off` now mirrors that split: an
+**unconditional** background chip (`paintBackground: true, paintGlass: false`)
+plus the travelling lens still gated on `thickness`. Both modes therefore paint
+a pill under the same condition, which is also what keeps the `.off`/`.high`
+swap invisible mid-slide.
+
+This interacts directly with the second patch: **it is `alignmentOverride` that
+makes `thickness` stay at zero.** A consumer driving the bar by discrete
+`tabIndex` never hits this, which is why upstream does not. If the override is
+ever removed, the gate becomes harmless again — but leave the split in, since it
+costs one widget at rest and removes the coupling entirely.
+
+Both chips carry `Key('nav_selection_pill')` so a test can assert the pill's
+presence directly rather than inferring it from a decoration.
+`test/bottom_nav_pill_test.dart` (in the app) drives a real `PageView` and
+asserts mid-gesture, which is the only place this reproduces —
+`pumpAndSettle` with the finger down hides it.
+
 ## Upgrading
 
 1. Copy the new upstream version over this directory, keeping this file.
-2. Re-apply the five edits; the table above locates them.
+2. Re-apply the six edits; the tables above locate them.
 3. Check first whether upstream has exposed the jelly parameters — if it has,
    drop the fork, take the pub dependency back, and delete the override.
 

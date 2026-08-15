@@ -85,15 +85,16 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
     await showAppDialog(
       context: context,
       builder: (_) => AlertDialog(
-        backgroundColor: Theme.of(context).cardColor, // ✅ Dynamic popup color
-        title: Text(
-          'Edit Subject',
-          style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
-        ),
+        // No style on either: dialogTheme.titleTextStyle already paints the
+        // title in bodyLarge's colour at 18/bold, and the field's default is
+        // bodyLarge. Both raw TextStyles only restated the colour, and a
+        // hand-built TextStyle is what resets fontFamily to null. See
+        // 
+        title: const Text('Edit Subject'),
         content: TextField(
           controller: controller,
           autofocus: true,
-          style: TextStyle(color: Theme.of(context).textTheme.bodyLarge?.color),
+          style: Theme.of(context).textTheme.bodyLarge,
           decoration: InputDecoration(
             hintText: 'Enter subject name',
             hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
@@ -108,7 +109,16 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color)),
+            child: Text(
+              'Cancel',
+              // labelLarge is 14/w600 — the same metrics textButtonTheme gives
+              // this label — recoloured to read as neutral rather than as the
+              // primary action. Derived from the theme so it keeps the bundled
+              // font.
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Theme.of(context).textTheme.bodyMedium?.color,
+                  ),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.check, color: Colors.green),
@@ -292,10 +302,14 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
                     child: ListTile(
                       title: Text(
                         subject.name,
-                        maxLines: 1,
+                        // Two lines: this list is how you identify which
+                        // subject you are editing, so the name has to be
+                        // readable in full at any system font size.
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontWeight: FontWeight.w600,
+                          height: 1.25,
                           color: theme
                               .textTheme
                               .bodyLarge
