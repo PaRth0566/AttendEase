@@ -5,7 +5,20 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!-- Advertising ID. No AttendEase code reads it. It arrives with
+         firebase-analytics (play-services-measurement -> play-services-ads-identifier),
+         whose library manifest declares the permission, and the manifest merger
+         folds it into the release build whether or not it is written here.
+
+         Declared explicitly so it is visible on inspection and matches the
+         "Yes" on Play Console's Advertising ID declaration (App content ->
+         Advertising ID, purpose: Analytics). Play blocks Android 13+ releases
+         that answer "Yes" without this permission present.
+
+         Deleting the firebase-analytics dependency in app/build.gradle.kts is
+         the only way to drop this — see the note there for what else changes. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID"/>
 
     <application
         android:label="AttendEase"

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -14,8 +15,11 @@ import '../../models/subject.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
+import '../../theme/container_transform.dart';
 import '../../widgets/app_overlays.dart';
 import '../../widgets/callout_box.dart';
+import '../../widgets/pressable.dart';
+import 'subject_detail_screen.dart';
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({super.key});
@@ -34,6 +38,15 @@ class _ReportScreenState extends State<ReportScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
 
+  /// Calendar span actually covered by attendance records for
+  /// [_selectedSemester] — the first date carrying any record (P / A / NU / NC)
+  /// and the last one, future-dated records included. Custom-range picking is
+  /// confined to this span: a range outside it can only ever produce an empty
+  /// report. Null when the semester holds no records at all.
+  DateTime? _recordFirstDate;
+  DateTime? _recordLastDate;
+  bool _boundsLoaded = false;
+
   bool _isGenerating = false;
   bool _reportGenerated = false;
 
@@ -43,6 +56,16 @@ class _ReportScreenState extends State<ReportScreen> {
   int _totalLectures = 0;
   int _totalAttended = 0;
 
+  /// The period the *displayed* report was generated over, captured at
+  /// generation time.
+  ///
+  /// Read only when a breakdown card is opened, so the detail page is scoped to
+  /// the report on screen rather than to whatever the pickers happen to hold
+  /// now. Null range = Semester mode, which counts every record the semester
+  /// holds — see [SubjectReportArgs].
+  DateTimeRange? _generatedRange;
+  String _generatedLabel = '';
+
   @override
   void initState() {
     super.initState();
@@ -51,50 +74,133 @@ class _ReportScreenState extends State<ReportScreen> {
 
   Future<void> _initDefaults() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       _selectedSemester = prefs.getInt('semester') ?? 1;
+    });
+    await _loadRecordBounds();
+  }
+
+  static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// Re-reads the record span for [_selectedSemester] and drops any already
+  /// picked date that the new span no longer covers — switching semesters must
+  /// not leave a range behind that its own picker would now refuse.
+  Future<void> _loadRecordBounds() async {
+    final bounds = await _attendanceDao.getAttendanceDateBoundsForSemester(
+      _selectedSemester,
+    );
+    if (!mounted) return;
+
+    final DateTime? first = bounds.firstDate == null
+        ? null
+        : _dateOnly(bounds.firstDate!);
+    final DateTime? last = bounds.lastDate == null
+        ? null
+        : _dateOnly(bounds.lastDate!);
+
+    bool outOfSpan(DateTime? d) {
+      if (d == null) return false;
+      if (first == null || last == null) return true;
+      return d.isBefore(first) || d.isAfter(last);
+    }
+
+    setState(() {
+      _recordFirstDate = first;
+      _recordLastDate = last;
+      _boundsLoaded = true;
+      if (outOfSpan(_startDate)) {
+        _startDate = null;
+        _reportGenerated = false;
+      }
+      if (outOfSpan(_endDate)) {
+        _endDate = null;
+        _reportGenerated = false;
+      }
     });
   }
 
   Future<void> _pickDate(bool isStart) async {
-    final initial = isStart
-        ? (_startDate ?? DateTime.now())
-        : (_endDate ?? DateTime.now());
+    if (!_boundsLoaded) await _loadRecordBounds();
+    if (!mounted) return;
+
+    final DateTime? first = _recordFirstDate;
+    final DateTime? last = _recordLastDate;
+    if (first == null || last == null) {
+      _showMessage(
+        'No attendance records for Semester $_selectedSemester yet — '
+        'there is no date range to pick from.',
+      );
+      return;
+    }
+
+    // The picker asserts on an initialDate outside [firstDate, lastDate], and
+    // "today" routinely falls outside a past semester's span.
+    DateTime clamp(DateTime d) =>
+        d.isBefore(first) ? first : (d.isAfter(last) ? last : d);
+
+    final DateTime initial = clamp(
+      _dateOnly(isStart ? (_startDate ?? DateTime.now()) : (_endDate ?? last)),
+    );
+
+    // The full span stays selectable in both pickers, and an inverted range is
+    // rejected on selection instead — so picking End first and then a later
+    // Start reports the same error as the other order, rather than silently
+    // greying the day out.
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
+      firstDate: first,
+      lastDate: last,
     );
+    if (picked == null || !mounted) return;
 
-    if (picked != null) {
+    final DateTime value = _dateOnly(picked);
+
+    if (isStart) {
+      if (_endDate != null && value.isAfter(_endDate!)) {
+        _showMessage('Start date cannot be after End date');
+        return;
+      }
       setState(() {
-        if (isStart) {
-          _startDate = picked;
-        } else {
-          if (_startDate != null && picked.isBefore(_startDate!)) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('End date cannot be before Start date'),
-              ),
-            );
-          } else {
-            _endDate = picked;
-          }
-        }
+        _startDate = value;
+        _reportGenerated = false;
+      });
+    } else {
+      if (_startDate != null && value.isBefore(_startDate!)) {
+        _showMessage('End date cannot be before Start date');
+        return;
+      }
+      setState(() {
+        _endDate = value;
         _reportGenerated = false;
       });
     }
   }
 
-  Future<void> _generateReport() async {
-    if (_reportType == 1 && (_startDate == null || _endDate == null)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select both Start and End dates')),
-      );
-      return;
+  Future<void> _generateReport({bool silent = false}) async {
+    if (_reportType == 1) {
+      if (_startDate == null || _endDate == null) {
+        _showMessage('Please select both Start and End dates');
+        return;
+      }
+      // Backstop for any range that turned invalid after it was picked (a
+      // semester switch, a restored state). Generating on an inverted range
+      // would quietly return an empty report instead of naming the problem.
+      if (_endDate!.isBefore(_startDate!)) {
+        _showMessage('End date cannot be before Start date');
+        return;
+      }
     }
-    setState(() => _isGenerating = true);
+    // `silent` is the re-read after returning from a breakdown card, where the
+    // user may have edited a record. Flipping the button into its spinner for
+    // that would read as a second, unasked-for generation.
+    if (!silent) setState(() => _isGenerating = true);
 
     String startQuery = '';
     String endQuery = '';
@@ -123,6 +229,18 @@ class _ReportScreenState extends State<ReportScreen> {
       );
     }
 
+    // Pinned to whichever branch above actually ran, so a breakdown card opens
+    // on the same period its own numbers were counted over. Semester mode
+    // deliberately carries no range: it counts the semester's whole record set,
+    // not the profile's semester_start/end window.
+    _generatedRange = _reportType == 0
+        ? null
+        : DateTimeRange(start: _startDate!, end: _endDate!);
+    _generatedLabel = _reportType == 0
+        ? 'Semester $_selectedSemester'
+        : '${DateFormat('MMM d, yyyy').format(_startDate!)} – '
+              '${DateFormat('MMM d, yyyy').format(_endDate!)}';
+
     _totalAttended = 0;
     _totalLectures = 0;
 
@@ -136,6 +254,7 @@ class _ReportScreenState extends State<ReportScreen> {
         ? 0.0
         : (_totalAttended / _totalLectures) * 100;
 
+    if (!mounted) return;
     _subjects.sort((a, b) {
       final statA = _stats[a.id] ?? {'attended': 0, 'total': 0};
       final statB = _stats[b.id] ?? {'attended': 0, 'total': 0};
@@ -152,6 +271,26 @@ class _ReportScreenState extends State<ReportScreen> {
       _isGenerating = false;
       _reportGenerated = true;
     });
+  }
+
+  /// Opens the tapped subject's breakdown, scoped to the report on screen.
+  ///
+  /// Uses `push` rather than `go` for the return value: the history rows on that
+  /// page are editable, so a record may have changed by the time it pops, and
+  /// this report's own figures would otherwise sit stale behind it. The card is
+  /// wrapped in a [ContainerTransformAnchor], so the page grows out of it and
+  /// shrinks back into it exactly as on the Dashboard.
+  Future<void> _openSubject(Subject subject) async {
+    final SubjectReportArgs args = (
+      subject: subject,
+      range: _generatedRange,
+      label: _generatedLabel,
+    );
+    await context.push('/app/profile/report/subject-detail', extra: args);
+    // Only worth re-reading while results are actually on screen; a mode switch
+    // while the page was open has already cleared them.
+    if (!mounted || !_reportGenerated) return;
+    await _generateReport(silent: true);
   }
 
   void _showExportOptions() {
@@ -288,6 +427,9 @@ class _ReportScreenState extends State<ReportScreen> {
         _selectedSemester = picked;
         _reportGenerated = false;
       });
+      // The selectable span belongs to the semester, so it has to follow the
+      // switch — otherwise Custom Dates keeps offering the old semester's days.
+      await _loadRecordBounds();
     }
   }
 
@@ -1070,6 +1212,27 @@ class _ReportScreenState extends State<ReportScreen> {
                               ),
                             ],
                           ),
+                        // The pickers already refuse everything outside the
+                        // record span; saying what the span *is* saves the user
+                        // discovering it by tapping greyed-out days.
+                        if (_reportType == 1) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _recordFirstDate == null || _recordLastDate == null
+                                ? _boundsLoaded
+                                      ? 'No attendance records for Semester '
+                                            '$_selectedSemester yet.'
+                                      : 'Loading available dates…'
+                                : 'Records available '
+                                      '${DateFormat('MMM dd, yyyy').format(_recordFirstDate!)}'
+                                      ' – '
+                                      '${DateFormat('MMM dd, yyyy').format(_recordLastDate!)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: theme.textTheme.bodyMedium?.color,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 16),
                         SizedBox(
                           width: double.infinity,
@@ -1259,13 +1422,38 @@ class _ReportScreenState extends State<ReportScreen> {
         ),
       ),
       const SizedBox(height: 16),
-      Text(
-        'Subject Breakdown',
-        style: TextStyle(
-          fontSize: 17,
-          fontWeight: FontWeight.bold,
-          color: theme.textTheme.bodyLarge?.color,
-        ),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Flexible(
+            child: Text(
+              'Subject Breakdown',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: theme.textTheme.bodyLarge?.color,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppDimens.space8),
+          // The chevron on each card is small; saying it outright is what makes
+          // the rows discoverable as more than a table.
+          Flexible(
+            child: Text(
+              'Tap a subject for details',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.textTheme.bodyMedium?.color,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
       ),
       const SizedBox(height: 10),
       ..._subjects.map((sub) {
@@ -1279,68 +1467,107 @@ class _ReportScreenState extends State<ReportScreen> {
             ? const Color(0xFF49AD4F)
             : const Color(0xFFF14134);
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          color: theme.cardColor,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDimens.radiusMd),
-            side: BorderSide(color: theme.dividerColor),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  // Top-aligned so the percentage tracks the name's first line
-                  // now that a long name wraps.
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        sub.name,
-                        // Two lines: a report row is unusable if you cannot
-                        // tell which subject it belongs to.
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+        return Padding(
+          // The bottom gap was the Card's own `margin`, which put it inside the
+          // anchor below — so the transform started from a box 8px taller than
+          // the card. Moved out here, the recorded rect is the card exactly.
+          padding: const EdgeInsets.only(bottom: 8),
+          child: ContainerTransformAnchor(
+            borderRadius: AppDimens.radiusMd,
+            child: Pressable(
+              borderRadius: AppDimens.brMd,
+              onTap: () => _openSubject(sub),
+              child: Card(
+                margin: EdgeInsets.zero,
+                color: theme.cardColor,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppDimens.radiusMd),
+                  side: BorderSide(color: theme.dividerColor),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        // Top-aligned so the percentage tracks the name's first
+                        // line now that a long name wraps.
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            // Name + chevron, laid out as on the Dashboard card:
+                            // Flexible (not Expanded) so a short name takes only
+                            // its own width and the chevron follows it rather
+                            // than parking against the percentage. The chevron is
+                            // the only thing on the card saying it opens.
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    sub.name,
+                                    // Two lines: a report row is unusable if you
+                                    // cannot tell which subject it belongs to.
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
+                                      height: 1.25,
+                                      color: theme.textTheme.bodyLarge?.color,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: AppDimens.space4),
+                                // Nudged onto the first line's optical centre,
+                                // since the row is top-aligned for wrapping.
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 2),
+                                  child: Icon(
+                                    Icons.chevron_right_rounded,
+                                    size: 18,
+                                    color: theme.dividerColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: AppDimens.space8),
+                          Text(
+                            '${percent.toStringAsFixed(2)}%',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      LinearProgressIndicator(
+                        value: total == 0 ? 0 : percent / 100,
+                        color: barColor,
+                        backgroundColor: theme.dividerColor,
+                        minHeight: 5,
+                        borderRadius: BorderRadius.circular(2.5),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '$attended / $total lectures',
                         style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                          height: 1.25,
-                          color: theme.textTheme.bodyLarge?.color,
+                          color: theme.textTheme.bodyMedium?.color,
+                          fontSize: 12,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: AppDimens.space8),
-                    Text(
-                      '${percent.toStringAsFixed(2)}%',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: color,
-                        fontSize: 15,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                LinearProgressIndicator(
-                  value: total == 0 ? 0 : percent / 100,
-                  color: barColor,
-                  backgroundColor: theme.dividerColor,
-                  minHeight: 5,
-                  borderRadius: BorderRadius.circular(2.5),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '$attended / $total lectures',
-                  style: TextStyle(
-                    color: theme.textTheme.bodyMedium?.color,
-                    fontSize: 12,
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         );

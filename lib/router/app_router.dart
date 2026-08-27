@@ -271,6 +271,37 @@ class AppRouter {
                     parentNavigatorKey: rootNavigatorKey,
                     pageBuilder: (context, state) =>
                         AppPageTransition.containerPage(state, const ReportScreen()),
+                    routes: [
+                      // The report's subject-breakdown cards open the same
+                      // detail page the Dashboard's do — same container
+                      // transform, same anchor — but scoped to the period the
+                      // report was generated over, which is what
+                      // [SubjectReportArgs] carries.
+                      GoRoute(
+                        path: 'subject-detail',
+                        parentNavigatorKey: rootNavigatorKey,
+                        redirect: (context, state) {
+                          // Guard: needs a generated report's scope in
+                          // state.extra. Force-browsed without it, there is no
+                          // period to report on — send the user to generate one.
+                          if (state.extra is! SubjectReportArgs) {
+                            return '/app/profile/report';
+                          }
+                          return null;
+                        },
+                        pageBuilder: (context, state) {
+                          final args = state.extra as SubjectReportArgs;
+                          return AppPageTransition.containerPage(
+                            state,
+                            SubjectDetailScreen(
+                              subject: args.subject,
+                              reportRange: args.range,
+                              reportLabel: args.label,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
                   ),
                   GoRoute(
                     path: 'refresh-pdf',

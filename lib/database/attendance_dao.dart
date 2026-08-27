@@ -2,6 +2,122 @@ import 'package:sqflite/sqflite.dart';
 
 import 'db_helper.dart';
 
+/// One row for [AttendanceDao.upsertAttendanceBatch].
+///
+/// [originalStatus] carries the same meaning it has on [upsertAttendance]: the
+/// PDF-reported baseline, or null to let the DAO preserve whatever baseline the
+/// stored row already holds.
+typedef AttendanceUpsert = ({
+  int timetableId,
+  String date,
+  String status,
+  String source,
+  String? originalStatus,
+});
+
+/// What a "mark the whole day Present / Absent" would do to one day.
+///
+/// Produced by [planDayMark]. The calendar needs both the rows to write and the
+/// counts behind them: the counts are what decide whether it confirms first, and
+/// what the confirmation is able to say about a day the dialog is covering up.
+class DayMarkPlan {
+  const DayMarkPlan({
+    required this.entries,
+    required this.markableCount,
+    required this.overwriteCount,
+    required this.notConductedCount,
+  });
+
+  /// The rows to write, in schedule order. Empty when every markable lecture
+  /// already holds the requested status — there is nothing to do, not even a
+  /// no-op write (which would restamp `source` and lie about where the value
+  /// came from).
+  final List<AttendanceUpsert> entries;
+
+  /// Lectures a bulk mark may write at all, changed or not — "Not Conducted"
+  /// excluded.
+  final int markableCount;
+
+  /// How many of [entries] already carried a Present or an Absent. This, and
+  /// only this, is what a confirmation dialog exists for: everything else is
+  /// filling in a blank.
+  final int overwriteCount;
+
+  /// Lectures left untouched because the report says they were not conducted.
+  final int notConductedCount;
+
+  bool get isEmpty => entries.isEmpty;
+
+  /// True when the mark would overwrite attendance that is already recorded.
+  bool get overwritesExistingMarks => overwriteCount > 0;
+}
+
+/// Plans a whole-day mark over [daySchedule] — a day exactly as
+/// [AttendanceDao.getDaySchedule] returns it, virtual rows included.
+///
+/// Three rules live here, and they are the ones that keep a bulk mark
+/// indistinguishable from tapping every row's own P/A pill by hand:
+///
+///  * **NC is never touched.** "Not Conducted" is something the report asserted
+///    about the lecture rather than a mark the student owns — the per-row
+///    controls offer no P/A on those either — and it carries no weight in any
+///    percentage. Sweeping it into "all present" would invent attendance for a
+///    lecture that never happened.
+///  * **A row already holding [status] is skipped**, so its stored baseline and
+///    `source` survive a mark that would not have changed its value anyway.
+///  * **Baselines follow the per-row pills.** An NU row (stored or virtual)
+///    keeps NU as its baseline, which is what leaves its revert-to-NU pill in
+///    place and tags the new value "Manual". An already-marked row passes no
+///    baseline at all, so the DAO preserves whatever the report reported —
+///    flipping a reported Absent to Present tags it "Manual", and marking the
+///    day back to Absent clears the tag by itself, since "Manual" is derived as
+///    `status != original_status`.
+DayMarkPlan planDayMark(
+  List<Map<String, dynamic>> daySchedule,
+  String status, {
+  String source = 'manual',
+}) {
+  final entries = <AttendanceUpsert>[];
+  var markableCount = 0;
+  var overwriteCount = 0;
+  var notConductedCount = 0;
+
+  for (final row in daySchedule) {
+    final String? rowStatus = row['status'] as String?;
+    if (rowStatus == 'NC') {
+      notConductedCount++;
+      continue;
+    }
+    final int? timetableId = row['timetable_entry_id'] as int?;
+    final String? date = row['record_date'] as String?;
+    // A subject with no day=0 seed slot has nowhere to store attendance, and a
+    // row with no date key is not addressable. Neither is reachable from
+    // getDaySchedule today; both are skipped rather than trusted.
+    if (timetableId == null || date == null) continue;
+
+    markableCount++;
+    if (rowStatus == status) continue;
+    if (rowStatus == 'P' || rowStatus == 'A') overwriteCount++;
+
+    entries.add((
+      timetableId: timetableId,
+      date: date,
+      status: status,
+      source: source,
+      originalStatus: rowStatus == 'NU'
+          ? ((row['original_status'] as String?) ?? 'NU')
+          : null,
+    ));
+  }
+
+  return DayMarkPlan(
+    entries: entries,
+    markableCount: markableCount,
+    overwriteCount: overwriteCount,
+    notConductedCount: notConductedCount,
+  );
+}
+
 class AttendanceDao {
   // ================================
   // DASHBOARD STATS (SUBJECT-WISE)
@@ -108,6 +224,34 @@ class AttendanceDao {
       'source': source,
       'original_status': baseline,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Writes many attendance rows in one transaction.
+  ///
+  /// The calendar's "mark the whole day Present/Absent" action is the caller.
+  /// Looping [upsertAttendance] there would run one implicit transaction — and
+  /// one fsync — per lecture, and worse, a failure halfway would leave the day
+  /// half-marked with no way back. A single transaction makes the day's mark
+  /// all-or-nothing, which is what the confirmation dialog promises.
+  ///
+  /// Each entry keeps [upsertAttendanceWith]'s baseline rule: a null
+  /// `originalStatus` preserves the stored PDF baseline, so marking a day does
+  /// not destroy what the report said and the "Manual" badge stays derivable.
+  Future<void> upsertAttendanceBatch(List<AttendanceUpsert> entries) async {
+    if (entries.isEmpty) return;
+    final db = await DBHelper.instance.database;
+    await db.transaction((txn) async {
+      for (final entry in entries) {
+        await upsertAttendanceWith(
+          txn,
+          timetableId: entry.timetableId,
+          date: entry.date,
+          status: entry.status,
+          source: entry.source,
+          originalStatus: entry.originalStatus,
+        );
+      }
+    });
   }
 
   // ================================
@@ -263,6 +407,41 @@ class AttendanceDao {
       ORDER BY a.date DESC
     ''',
       [subjectId],
+    );
+    return maps;
+  }
+
+  /// [getAttendanceHistoryForSubject] confined to an inclusive calendar range.
+  ///
+  /// The Analytics & Reports breakdown is the caller: a card there states a
+  /// subject's standing *over the report's period*, so the page it opens has to
+  /// count the same records the card counted — and only those.
+  ///
+  /// Bounds are compared on the stripped 10-character date, exactly as
+  /// [getAttendanceStatsForDateRange] does, so a multi-lecture key
+  /// (`2026-07-20_2`) is matched on its real date instead of sorting
+  /// lexicographically past the end boundary. Both bounds are `yyyy-MM-dd`.
+  ///
+  /// NU and NC rows inside the range are returned, as in the unbounded read:
+  /// they carry no weight in the percentage but they are the answer to "why is
+  /// this period's total lower than the weeks suggest".
+  Future<List<Map<String, dynamic>>> getAttendanceHistoryForSubjectInRange(
+    int subjectId,
+    String startDate,
+    String endDate,
+  ) async {
+    final db = await DBHelper.instance.database;
+    final List<Map<String, dynamic>> maps = await db.rawQuery(
+      '''
+      SELECT a.timetable_entry_id, a.date, a.status, a.source, a.original_status
+      FROM attendance_records a
+      INNER JOIN timetable t ON a.timetable_entry_id = t.id
+      WHERE t.subject_id = ?
+        AND a.date NOT LIKE 'pad_%'
+        AND substr(a.date, 1, 10) >= ? AND substr(a.date, 1, 10) <= ?
+      ORDER BY a.date DESC
+    ''',
+      [subjectId, startDate, endDate],
     );
     return maps;
   }
@@ -666,6 +845,42 @@ class AttendanceDao {
       ['$date%', semester],
     );
     return result.map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  /// Returns the calendar span covered by real attendance records for [semester].
+  ///
+  /// Both bounds are the raw 10-character calendar date (`yyyy-MM-dd`), derived
+  /// with `substr(date, 1, 10)` so multi-lecture `_n` suffixes and padding rows
+  /// are handled correctly. Returns null values when no records exist — callers
+  /// (the report custom-date pickers) should fall back to a sensible default.
+  Future<({DateTime? firstDate, DateTime? lastDate})>
+      getAttendanceDateBoundsForSemester(int semester) async {
+    final db = await DBHelper.instance.database;
+    final result = await db.rawQuery(
+      '''
+      SELECT
+        MIN(substr(a.date, 1, 10)) AS min_date,
+        MAX(substr(a.date, 1, 10)) AS max_date
+      FROM attendance_records a
+      INNER JOIN timetable t ON a.timetable_entry_id = t.id
+      INNER JOIN subjects s  ON t.subject_id = s.id
+      WHERE s.semester = ?
+        AND a.date NOT LIKE 'pad_%'
+      ''',
+      [semester],
+    );
+
+    if (result.isEmpty || result.first['min_date'] == null) {
+      return (firstDate: null, lastDate: null);
+    }
+
+    try {
+      final first = DateTime.parse(result.first['min_date'] as String);
+      final last = DateTime.parse(result.first['max_date'] as String);
+      return (firstDate: first, lastDate: last);
+    } catch (_) {
+      return (firstDate: null, lastDate: null);
+    }
   }
 
 }

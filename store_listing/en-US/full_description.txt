@@ -1,0 +1,32 @@
+AttendEase keeps your college attendance under control. Set up your timetable once, mark each lecture as you go, and always know exactly where you stand against your attendance requirement.
+
+Instead of guessing whether you can afford to miss tomorrow's lecture, AttendEase does the arithmetic for you — per subject and for the semester overall.
+
+WHAT YOU CAN DO
+
+• Build your semester: subjects, weekly timetable slots, and semester start and end dates.
+• Mark attendance in a tap — one lecture at a time, or a whole day at once.
+• Watch your live percentage for every subject and for the semester overall, measured against the target you set.
+• See which upcoming lectures you can miss while staying above your target, and which ones would push you below it.
+• Review any stretch of the semester with a calendar view and custom date-range reports.
+• Open any subject for its full session-by-session history.
+• Import your college attendance report PDF and let AttendEase fill in your records, so you are not starting from zero in the middle of a semester.
+• Export or share a clean PDF summary of your attendance whenever you need to show it.
+• Sign in to back up and restore everything, so a new phone does not mean starting over — or stay in guest mode and keep every record on your device.
+• Light and dark themes that follow your system setting.
+
+PRIVACY
+
+• Attendance report PDFs are read on your device. The file itself is never uploaded from the Android app.
+• No ads and no third-party trackers. Firebase Analytics records anonymous usage statistics such as app opens and screen views.
+• Cloud backup is optional and tied to your own account. You can delete your account and everything in it from inside the app.
+
+WHO IT IS FOR
+
+Students on a fixed weekly timetable who have to stay above a minimum attendance percentage, whether that is 75% or whatever your institution requires.
+
+GOOD TO KNOW
+
+Report import recognises the report formats AttendEase currently supports. If yours is not recognised yet, you can still track everything manually, and you can send us the details from the in-app bug report screen.
+
+AttendEase is open source. You can read the code, file an issue, or contribute at github.com/PaRth0566/AttendEase

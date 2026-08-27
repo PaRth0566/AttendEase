@@ -2,7 +2,7 @@ name: attend_ease
 description: "AttendEase - a privacy-conscious attendance tracker with PDF insights and cloud sync."
 publish_to: 'none'
 
-version: 1.0.5+5
+version: 1.1.0+6
 
 environment:
   sdk: ^3.10.7

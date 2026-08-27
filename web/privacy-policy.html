@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AttendEase — Privacy Policy</title>
+    <meta name="description" content="How AttendEase collects, stores, and protects your data. Attendance records stay on your device by default; cloud sync is opt-in.">
+    <meta name="theme-color" content="#0f1117">
+
+    <!-- Favicon. Absolute paths: these pages are served through a rewrite
+         (/privacy-policy), so relative hrefs would break at /privacy-policy.html. -->
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+    <style>
+        :root {
+            --bg: #0f1117;
+            --card: #1a1d27;
+            --text: #e4e6eb;
+            --muted: #9ca3af;
+            --accent: #38bdf8;
+            --border: #2d3142;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            padding: 2rem 1rem;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 0.25rem;
+            color: #fff;
+        }
+        .subtitle {
+            color: var(--muted);
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+        }
+        h2 {
+            font-size: 1.3rem;
+            color: var(--accent);
+            margin: 2rem 0 0.75rem;
+            padding-bottom: 0.4rem;
+            border-bottom: 1px solid var(--border);
+        }
+        h3 {
+            font-size: 1.05rem;
+            margin: 1.25rem 0 0.5rem;
+            color: #d1d5db;
+        }
+        p, li {
+            margin-bottom: 0.75rem;
+            color: var(--text);
+        }
+        ul {
+            padding-left: 1.5rem;
+        }
+        li { list-style: disc; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+        .badge {
+            display: inline-block;
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent);
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+        footer {
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 0.85rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Privacy Policy</h1>
+        <p class="subtitle">AttendEase — Last updated: August 26, 2026</p>
+
+        <div class="card">
+            <span class="badge">Summary</span>
+            <p>AttendEase is a privacy-conscious attendance tracker. Your attendance data is stored locally on your device by default. Cloud sync is optional and only activated when you choose to sign in with Google.</p>
+        </div>
+
+        <h2>1. Information We Collect</h2>
+
+        <h3>1.1 Information You Provide</h3>
+        <ul>
+            <li><strong>Google Account Information:</strong> When you choose to sign in with Google, we receive your name, email address, and profile photo from your Google account. This is used solely for authentication and display within the app.</li>
+            <li><strong>Attendance Data:</strong> Subject names, attendance records, schedules, and notes that you manually enter or import via PDF.</li>
+        </ul>
+
+        <h3>1.2 Information Collected Automatically</h3>
+        <ul>
+            <li><strong>Analytics Data:</strong> We use Firebase Analytics to collect anonymous usage data such as app opens, screen views, and feature usage. This data is aggregated and is not used to identify you personally.</li>
+            <li><strong>Advertising Identifier:</strong> Firebase Analytics reads your device's advertising ID. AttendEase shows no advertising and does not use the ID for advertising or marketing; it is collected only so anonymous usage statistics stay consistent. You can delete or reset it at any time in your device settings.</li>
+            <li><strong>Device Information:</strong> Basic device information (OS version, device model, app version) collected by Firebase Analytics.</li>
+        </ul>
+
+        <h3>1.3 Information We Do NOT Collect</h3>
+        <ul>
+            <li>Location data</li>
+            <li>Contact lists</li>
+            <li>Photos or media (except PDFs you explicitly import)</li>
+            <li>Browsing history</li>
+            <li>Financial information</li>
+        </ul>
+
+        <h2>2. How We Use Your Information</h2>
+        <ul>
+            <li><strong>Authentication:</strong> To verify your identity when using cloud sync features.</li>
+            <li><strong>Cloud Sync:</strong> To store and synchronize your attendance data across your devices via Google Cloud Firestore (only when you opt in by signing in).</li>
+            <li><strong>App Improvement:</strong> Anonymous analytics help us understand which features are most used, so we know what to improve next.</li>
+            <li><strong>PDF Processing:</strong> Imported PDFs are processed locally on your device to extract attendance data. PDF files are not uploaded to any server.</li>
+        </ul>
+
+        <h2>3. Data Storage and Security</h2>
+
+        <h3>3.1 Local Storage</h3>
+        <p>By default, all your attendance data is stored locally in an SQLite database on your device. This data never leaves your device unless you explicitly enable cloud sync.</p>
+
+        <h3>3.2 Cloud Storage</h3>
+        <p>If you sign in with Google, your attendance data is synced to Google Cloud Firestore. This data is:</p>
+        <ul>
+            <li>Encrypted in transit using TLS/HTTPS</li>
+            <li>Stored in Google's secure cloud infrastructure</li>
+            <li>Accessible only to your authenticated account</li>
+            <li>Protected by Firestore Security Rules that prevent unauthorized access</li>
+        </ul>
+
+        <h3>3.3 Third-Party Services</h3>
+        <p>We use the following third-party services:</p>
+        <ul>
+            <li><strong>Firebase Authentication</strong> — for Google Sign-In</li>
+            <li><strong>Cloud Firestore</strong> — for cloud data sync</li>
+            <li><strong>Firebase Analytics</strong> — for anonymous usage analytics, which also reads your advertising ID</li>
+        </ul>
+        <p>These services are operated by Google and are subject to <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a>.</p>
+
+        <h2>4. Data Sharing</h2>
+        <p>We do <strong>not</strong> sell, trade, or share your personal information with third parties. Your data is only shared with:</p>
+        <ul>
+            <li><strong>Firebase/Google Cloud:</strong> Only when you opt in to cloud sync, and solely for the purpose of storing and syncing your data.</li>
+            <li><strong>Firebase Analytics:</strong> Anonymous usage events and your advertising ID, used only to produce aggregate usage statistics for us. We do not sell this data or use it for advertising.</li>
+        </ul>
+
+        <h2>5. Your Rights and Choices</h2>
+        <ul>
+            <li><strong>Use Without Sign-In:</strong> You can use AttendEase fully offline without creating an account or signing in.</li>
+            <li><strong>Delete Your Data:</strong> You can delete all your local data by clearing app data or uninstalling the app. Cloud data can be deleted by using the delete account option within the app or by contacting us. See <a href="/delete-account">Delete Your Account and Data</a> for step-by-step instructions and what is removed.</li>
+            <li><strong>Reset or Delete Your Advertising ID:</strong> Open Android <strong>Settings</strong> → <strong>Privacy</strong> → <strong>Ads</strong> to reset or delete your advertising ID. Once deleted, the app receives a string of zeros instead. Anonymous analytics events still continue; there is currently no in-app switch to turn them off.</li>
+            <li><strong>Export Your Data:</strong> You can export your attendance data as PDF reports from within the app.</li>
+        </ul>
+
+        <h2>6. Children's Privacy</h2>
+        <p>AttendEase is not directed at children under 13. We do not knowingly collect personal information from children under 13. If you believe we have collected information from a child under 13, please contact us so we can promptly remove it.</p>
+
+        <h2>7. Changes to This Policy</h2>
+        <p>We may update this privacy policy from time to time. We will notify you of any significant changes by posting the new policy on this page and updating the "Last updated" date. Your continued use of the app after changes constitutes acceptance of the updated policy.</p>
+
+        <h2>8. Contact Us</h2>
+        <p>If you have any questions about this privacy policy or your data, please contact us at:</p>
+        <div class="card">
+            <p><strong>Email:</strong> <a href="mailto:parthrathod05066@gmail.com">parthrathod05066@gmail.com</a></p>
+        </div>
+
+        <h2>9. Source Code</h2>
+        <p>AttendEase is developed on GitHub. You can browse the project, follow releases, or report an issue there:</p>
+        <div class="card">
+            <p><strong>GitHub:</strong> <a href="https://github.com/PaRth0566/AttendEase" target="_blank" rel="noopener">github.com/PaRth0566/AttendEase</a></p>
+        </div>
+
+        <footer>
+            <p>&copy; 2026 AttendEase. All rights reserved.</p>
+            <p><a href="/">Back to AttendEase</a></p>
+        </footer>
+    </div>
+</body>
+</html>

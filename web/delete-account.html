@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AttendEase — Delete Your Account and Data</title>
+    <meta name="description" content="How to delete your AttendEase account and data, in the app or by email, and exactly what is removed or kept.">
+    <meta name="theme-color" content="#0f1117">
+
+    <!-- Favicon. Absolute paths: these pages are served through a rewrite
+         (/delete-account), so relative hrefs would break at /delete-account.html. -->
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png">
+    <style>
+        :root {
+            --bg: #0f1117;
+            --card: #1a1d27;
+            --text: #e4e6eb;
+            --muted: #9ca3af;
+            --accent: #38bdf8;
+            --danger: #f87171;
+            --border: #2d3142;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            padding: 2rem 1rem;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 2rem;
+            margin-bottom: 0.25rem;
+            color: #fff;
+        }
+        .subtitle {
+            color: var(--muted);
+            margin-bottom: 2rem;
+            font-size: 0.95rem;
+        }
+        h2 {
+            font-size: 1.3rem;
+            color: var(--accent);
+            margin: 2rem 0 0.75rem;
+            padding-bottom: 0.4rem;
+            border-bottom: 1px solid var(--border);
+            scroll-margin-top: 1.5rem;
+        }
+        h3 {
+            font-size: 1.05rem;
+            margin: 1.25rem 0 0.5rem;
+            color: #d1d5db;
+        }
+        p, li {
+            margin-bottom: 0.75rem;
+            color: var(--text);
+        }
+        ul, ol {
+            padding-left: 1.5rem;
+        }
+        li { list-style: disc; }
+        ol li { list-style: decimal; }
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+        .card.warn {
+            border-color: rgba(248, 113, 113, 0.45);
+        }
+        .badge {
+            display: inline-block;
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent);
+            padding: 0.2rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+        .badge.danger {
+            background: rgba(248, 113, 113, 0.15);
+            color: var(--danger);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.95rem;
+        }
+        th, td {
+            text-align: left;
+            padding: 0.6rem 0.75rem;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+        th { color: var(--muted); font-weight: 600; }
+        code {
+            background: rgba(148, 163, 184, 0.15);
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        footer {
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 0.85rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Delete Your Account and Data</h1>
+        <p class="subtitle">AttendEase (<code>com.parthm.attendease</code>) — Last updated: August 26, 2026</p>
+
+        <div class="card">
+            <span class="badge">Summary</span>
+            <p>You can delete your AttendEase account and all associated data at any time, either from inside the app or by emailing us. Deletion is permanent and cannot be undone.</p>
+        </div>
+
+        <h2>Option 1 — Delete from inside the app</h2>
+        <p>This is the fastest method and takes effect immediately.</p>
+        <ol>
+            <li>Open <strong>AttendEase</strong> and make sure you are signed in.</li>
+            <li>Go to the <strong>Profile</strong> tab.</li>
+            <li>Tap <strong>Account Settings</strong>.</li>
+            <li>Scroll to the <strong>Danger Zone</strong> section.</li>
+            <li>Tap <strong>Delete Account</strong>.</li>
+            <li>Type <code>DELETE</code> to confirm, then tap <strong>Delete Permanently</strong>.</li>
+            <li>Confirm your identity with Google when prompted.</li>
+        </ol>
+        <p>Your account and data are erased as soon as this completes. If you see a message asking you to sign in again, log out, log back in, and repeat the steps — Google requires a recent sign-in before an account can be deleted.</p>
+
+        <h2>Option 2 — Request deletion by email</h2>
+        <p>If you can no longer access the app or your device, email us and we will delete your account for you.</p>
+        <div class="card">
+            <p><strong>Email:</strong> <a href="mailto:parthrathod05066@gmail.com?subject=AttendEase%20Account%20Deletion%20Request">parthrathod05066@gmail.com</a></p>
+            <p><strong>Subject:</strong> AttendEase Account Deletion Request</p>
+            <p><strong>Include:</strong> the Google account email address you signed in with, so we can locate and verify your account.</p>
+        </div>
+        <p>We verify that the request comes from the account owner, then delete the account. Requests are handled within <strong>30 days</strong>, and normally much sooner. We will email you to confirm once the deletion is done.</p>
+
+        <h2 id="what-gets-deleted">What gets deleted</h2>
+        <p>Deleting your account permanently removes:</p>
+        <ul>
+            <li>Your AttendEase account and Firebase Authentication record</li>
+            <li>Your name, email address, and profile photo taken from your Google account</li>
+            <li>Your cloud-synced document in Cloud Firestore, including subjects, attendance records, timetable, and imported report history</li>
+            <li>All AttendEase data stored locally on the device you delete from, including the on-device database and saved app preferences</li>
+        </ul>
+
+        <div class="card warn">
+            <span class="badge danger">Irreversible</span>
+            <p>There is no recovery, undo, or backup after deletion. If you want to keep your records, export a PDF report from the app before you delete your account.</p>
+        </div>
+
+        <h3>Data on your other devices</h3>
+        <p>Local data on other devices where you were signed in is removed the next time AttendEase opens there and finds the account gone. You can also remove it immediately by clearing the app's storage in your device settings, or by uninstalling the app.</p>
+
+        <h3>Retention</h3>
+        <table>
+            <tr>
+                <th>Data</th>
+                <th>Retention after deletion</th>
+            </tr>
+            <tr>
+                <td>Account record and profile information</td>
+                <td>Deleted immediately; no retention period</td>
+            </tr>
+            <tr>
+                <td>Cloud-synced attendance data (Firestore)</td>
+                <td>Deleted immediately; removed from Google Cloud backups within 30 days</td>
+            </tr>
+            <tr>
+                <td>Local on-device data</td>
+                <td>Deleted immediately on the device you delete from</td>
+            </tr>
+            <tr>
+                <td>Anonymous analytics events and advertising ID</td>
+                <td>Not linked to your identity and cannot be traced back to you; retained in aggregate by Firebase Analytics for up to 14 months</td>
+            </tr>
+        </table>
+        <p>We keep no other copies of your data, and we do not retain anything for legal or business purposes after deletion.</p>
+
+        <h2 id="delete-some-data">Deleting only some of your data</h2>
+        <p>You do not have to delete your whole account to remove data. You can keep your AttendEase account and still delete parts of it:</p>
+        <ul>
+            <li><strong>Delete individual subjects:</strong> go to <strong>Profile</strong> → <strong>Edit Subjects</strong> and tap the delete icon next to any subject. This removes the subject together with its attendance records, on your device and in your cloud copy.</li>
+            <li><strong>Clear all academic data:</strong> re-importing an attendance report offers to replace your existing records, which clears the previous subjects, attendance records, timetable, and import history while your account stays intact.</li>
+            <li><strong>Remove local data only:</strong> clear the app's storage in your device settings, or uninstall the app. Your account and any cloud copy remain.</li>
+        </ul>
+        <p>You can also email <a href="mailto:parthrathod05066@gmail.com?subject=AttendEase%20Partial%20Data%20Deletion%20Request">parthrathod05066@gmail.com</a> and ask us to delete specific data without closing your account. Tell us the Google account email you signed in with and what you want removed. Email requests are handled within <strong>30 days</strong>.</p>
+        <p><strong>What is kept:</strong> your account, sign-in details, and profile information stay in place, along with any subjects and records you did not delete. Deleted items are removed from your device and your cloud copy immediately, and from Google Cloud backups within 30 days. Anonymous analytics are not linked to your identity and are unaffected. See <a href="#what-gets-deleted">What gets deleted</a> for the full retention table.</p>
+
+        <h2>Using AttendEase without an account</h2>
+        <p>An account is optional. AttendEase works fully offline with your data stored only on your device. If you never sign in, there is nothing to delete on our side — clearing the app's data or uninstalling it removes everything.</p>
+
+        <h2>Questions</h2>
+        <div class="card">
+            <p><strong>Email:</strong> <a href="mailto:parthrathod05066@gmail.com">parthrathod05066@gmail.com</a></p>
+            <p><strong>Privacy Policy:</strong> <a href="/privacy-policy">attendease-cbc6f.web.app/privacy-policy</a></p>
+        </div>
+
+        <h2>Source code</h2>
+        <p>AttendEase is developed on GitHub. You can browse the project, follow releases, or report an issue there:</p>
+        <div class="card">
+            <p><strong>GitHub:</strong> <a href="https://github.com/PaRth0566/AttendEase" target="_blank" rel="noopener">github.com/PaRth0566/AttendEase</a></p>
+        </div>
+
+        <footer>
+            <p>&copy; 2026 AttendEase. All rights reserved.</p>
+            <p><a href="/">Back to AttendEase</a></p>
+        </footer>
+    </div>
+</body>
+</html>

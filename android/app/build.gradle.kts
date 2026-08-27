@@ -93,6 +93,21 @@ dependencies {
     // Firebase BOM
     implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
 
-    // Firebase Analytics
+    // Firebase Analytics.
+    //
+    // No Dart code logs events; this is here for the reports the SDK collects
+    // on its own (app opens, screen views, retention) in the Firebase console.
+    // Two consequences are easy to forget, and both are declared in Play
+    // Console rather than being visible in this file:
+    //
+    //   * it pulls play-services-ads-identifier, which merges
+    //     com.google.android.gms.permission.AD_ID into the manifest, so the
+    //     Advertising ID declaration must answer "Yes" (purpose: Analytics);
+    //   * Data safety must list Device or other IDs and App interactions,
+    //     collected for Analytics.
+    //
+    // Removing this line reverses both, and would also make the "no analytics
+    // SDKs" style of claim in store_listing/ and web/privacy-policy.html true
+    // again. Do not drop it without updating those three places together.
     implementation("com.google.firebase:firebase-analytics")
 }

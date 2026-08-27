@@ -10,6 +10,7 @@ import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
 import '../../database/timetable_dao.dart';
 import '../../models/subject.dart';
+import '../../services/app_refresh_bus.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
@@ -19,6 +20,7 @@ import '../../widgets/empty_state.dart';
 import '../../widgets/glass_action_button.dart';
 import '../../widgets/app_overlays.dart';
 import '../../widgets/beak_tooltip.dart';
+import '../../widgets/calendar_day_header.dart';
 import '../../widgets/callout_box.dart';
 import '../root/tab_page_state.dart';
 
@@ -27,6 +29,24 @@ class CalendarScreen extends StatefulWidget {
 
   @override
   State<CalendarScreen> createState() => CalendarScreenState();
+}
+
+/// Whether [record] fills the trailing delete column of its row.
+///
+/// A stored Present or Absent renders the delete button; a stored "Not
+/// Conducted" renders the disabled icon explaining why the report's own row
+/// cannot be deleted. Those are the only two cases, so "stored, and not NU" is
+/// the whole rule.
+///
+/// Read twice: once per row, to draw the right thing, and once across the day,
+/// to decide whether the column exists at all. A day of nothing but "Not
+/// Updated" lectures has no delete affordance anywhere in it, and reserving
+/// width for one there is what left every row's P/A pills floating 42px short of
+/// the card edge instead of sitting against it.
+bool occupiesDeleteColumn(Map<String, dynamic> record) {
+  final bool isVirtual =
+      record['is_virtual'] == 1 || record['record_id'] == null;
+  return !isVirtual && record['status'] != 'NU';
 }
 
 class CalendarScreenState extends TabPageState<CalendarScreen>
@@ -75,6 +95,13 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
   /// memory only — a killed app forfeits the window.
   _DeletedRecord? _lastDeleted;
   Timer? _undoTimer;
+
+  /// True only for the duration of the [AppRefreshBus.refreshAll] call this
+  /// screen makes after writing. See [_notifyOtherTabs].
+  bool _ignoreBusReload = false;
+
+  /// True while a "mark the whole day" is in flight. See [_markWholeDay].
+  bool _bulkMarking = false;
 
   @override
   void initState() {
@@ -264,6 +291,10 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
   /// throw you back to today every time you crossed the nav bar.
   @override
   Future<void> reloadData() async {
+    // Already up to date: this is the app-wide refresh *this* screen just fired
+    // after its own write, and re-reading here would only cost a spinner flash.
+    if (_ignoreBusReload) return;
+
     // Re-read bounds first so an end date the user just edited in Profile (or a
     // semester switch) is picked up on return to the tab, without a restart —
     // and before the heatmap, which marks out-of-range days 'outside'.
@@ -356,6 +387,314 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
       originalStatus: 'NU',
     );
     await _loadForDate(_selectedDay!);
+  }
+
+  // ── Mark the whole day ──────────────────────────────────────────────────────
+
+  /// Whether the open day has anything a bulk mark could write.
+  ///
+  /// A day of nothing but "Not Conducted" rows does not — see [planDayMark],
+  /// which owns that rule and every other one about what a whole-day mark is
+  /// allowed to touch.
+  bool get _hasBulkTargets => planDayMark(_dayRecords, 'P').markableCount > 0;
+
+  /// Sets every markable lecture on the open day to [status] ('P' or 'A').
+  ///
+  /// Asks first only when the day already holds marked attendance that would be
+  /// flipped. A day whose lectures are all still "Not Updated" has nothing to
+  /// lose, so it is written straight away — a dialog there is friction for
+  /// nothing.
+  Future<void> _markWholeDay(String status) async {
+    // One bulk mark at a time. Both pills plan from [_dayRecords], which is only
+    // refreshed once the write completes — so a quick "All P" then "All A" would
+    // otherwise run two writes off the same stale snapshot and leave the day
+    // showing whichever finished last.
+    if (_bulkMarking) return;
+    final DateTime? day = _selectedDay;
+    if (day == null) return;
+
+    final plan = planDayMark(_dayRecords, status);
+    if (plan.markableCount == 0) return;
+
+    _bulkMarking = true;
+    try {
+      await _runMarkWholeDay(day, status, plan);
+    } finally {
+      _bulkMarking = false;
+    }
+  }
+
+  /// The body of [_markWholeDay], split out only so the in-flight flag is
+  /// released by one `finally` on every path out — including the early returns
+  /// below and a cancelled dialog.
+  Future<void> _runMarkWholeDay(
+    DateTime day,
+    String status,
+    DayMarkPlan plan,
+  ) async {
+    final String word = status == 'P' ? 'present' : 'absent';
+
+    if (plan.isEmpty) {
+      _showDayMessage(
+        'Every lecture on this day is already marked $word.',
+        icon: Icons.info_outline_rounded,
+        color: Theme.of(context).colorScheme.primary,
+      );
+      return;
+    }
+
+    if (plan.overwritesExistingMarks) {
+      final bool confirmed = await _confirmMarkWholeDay(
+        day: day,
+        status: status,
+        plan: plan,
+      );
+      if (!confirmed || !mounted) return;
+      // The dialog is modal so the day cannot have been re-selected under it,
+      // but a background refresh could have. Writing keys planned for a day that
+      // is no longer open would edit records the user cannot see, so the safe
+      // answer is to do nothing.
+      if (!isSameDay(_selectedDay, day)) return;
+    }
+
+    await _applyMarkWholeDay(plan);
+    if (!mounted) return;
+
+    final c = context.appColors;
+    final int n = plan.entries.length;
+    _showDayMessage(
+      n == 1 ? 'Marked 1 lecture $word.' : 'Marked $n lectures $word.',
+      icon: status == 'P'
+          ? Icons.check_circle_outline_rounded
+          : Icons.cancel_outlined,
+      color: status == 'P' ? c.success : c.danger,
+    );
+  }
+
+  /// Writes [plan] in one transaction, then re-derives everything that reads it.
+  ///
+  /// The baseline rules that keep the "Manual" badge honest live in
+  /// [planDayMark]; all that happens here is the write and the refresh.
+  Future<void> _applyMarkWholeDay(DayMarkPlan plan) async {
+    if (plan.isEmpty) return;
+
+    await _attendanceDao.upsertAttendanceBatch(plan.entries);
+    if (!mounted) return;
+
+    await _fetchMonthData(_focusedDay);
+    if (!mounted) return;
+    final DateTime? selected = _selectedDay;
+    if (selected != null) await _loadForDate(selected);
+    CloudSyncService().backupDataToCloud();
+    if (!mounted) return;
+    _notifyOtherTabs();
+  }
+
+  /// Tells the rest of the app to re-read the database after a write here.
+  ///
+  /// A whole day changing at once moves the dashboard's percentages, the report's
+  /// totals and the subject timelines, and [AppRefreshBus] is how a write in one
+  /// tab reaches the others without waiting for the user to walk over.
+  ///
+  /// The bus fans out to every mounted tab, this one included — and this screen
+  /// has already refreshed itself by the time it fires. `refreshAll` notifies
+  /// synchronously, so setting the flag around the call is enough to skip that
+  /// redundant second read (and the spinner flash it would bring).
+  void _notifyOtherTabs() {
+    _ignoreBusReload = true;
+    AppRefreshBus.instance.refreshAll();
+    _ignoreBusReload = false;
+  }
+
+  /// Asks before a bulk mark overwrites attendance that is already recorded.
+  ///
+  /// Same shape as the app's other consequential confirmations — tinted disc,
+  /// centred copy, the thing being changed boxed on its own surface — and the
+  /// counts are spelled out because "the whole day" is the one detail the user
+  /// cannot check while the dialog covers the list.
+  Future<bool> _confirmMarkWholeDay({
+    required DateTime day,
+    required String status,
+    required DayMarkPlan plan,
+  }) async {
+    final theme = Theme.of(context);
+    final c = context.appColors;
+    final bool present = status == 'P';
+    final Color tint = present ? c.success : c.danger;
+    final String word = present ? 'Present' : 'Absent';
+    final Color? muted = theme.textTheme.bodySmall?.color;
+
+    String lectures(int n) => n == 1 ? '1 lecture' : '$n lectures';
+
+    final bool? result = await showAppDialog<bool>(
+      context: context,
+      // A stray tap outside must never rewrite a whole day's attendance.
+      barrierDismissible: false,
+      builder: (dialogCtx) => AlertDialog(
+        // The same tinted-disc header the sync dialog uses, in the colour of the
+        // status being applied, so green and red are recognisable before the
+        // title is read.
+        icon: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: tint.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            present ? Icons.done_all_rounded : Icons.remove_done_rounded,
+            color: tint,
+            size: 24,
+          ),
+        ),
+        title: Text('Mark this day all ${word.toLowerCase()}?'),
+        // Scrolls rather than overflows: AlertDialog lays its content out at
+        // intrinsic height, and at the 1.4 text scale showAppDialog allows the
+        // copy + box + footnote can outgrow a short viewport.
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'This day already has attendance recorded. Every lecture on it '
+                'will be set to $word, replacing what is there now. Only this '
+                'day changes — every other day stays as it is.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(height: 1.45),
+              ),
+              const SizedBox(height: AppDimens.space20),
+              // The day, boxed on its own surface — the one thing worth double
+              // checking before overwriting it.
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimens.space12,
+                  vertical: AppDimens.space10,
+                ),
+                decoration: BoxDecoration(
+                  color: c.subtleSurface,
+                  borderRadius: AppDimens.brMd,
+                  border: Border.all(color: c.cardBorder),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Icon(Icons.event_rounded, size: 18, color: muted),
+                    ),
+                    const SizedBox(width: AppDimens.space10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            DateFormat('EEEE, MMMM d, yyyy').format(day),
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              height: 1.3,
+                            ),
+                          ),
+                          const SizedBox(height: AppDimens.space2),
+                          Text(
+                            '${plan.entries.length} of '
+                            '${lectures(plan.markableCount)} change · '
+                            '${plan.overwriteCount} already marked',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              height: 1.35,
+                            ),
+                          ),
+                          if (plan.notConductedCount > 0)
+                            Text(
+                              '${lectures(plan.notConductedCount)} not '
+                              'conducted — left as they are',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                height: 1.35,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppDimens.space16),
+              Text(
+                'Your Report & Analysis percentages are recalculated, and the '
+                'change syncs to your cloud backup.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(height: 1.45),
+              ),
+            ],
+          ),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(
+          AppDimens.space20,
+          AppDimens.space8,
+          AppDimens.space20,
+          AppDimens.space20,
+        ),
+        // "Mark all present" beside "Cancel" overruns a narrow phone's dialog,
+        // and the default row would wrap the label inside the pill. Stacking
+        // stays legible at any width — same treatment the replace dialog gets.
+        actionsOverflowDirection: VerticalDirection.up,
+        actionsOverflowButtonSpacing: AppDimens.space8,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogCtx, false),
+            child: const Text('Cancel'),
+          ),
+          const SizedBox(width: AppDimens.space4),
+          FilledButton(
+            // The app's own green/red, the same pair the day's cards and the
+            // pill that opened this dialog are painted with.
+            style: FilledButton.styleFrom(
+              backgroundColor: tint,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimens.space20,
+                vertical: AppDimens.space12,
+              ),
+            ),
+            onPressed: () => Navigator.pop(dialogCtx, true),
+            child: Text('Mark all ${word.toLowerCase()}'),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// A one-line result chip for the bulk actions.
+  ///
+  /// Cleared of the calendar's floating "Add record" pill the same way the undo
+  /// bar is — see [GlassNavTheme.snackBarPillClearance].
+  void _showDayMessage(
+    String text, {
+    required IconData icon,
+    required Color color,
+  }) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 3),
+          margin: const EdgeInsets.only(
+            left: AppDimens.space16,
+            right: AppDimens.space16,
+            bottom: GlassNavTheme.snackBarPillClearance,
+          ),
+          content: Row(
+            children: [
+              Icon(icon, size: 20, color: color),
+              const SizedBox(width: AppDimens.space12),
+              Expanded(
+                child: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
+              ),
+            ],
+          ),
+        ),
+      );
   }
 
   /// `2026-08-11_2` → `Mon, 11 Aug`.
@@ -1000,6 +1339,21 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
         : null;
     final isSunday = _selectedDay?.weekday == DateTime.sunday;
     final canAddRecord = !isFutureDay && !isSunday && selectedDateKey != null;
+    // Same gate as the per-row P/A pills, for the same reason: attendance for a
+    // lecture that has not happened is not assertable (§4), a Sunday has no
+    // lectures, and a day whose only rows are "Not Conducted" has nothing a bulk
+    // mark could legitimately write. Hidden mid-load too — the pills would be
+    // acting on the previous day's records.
+    final canBulkMark = canAddRecord && !_loading && _hasBulkTargets;
+    // Does *any* row on this day render something in the trailing delete column?
+    //
+    // The column is reserved per row so the P/A pills line up down the card
+    // stack — but reserving it on a day where nothing can be deleted just
+    // indents every row's pills by 42px away from the card's right edge, which
+    // is what made an all-"Not Updated" day look mis-aligned. Decided once for
+    // the whole day, so rows still agree with each other either way.
+    final dayHasDeleteColumn = !isFutureDay &&
+        _dayRecords.any(occupiesDeleteColumn);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -1401,18 +1755,14 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                     ),
                   ),
 
-                  // Selected day label
+                  // Selected day label, with the day's two bulk-mark pills on
+                  // the same line.
                   if (_selectedDay != null)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
-                      child: Text(
-                        DateFormat('EEEE, MMMM d, yyyy').format(_selectedDay!),
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: theme.textTheme.bodyLarge?.color,
-                        ),
-                      ),
+                    CalendarDayHeader(
+                      day: _selectedDay!,
+                      showBulkActions: canBulkMark,
+                      onMarkAllPresent: () => _markWholeDay('P'),
+                      onMarkAllAbsent: () => _markWholeDay('A'),
                     ),
 
                   // Records list. Flows within the page scroll (no Expanded):
@@ -1549,8 +1899,7 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                                   // left — repeating it here would cost the
                                   // single line and say nothing new.
                                   ? 'From your report — can’t be deleted'
-                                  : null;
-                              final c = context.appColors;
+                                  : null;                              final c = context.appColors;
                               // Future rows are a read-only preview; a neutral
                               // dot rather than the warning colour NU picks (§4).
                               final statusColor = isFutureDay
@@ -1770,110 +2119,120 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
                                                   ),
                                                 ],
                                               ],
-                                              // Every row reserves the delete
-                                              // icon's width, whether or not it
-                                              // renders one. Dropping it on NU
-                                              // rows instead would shift their
-                                              // P/A pills 42px right and leave
-                                              // the trailing column ragged.
-                                              const SizedBox(width: 6),
-                                              if (canDelete)
-                                                SizedBox(
-                                                  width: 36,
-                                                  child: IconButton(
-                                                    icon: Icon(
-                                                      Icons
-                                                          .delete_outline_rounded,
-                                                      size: 20,
-                                                      color: theme
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.color,
+                                              // The delete column is reserved on
+                                              // every row of a day that has one
+                                              // anywhere, so the P/A pills line
+                                              // up down the stack rather than
+                                              // stepping 42px sideways on the
+                                              // rows without a button. On a day
+                                              // where nothing is deletable —
+                                              // every lecture still "Not
+                                              // Updated" — there is no column to
+                                              // reserve, and the pills sit
+                                              // against the card's edge like any
+                                              // other trailing control.
+                                              if (dayHasDeleteColumn) ...[
+                                                const SizedBox(width: 6),
+                                                if (canDelete)
+                                                  SizedBox(
+                                                    width: 36,
+                                                    child: IconButton(
+                                                      icon: Icon(
+                                                        Icons
+                                                            .delete_outline_rounded,
+                                                        size: 20,
+                                                        color: theme
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.color,
+                                                      ),
+                                                      tooltip: 'Delete record',
+                                                      onPressed: () async {
+                                                        final statusLabel =
+                                                            isPresent
+                                                            ? 'Present'
+                                                            : 'Absent';
+                                                        final ok =
+                                                            await _confirmDelete(
+                                                              subjectName:
+                                                                  subjectName,
+                                                              statusLabel:
+                                                                  statusLabel,
+                                                              // The row's own
+                                                              // colour, so the
+                                                              // dialog's dot
+                                                              // matches the card
+                                                              // that was tapped.
+                                                              statusColor:
+                                                                  statusColor,
+                                                              prettyDate:
+                                                                  _prettyDate(
+                                                                    recordDate,
+                                                                  ),
+                                                            );
+                                                        if (!ok) return;
+                                                        if (!mounted) return;
+                                                        await _deleteWithUndo(
+                                                          recordId: recordId,
+                                                          timetableEntryId:
+                                                              timetableId,
+                                                          // The raw key —
+                                                          // storage, not
+                                                          // display.
+                                                          date: recordDate,
+                                                          status: status,
+                                                          statusLabel:
+                                                              statusLabel,
+                                                          source:
+                                                              record['source']
+                                                                  as String? ??
+                                                              'manual',
+                                                          originalStatus:
+                                                              originalStatus,
+                                                          subjectName:
+                                                              subjectName,
+                                                        );
+                                                      },
+                                                      visualDensity:
+                                                          VisualDensity.compact,
+                                                      padding: EdgeInsets.zero,
                                                     ),
-                                                    tooltip: 'Delete record',
-                                                    onPressed: () async {
-                                                      final statusLabel =
-                                                          isPresent
-                                                          ? 'Present'
-                                                          : 'Absent';
-                                                      final ok =
-                                                          await _confirmDelete(
-                                                            subjectName:
-                                                                subjectName,
-                                                            statusLabel:
-                                                                statusLabel,
-                                                            // The row's own
-                                                            // colour, so the
-                                                            // dialog's dot
-                                                            // matches the card
-                                                            // that was tapped.
-                                                            statusColor:
-                                                                statusColor,
-                                                            prettyDate:
-                                                                _prettyDate(
-                                                                  recordDate,
-                                                                ),
-                                                          );
-                                                      if (!ok) return;
-                                                      if (!mounted) return;
-                                                      await _deleteWithUndo(
-                                                        recordId: recordId,
-                                                        timetableEntryId:
-                                                            timetableId,
-                                                        // The raw key —
-                                                        // storage, not display.
-                                                        date: recordDate,
-                                                        status: status,
-                                                        statusLabel:
-                                                            statusLabel,
-                                                        source:
-                                                            record['source']
-                                                                as String? ??
-                                                            'manual',
-                                                        originalStatus:
-                                                            originalStatus,
-                                                        subjectName:
-                                                            subjectName,
-                                                      );
-                                                    },
-                                                    visualDensity:
-                                                        VisualDensity.compact,
-                                                    padding: EdgeInsets.zero,
-                                                  ),
-                                                )
-                                              else if (deleteBlockedReason !=
-                                                  null)
-                                                SizedBox(
-                                                  width: 36,
-                                                  child: BeakTooltip(
-                                                    // Touch-first: a
-                                                    // long-press-only tooltip
-                                                    // is undiscoverable, so the
-                                                    // explanation would never
-                                                    // be read.
-                                                    message:
-                                                        deleteBlockedReason,
-                                                    child: Icon(
-                                                      Icons
-                                                          .delete_outline_rounded,
-                                                      size: 20,
-                                                      // 0.35 reads as "present
-                                                      // but off"; the card's own
-                                                      // border alpha (80/255)
-                                                      // read as a glitch on the
-                                                      // dark theme.
-                                                      color: theme
-                                                          .textTheme
-                                                          .bodyMedium
-                                                          ?.color
-                                                          ?.withValues(
-                                                            alpha: 0.35,
-                                                          ),
+                                                  )
+                                                else if (deleteBlockedReason !=
+                                                    null)
+                                                  SizedBox(
+                                                    width: 36,
+                                                    child: BeakTooltip(
+                                                      // Touch-first: a
+                                                      // long-press-only tooltip
+                                                      // is undiscoverable, so
+                                                      // the explanation would
+                                                      // never be read.
+                                                      message:
+                                                          deleteBlockedReason,
+                                                      child: Icon(
+                                                        Icons
+                                                            .delete_outline_rounded,
+                                                        size: 20,
+                                                        // 0.35 reads as "present
+                                                        // but off"; the card's
+                                                        // own border alpha
+                                                        // (80/255) read as a
+                                                        // glitch on the dark
+                                                        // theme.
+                                                        color: theme
+                                                            .textTheme
+                                                            .bodyMedium
+                                                            ?.color
+                                                            ?.withValues(
+                                                              alpha: 0.35,
+                                                            ),
+                                                      ),
                                                     ),
-                                                  ),
-                                                )
-                                              else
-                                                const SizedBox(width: 36),
+                                                  )
+                                                else
+                                                  const SizedBox(width: 36),
+                                              ],
                                             ],
                                           ),
                                       ],

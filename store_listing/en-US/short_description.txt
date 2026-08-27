@@ -1,0 +1,1 @@
+Track class attendance, hit your target %, and see which lectures you can skip
