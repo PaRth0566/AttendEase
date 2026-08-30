@@ -81,6 +81,36 @@ android {
             )
         }
     }
+
+    packaging {
+        jniLibs {
+            // libdatastore_shared_counter.so reaches the bundle through
+            // firebase-analytics -> firebase-common -> androidx.datastore, and is
+            // the reason Play Console warns "Your app could crash on 16 KB
+            // devices": it is compiled with NDK r20 (2019), whose linker has the
+            // bug that warning is about. Every other native library in the
+            // bundle is current — libflutter.so is r28c, libsqlite3.so is r29.
+            //
+            // Upgrading is not the fix. datastore-core 1.2.0 ships a copy built
+            // with r20 while 1.1.7's is built with r25c, so the newer release
+            // regressed and both versions are flagged. There is no good version
+            // to move to.
+            //
+            // Dropping it is safe because nothing here loads it. The library
+            // backs androidx.datastore.core.SharedCounter, which only
+            // MultiProcessDataStoreFactory instantiates, and Firebase uses
+            // single-process DataStore. Saves 51 KB per ABI as a side effect.
+            //
+            // If a future Firebase release switches to multi-process DataStore
+            // this turns into an UnsatisfiedLinkError at runtime. Re-check when
+            // bumping the Firebase BOM: if the .so is still built with an NDK
+            // older than r27, keep the exclude; if it has been rebuilt with a
+            // current one, delete this block instead.
+            //
+            //   llvm-readelf --notes <lib>.so | grep -A1 NT_ANDROID_TYPE_IDENT
+            excludes += "**/libdatastore_shared_counter.so"
+        }
+    }
 }
 
 flutter {
@@ -88,7 +118,7 @@ flutter {
 }
 
 dependencies {
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     // Firebase BOM
     implementation(platform("com.google.firebase:firebase-bom:34.0.0"))
