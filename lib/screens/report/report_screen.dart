@@ -4,14 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../database/attendance_dao.dart';
 import '../../database/subject_dao.dart';
 import '../../models/subject.dart';
+import '../../services/attendance_report_pdf.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
@@ -441,351 +440,38 @@ class _ReportScreenState extends State<ReportScreen> {
     );
 
     try {
-      final pdf = pw.Document();
+      final fileName = _reportType == 0
+          ? 'Semester_${_selectedSemester}_Attendance_Report.pdf'
+          : 'Attendance_Report_'
+                '${DateFormat('dd-MM-yyyy').format(_startDate!)}_to_'
+                '${DateFormat('dd-MM-yyyy').format(_endDate!)}.pdf';
 
-      // Premium Colors
-      final primaryAppBlue = PdfColor.fromHex('#2563EB');
-      final bgCard = PdfColor.fromHex('#F8FAFC');
-      final textDark = PdfColor.fromHex('#1E293B');
-      final textLight = PdfColor.fromHex('#64748B');
-      final successColor = PdfColor.fromHex('#16A34A');
-      final dangerColor = PdfColor.fromHex('#DC2626');
+      final prefs = await SharedPreferences.getInstance();
 
-      String fileName = "";
-      String reportSubtitle = "";
-      if (_reportType == 0) {
-        fileName = "Semester_${_selectedSemester}_Attendance_Report.pdf";
-        reportSubtitle = "Semester $_selectedSemester Overview";
-      } else {
-        final start = DateFormat('dd MMM yyyy').format(_startDate!);
-        final end = DateFormat('dd MMM yyyy').format(_endDate!);
-        fileName =
-            "Attendance_Report_${DateFormat('dd-MM-yyyy').format(_startDate!)}_to_${DateFormat('dd-MM-yyyy').format(_endDate!)}.pdf";
-        reportSubtitle = "$start  to  $end";
-      }
-
-      int subjectsMeetingCriteria = 0;
-      int subjectsNeedingAttention = 0;
-
-      for (final sub in _subjects) {
-        final stat = _stats[sub.id] ?? {'attended': 0, 'total': 0};
-        final percent = stat['total'] == 0
-            ? 0.0
-            : (stat['attended']! / stat['total']!) * 100;
-        if (percent >= sub.requiredPercent) {
-          subjectsMeetingCriteria++;
-        } else {
-          subjectsNeedingAttention++;
-        }
-      }
-
-      pw.Widget buildSummaryCard({
-        required String title,
-        required String value,
-        required String subtitle,
-        required PdfColor valueColor,
-        required PdfColor bgColor,
-        required PdfColor textColor,
-        required PdfColor subTextColor,
-      }) {
-        return pw.Container(
-          padding: const pw.EdgeInsets.all(12),
-          decoration: pw.BoxDecoration(
-            color: bgColor,
-            borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-            border: pw.Border.all(color: PdfColors.grey200, width: 1),
-          ),
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: [
-              pw.Text(
-                title,
-                style: pw.TextStyle(
-                  fontSize: 11,
-                  fontWeight: pw.FontWeight.bold,
-                  color: textColor,
-                ),
-              ),
-              pw.SizedBox(height: 8),
-              pw.Text(
-                value,
-                style: pw.TextStyle(
-                  fontSize: 24,
-                  fontWeight: pw.FontWeight.bold,
-                  color: valueColor,
-                ),
-              ),
-              pw.SizedBox(height: 4),
-              pw.Text(
-                subtitle,
-                style: pw.TextStyle(fontSize: 9, color: subTextColor),
-              ),
-            ],
-          ),
-        );
-      }
-
-      pw.Widget buildHeaderCell(String text) {
-        return pw.Container(
-          padding: const pw.EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-          alignment: pw.Alignment.centerLeft,
-          child: pw.Text(
-            text,
-            style: pw.TextStyle(
-              color: PdfColors.white,
-              fontSize: 11,
-              fontWeight: pw.FontWeight.bold,
-            ),
-          ),
-        );
-      }
-
-      pw.Widget buildDataCell(
-        String text, {
-        PdfColor? color,
-        bool isBold = false,
-      }) {
-        return pw.Container(
-          padding: const pw.EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-          alignment: pw.Alignment.centerLeft,
-          child: pw.Text(
-            text,
-            style: pw.TextStyle(
-              color: color ?? PdfColors.grey800,
-              fontSize: 10,
-              fontWeight: isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
-            ),
-          ),
-        );
-      }
-
-      pdf.addPage(
-        pw.MultiPage(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(32),
-          header: (context) {
-            return pw.Container(
-              margin: const pw.EdgeInsets.only(bottom: 24),
-              padding: const pw.EdgeInsets.all(16),
-              decoration: pw.BoxDecoration(
-                color: primaryAppBlue,
-                borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-              ),
-              child: pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        "AttendEase",
-                        style: pw.TextStyle(
-                          color: PdfColors.white,
-                          fontSize: 24,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        "Official Attendance Report",
-                        style: pw.TextStyle(
-                          color: PdfColors.blue100,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                  pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      pw.Text(
-                        reportSubtitle,
-                        style: pw.TextStyle(
-                          color: PdfColors.white,
-                          fontSize: 14,
-                          fontWeight: pw.FontWeight.bold,
-                        ),
-                      ),
-                      pw.SizedBox(height: 4),
-                      pw.Text(
-                        "Generated: ${DateFormat('MMM dd, yyyy').format(DateTime.now())}",
-                        style: pw.TextStyle(
-                          color: PdfColors.blue100,
-                          fontSize: 10,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-          footer: (context) {
-            return pw.Container(
-              alignment: pw.Alignment.center,
-              margin: const pw.EdgeInsets.only(top: 16),
-              child: pw.Text(
-                "Generated securely by AttendEase App | Page ${context.pageNumber} of ${context.pagesCount}",
-                style: const pw.TextStyle(
-                  fontSize: 10,
-                  color: PdfColors.grey500,
-                ),
-              ),
-            );
-          },
-          build: (pw.Context context) {
-            return [
-              pw.Text(
-                "Performance Summary",
-                style: pw.TextStyle(
-                  fontSize: 16,
-                  fontWeight: pw.FontWeight.bold,
-                  color: textDark,
-                ),
-              ),
-              pw.SizedBox(height: 12),
-
-              pw.Row(
-                children: [
-                  pw.Expanded(
-                    child: buildSummaryCard(
-                      title: "Overall Attendance",
-                      value: "${_overallPercent.toStringAsFixed(2)}%",
-                      subtitle: "$_totalAttended / $_totalLectures Lectures",
-                      valueColor: _overallPercent >= 75
-                          ? successColor
-                          : dangerColor,
-                      bgColor: bgCard,
-                      textColor: textDark,
-                      subTextColor: textLight,
-                    ),
-                  ),
-                  pw.SizedBox(width: 12),
-                  pw.Expanded(
-                    child: buildSummaryCard(
-                      title: "Meeting Criteria",
-                      value: "$subjectsMeetingCriteria",
-                      subtitle: "Out of ${_subjects.length} Subjects",
-                      valueColor: successColor,
-                      bgColor: bgCard,
-                      textColor: textDark,
-                      subTextColor: textLight,
-                    ),
-                  ),
-                  pw.SizedBox(width: 12),
-                  pw.Expanded(
-                    child: buildSummaryCard(
-                      title: "Needs Attention",
-                      value: "$subjectsNeedingAttention",
-                      subtitle: "Below Required %",
-                      valueColor: subjectsNeedingAttention > 0
-                          ? dangerColor
-                          : successColor,
-                      bgColor: bgCard,
-                      textColor: textDark,
-                      subTextColor: textLight,
-                    ),
-                  ),
-                ],
-              ),
-              pw.SizedBox(height: 32),
-
-              pw.Text(
-                "Detailed Subject Breakdown",
-                style: pw.TextStyle(
-                  fontSize: 16,
-                  fontWeight: pw.FontWeight.bold,
-                  color: textDark,
-                ),
-              ),
-              pw.SizedBox(height: 12),
-
-              pw.Table(
-                columnWidths: {
-                  0: const pw.FlexColumnWidth(3),
-                  1: const pw.FlexColumnWidth(1),
-                  2: const pw.FlexColumnWidth(1),
-                  3: const pw.FlexColumnWidth(1.2),
-                  4: const pw.FlexColumnWidth(1.5),
-                },
-                border: pw.TableBorder.all(
-                  color: PdfColors.grey300,
-                  width: 0.5,
-                ),
-                children: [
-                  pw.TableRow(
-                    decoration: pw.BoxDecoration(color: primaryAppBlue),
-                    children: [
-                      buildHeaderCell("Subject Name"),
-                      buildHeaderCell("Attended"),
-                      buildHeaderCell("Total"),
-                      buildHeaderCell("Percentage"),
-                      buildHeaderCell("Status"),
-                    ],
-                  ),
-                  ...List.generate(_subjects.length, (index) {
-                    final sub = _subjects[index];
-                    final stat = _stats[sub.id] ?? {'attended': 0, 'total': 0};
-                    final attended = stat['attended']!;
-                    final total = stat['total']!;
-                    final percent = total == 0 ? 0.0 : (attended / total) * 100;
-                    final isMeeting = percent >= sub.requiredPercent;
-
-                    return pw.TableRow(
-                      decoration: pw.BoxDecoration(
-                        color: index % 2 == 1
-                            ? PdfColors.grey50
-                            : PdfColors.white,
-                      ),
-                      children: [
-                        buildDataCell(sub.name, isBold: true),
-                        buildDataCell(attended.toString()),
-                        buildDataCell(total.toString()),
-                        buildDataCell(
-                          '${percent.toStringAsFixed(2)}%',
-                          color: isMeeting ? successColor : dangerColor,
-                          isBold: true,
-                        ),
-                        pw.Container(
-                          padding: const pw.EdgeInsets.symmetric(
-                            vertical: 8,
-                            horizontal: 8,
-                          ),
-                          alignment: pw.Alignment.centerLeft,
-                          child: pw.Container(
-                            padding: const pw.EdgeInsets.symmetric(
-                              vertical: 4,
-                              horizontal: 8,
-                            ),
-                            decoration: pw.BoxDecoration(
-                              color: isMeeting
-                                  ? PdfColor.fromHex('#DCFCE7')
-                                  : PdfColor.fromHex('#FEE2E2'),
-                              borderRadius: const pw.BorderRadius.all(
-                                pw.Radius.circular(4),
-                              ),
-                            ),
-                            child: pw.Text(
-                              isMeeting ? 'On Track' : 'Warning',
-                              style: pw.TextStyle(
-                                fontSize: 10,
-                                fontWeight: pw.FontWeight.bold,
-                                color: isMeeting ? successColor : dangerColor,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  }),
-                ],
-              ),
-            ];
-          },
+      final pdfBytes = await buildAttendanceReportPdf(
+        meta: ReportMeta(
+          periodKind: _reportType == 0 ? 'Semester' : 'Date range',
+          periodLabel: _reportType == 0
+              ? 'Semester $_selectedSemester'
+              : '${DateFormat('d MMM yyyy').format(_startDate!)} – '
+                    '${DateFormat('d MMM yyyy').format(_endDate!)}',
+          semester: _selectedSemester,
+          studentName: prefs.getString('full_name')?.trim() ?? '',
+          course: prefs.getString('course')?.trim() ?? '',
+          year: prefs.getString('year')?.trim() ?? '',
         ),
+        // _generateReport already ordered these worst-percentage-first, which is
+        // the order the document should print: whatever needs action comes first.
+        rows: [
+          for (final sub in _subjects)
+            ReportSubjectRow(
+              name: sub.name,
+              attended: _stats[sub.id]?['attended'] ?? 0,
+              total: _stats[sub.id]?['total'] ?? 0,
+              requiredPercent: sub.requiredPercent,
+            ),
+        ],
       );
-
-      final pdfBytes = await pdf.save();
 
       if (!isShare) {
         Directory? directory;
