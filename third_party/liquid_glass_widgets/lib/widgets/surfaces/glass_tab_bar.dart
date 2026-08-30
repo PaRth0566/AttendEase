@@ -184,6 +184,7 @@ class GlassTabBar extends StatefulWidget {
         GlassInteractionBehavior.full,
     double pressScale = 1.04,
     bool platformViewBackdrop = false,
+    bool staticIndicator = false, // AttendEase patch
     bool adaptiveBrightness = false,
     ValueChanged<Brightness>? onBrightnessChanged,
     ValueListenable<Brightness>? brightnessOverride,
@@ -235,6 +236,7 @@ class GlassTabBar extends StatefulWidget {
           interactionBehavior: interactionBehavior,
           pressScale: pressScale,
           platformViewBackdrop: platformViewBackdrop,
+          staticIndicator: staticIndicator, // AttendEase patch
           adaptiveBrightness: adaptiveBrightness,
           onBrightnessChanged: onBrightnessChanged,
           brightnessOverride: brightnessOverride,
@@ -425,6 +427,7 @@ class GlassTabBar extends StatefulWidget {
       this.interactionGlowColor,
       this.interactionGlowRadius = 1.5,
       this.platformViewBackdrop = false,
+      this.staticIndicator = false, // AttendEase patch
       this.adaptiveBrightness = false,
       this.onBrightnessChanged,
       this.brightnessOverride,
@@ -623,6 +626,14 @@ class GlassTabBar extends StatefulWidget {
   /// Forces BackdropFilter rendering over iOS PlatformViews. Defaults to false.
   final bool platformViewBackdrop;
 
+  /// AttendEase patch: keeps the selection pill as its resting chip for the
+  /// whole of every gesture instead of cross-fading to the travelling glass
+  /// lens. Needed on renderers with no glass shader (web), where that lens
+  /// degrades to a flat body of its own tint and the pill visibly changes
+  /// colour the moment a bar drag raises the jelly spring — while a page-driven
+  /// slide, which leaves the spring at rest, keeps the correct chip.
+  final bool staticIndicator;
+
   /// Adapts brightness to content scrolling underneath. Defaults to false.
   final bool adaptiveBrightness;
 
@@ -747,6 +758,7 @@ class _GlassTabBarState extends State<GlassTabBar> {
       interactionBehavior: widget.interactionBehavior,
       pressScale: widget.pressScale,
       platformViewBackdrop: widget.platformViewBackdrop,
+      staticIndicator: widget.staticIndicator, // AttendEase patch
       adaptiveBrightness: widget.adaptiveBrightness,
       onBrightnessChanged: widget.onBrightnessChanged,
       brightnessOverride: widget.brightnessOverride,

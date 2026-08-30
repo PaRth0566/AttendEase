@@ -136,6 +136,37 @@ class GlassNavTheme {
     );
   }
 
+  /// The bar's material for the **light theme on web**, over the opaque white
+  /// capsule the web build seats it on.
+  ///
+  /// Identical to [settings] except that the rim is a hairline and the blur is
+  /// off — the two things a wide, blurring glass does wrong once it is sitting
+  /// on an opaque backer instead of on live page content.
+  ///
+  /// `thickness` is the width of the shader's inner bevel band, and 20 is tuned
+  /// for a dark, translucent bar where a wide bevel reads as depth. 2 keeps the
+  /// same specular rim and iridescent fringe drawn as a hairline, which is what
+  /// bug item 5 asks the light bar's edge to be.
+  ///
+  /// `blur` goes to 0 because on web there is no glass shader — `AdaptiveGlass`
+  /// falls back to a `BackdropFilter` clipped to the bar's shape, and a blur
+  /// reads its source from the layer *underneath*, which near the capsule's edge
+  /// is whatever is beside the bar rather than the capsule. At sigma 20 that
+  /// smeared the page inward as a grey ramp about 24px wide just inside the
+  /// edge, measured falling to `rgb(184,184,184)` (luminance 0.53) against a
+  /// black backdrop — the "bar has a dirty inner outline" half of the light-web
+  /// bar looking wrong. Over an opaque capsule the blur has nothing legitimate
+  /// left to do: everything it is meant to obscure is already hidden by the
+  /// backer, so all it can contribute is the bleed.
+  ///
+  /// Light-web-only by construction. It is a separate value rather than an edit
+  /// to [settings] because [settings] is shared with the app build and with the
+  /// dark theme, where the wide bevel and the blur are correct and are what the
+  /// app ships.
+  static LiquidGlassSettings webLightSettings() {
+    return settings(Brightness.light).copyWith(thickness: 2, blur: 0);
+  }
+
   /// Tint of the selected tab's pill.
   ///
   /// Glass-on-glass needs a real step in brightness to be findable at all, but
@@ -186,6 +217,22 @@ class GlassNavTheme {
     );
   }
 
+  /// The opaque, blue-tinted fill the resting selection pill wears in the
+  /// **light theme**.
+  ///
+  /// `#DBEAFE` is Tailwind's `blue-100` — the brand's own hue at a very light
+  /// tint. It is deliberately opaque and constant: the earlier light-mode pill
+  /// was `Color(0xFF1F2126)` at a low alpha, which composited through the glass
+  /// shader to a faint grey on Impeller but, on web where that shader is
+  /// dropped, painted straight through as a near-black slab whose alpha
+  /// animated black→grey→light across a tab change. Nothing here resolves from
+  /// the `on*` family and nothing animates its alpha, so it can never come out
+  /// dark. The selected icon ([selectedIcon]) and label ([selectedLabel]) read
+  /// cleanly on it — brand blue `#2563EB` measures ~4.7:1 against this fill.
+  ///
+  /// Light-theme-only by construction: dark mode keeps its white lift.
+  static const Color lightIndicatorFill = Color(0xFFDBEAFE);
+
   /// The material the pill wears **while it travels**, for light mode.
   ///
   /// The material the pill wears **while it travels**, for light mode.
@@ -222,8 +269,14 @@ class GlassNavTheme {
     // fringe, drawn as a hairline. It is the one field deliberately *not* inherited
     // from the base — a dark bar can carry a wide bevel, a white one shows
     // every pixel of it.
+    //
+    // The tint is [lightIndicatorFill] — the same light blue the resting chip
+    // wears — so the cross-fade from resting chip to travelling lens has
+    // nothing to give away. It used to be `Color(0xFF1F2126)` (near-black),
+    // which on web (no glass shader) meant the pill turned into a dark slab the
+    // instant it started moving.
     return const LiquidGlassSettings(
-      glassColor: Color(0xFF1F2126),
+      glassColor: lightIndicatorFill,
       thickness: 3,
     );
   }

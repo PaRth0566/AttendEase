@@ -127,6 +127,22 @@ class AnimatedGlassIndicator extends StatelessWidget {
   /// to `false`, so callers that do not set it keep upstream behaviour.
   final bool stretchAlongMotion;
 
+  /// AttendEase patch: pin the pill to its resting chip and never cross-fade to
+  /// the travelling glass lens.
+  ///
+  /// The pill normally paints in two passes that trade places on the jelly
+  /// [thickness] spring — the chip ([indicatorColor]) at rest, the lens
+  /// ([settings]) while travelling. That handover assumes the lens is a real
+  /// refracting material, which it is on Impeller. On web there is no glass
+  /// shader, so the lens degrades to a flat body of its own tint and the pill
+  /// visibly changes colour the moment a drag raises `thickness` — while a
+  /// page-driven slide, which leaves `thickness` at 0, keeps the correct chip.
+  ///
+  /// With this set the chip stays at full opacity and the glass pass is never
+  /// mounted, so both gestures look identical. Geometry is untouched: the
+  /// alignment, jelly transform and expansion still follow `thickness`.
+  final bool staticPill;
+
   const AnimatedGlassIndicator({
     super.key,
     required this.velocity,
@@ -151,6 +167,7 @@ class AnimatedGlassIndicator extends StatelessWidget {
     this.pinchStrength = 1.0,
     this.innerBlur = 0.0,
     this.stretchAlongMotion = false, // AttendEase patch
+    this.staticPill = false, // AttendEase patch
   });
 
   /// The iOS 26-calibrated default glass settings for all indicator pills.
@@ -285,7 +302,11 @@ class AnimatedGlassIndicator extends StatelessWidget {
 
     // 1. Background Indicator (Resting state)
     // Fade out as the drag spring thickness increases toward 0.15.
-    final backgroundOpacity = (1.0 - (thickness / 0.15)).clamp(0.0, 1.0);
+    //
+    // AttendEase patch: [staticPill] holds it at full opacity instead, so the
+    // chip never hands over to the glass pass. See the field's doc comment.
+    final backgroundOpacity =
+        staticPill ? 1.0 : (1.0 - (thickness / 0.15)).clamp(0.0, 1.0);
     final backgroundIndicator = Builder(
       builder: (context) {
         // HIDE during capture so GlassEffect doesn't bake the pill into its snapshot
@@ -315,8 +336,10 @@ class AnimatedGlassIndicator extends StatelessWidget {
     // We fade the glass in/out by setting `visibility` on the settings rather
     // than wrapping the widget in `Opacity`.
     final interactionFade = thickness.clamp(0.0, 1.0);
-    final glassFade =
-        (glassVisibilityOverride ?? interactionFade).clamp(0.0, 1.0);
+    // AttendEase patch: [staticPill] suppresses the glass pass entirely.
+    final glassFade = staticPill
+        ? 0.0
+        : (glassVisibilityOverride ?? interactionFade).clamp(0.0, 1.0);
     final base =
         settings != null ? _mergeWithBase(settings!) : baseIndicatorSettings;
 

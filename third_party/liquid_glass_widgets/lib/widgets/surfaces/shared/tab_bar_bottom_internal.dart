@@ -391,6 +391,7 @@ class TabIndicator extends StatefulWidget {
     this.interactionGlowOpacity = 1,
     this.interactionScale = 1.0,
     this.platformViewBackdrop = false,
+    this.staticIndicator = false, // AttendEase patch
     super.key,
   });
 
@@ -448,6 +449,12 @@ class TabIndicator extends StatefulWidget {
   /// When true, forces BackdropFilter rendering and refracts the icon layer
   /// instead of the backdrop — needed over iOS PlatformViews.
   final bool platformViewBackdrop;
+
+  /// AttendEase patch: keep the pill as its resting chip in every gesture,
+  /// instead of cross-fading to the travelling glass lens once the jelly spring
+  /// engages. Forwarded to [AnimatedGlassIndicator.staticPill]; see that field
+  /// for why the web build needs it.
+  final bool staticIndicator;
 
   @override
   State<TabIndicator> createState() => TabIndicatorState();
@@ -854,6 +861,7 @@ class TabIndicatorState extends State<TabIndicator>
               expansion: widget.indicatorExpansion,
               settings: widget.indicatorSettings,
               stretchAlongMotion: true, // AttendEase patch
+              staticPill: widget.staticIndicator, // AttendEase patch
               backgroundKey: widget.platformViewBackdrop
                   ? _iconLayerKey
                   : widget.backgroundKey,
@@ -861,7 +869,14 @@ class TabIndicatorState extends State<TabIndicator>
 
           // Keep the existing rim visible for slow page drags without changing
           // the spring thickness that drives every other pill animation.
-          if (widget.visible && (thickness > 0.05 || forceRim))
+          //
+          // AttendEase patch: skipped entirely under [staticIndicator] — the
+          // chip above is holding the pill for the whole gesture, and this pass
+          // is the one that would repaint it as a flat tinted body on a
+          // shader-free renderer.
+          if (widget.visible &&
+              !widget.staticIndicator &&
+              (thickness > 0.05 || forceRim))
             AnimatedGlassIndicator(
               velocity: forceRim ? glassVelocity : velocity,
               itemCount: widget.tabCount,
@@ -1001,6 +1016,7 @@ class TabIndicatorState extends State<TabIndicator>
                     expansion: widget.indicatorExpansion,
                     settings: widget.indicatorSettings,
                     stretchAlongMotion: true, // AttendEase patch
+                    staticPill: widget.staticIndicator, // AttendEase patch
                     backgroundKey: widget.platformViewBackdrop
                         ? _iconLayerKey
                         : widget.backgroundKey,
@@ -1065,27 +1081,33 @@ class TabIndicatorState extends State<TabIndicator>
 
           // 3. Moving Glass Indicator Layer — on top so it refracts
           // the merged icon RepaintBoundary AND the glow beneath it.
-          AnimatedGlassIndicator(
-            velocity: velocity,
-            itemCount: widget.tabCount,
-            alignment: alignment,
-            thickness: thickness,
-            quality: widget.quality,
-            indicatorColor: indicatorColor,
-            isBackgroundIndicator: false,
-            paintBackground: false,
-            paintGlass: true,
-            borderRadius: thickness < 1 ? backgroundRadius : glassRadius,
-            padding: const EdgeInsets.all(4),
-            expansion:
-                widget.indicatorExpansion.resolve(Directionality.of(context)),
-            settings: widget.indicatorSettings,
-            pinchStrength: widget.indicatorPinchStrength,
-            stretchAlongMotion: true, // AttendEase patch
-            backgroundKey: widget.platformViewBackdrop
-                ? _iconLayerKey
-                : widget.backgroundKey,
-          ),
+          //
+          // AttendEase patch: omitted under [staticIndicator], for the same
+          // reason as the `.off` branch's rim pass — on a shader-free renderer
+          // this lens is a flat tinted body that covers the icon layer instead
+          // of refracting it.
+          if (!widget.staticIndicator)
+            AnimatedGlassIndicator(
+              velocity: velocity,
+              itemCount: widget.tabCount,
+              alignment: alignment,
+              thickness: thickness,
+              quality: widget.quality,
+              indicatorColor: indicatorColor,
+              isBackgroundIndicator: false,
+              paintBackground: false,
+              paintGlass: true,
+              borderRadius: thickness < 1 ? backgroundRadius : glassRadius,
+              padding: const EdgeInsets.all(4),
+              expansion:
+                  widget.indicatorExpansion.resolve(Directionality.of(context)),
+              settings: widget.indicatorSettings,
+              pinchStrength: widget.indicatorPinchStrength,
+              stretchAlongMotion: true, // AttendEase patch
+              backgroundKey: widget.platformViewBackdrop
+                  ? _iconLayerKey
+                  : widget.backgroundKey,
+            ),
         ],
       ),
     );

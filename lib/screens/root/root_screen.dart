@@ -305,7 +305,16 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final Brightness brightness = theme.brightness;
-    final glassSettings = GlassNavTheme.settings(brightness);
+    // The bar's glass is translucent by design, and on web the glass shader is
+    // dropped — so a light-theme web build seats the bar on an opaque white
+    // capsule (see `opaqueWebBar` below). Over that capsule the shared
+    // material's wide bevel band paints as a grey ring just inside the
+    // capsule's edge, so the light-web build takes a hairline-rim variant of
+    // the same material. App builds and the web dark theme keep the shared one.
+    final bool opaqueWebBar = kIsWeb && brightness == Brightness.light;
+    final glassSettings = opaqueWebBar
+        ? GlassNavTheme.webLightSettings()
+        : GlassNavTheme.settings(brightness);
     final Color unselectedContent = GlassNavTheme.unselectedContent(brightness);
 
     if (_isSyncing) {
@@ -401,10 +410,23 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
               final double systemNavInset = MediaQuery.viewPaddingOf(
                 context,
               ).bottom;
-              final Widget navBar = Padding(
-                key: const Key('bottom_nav_bar'),
-                padding: EdgeInsets.only(bottom: systemNavInset),
-                child: GlassTabBar.bottom(
+              // The bar's glass is translucent by design, and on web the glass
+              // shader is dropped — so a light-theme web build shows the page
+              // straight through the bar (bug item 5) and, being additive-white
+              // over a light page, the pill and labels lose their contrast. The
+              // fix is an opaque, shape-matched white pad *behind* the glass, so
+              // the same tuned glass composites over white instead of over live
+              // page content. It is light-web-only: the package's own backer
+              // (`LiquidGlassSettings.backerColor`) is skipped on the grouped
+              // path the bar uses, so the pad is placed here at the point of
+              // use rather than in the shared settings.
+              //
+              // App builds and the web dark theme are untouched: there the glass
+              // shader runs (app) or the dark bar earns its edge off a dark page
+              // (web dark), so no pad is inserted and the subtree is unchanged.
+              // `opaqueWebBar` is computed once in `build`, above, because the
+              // bar's material is chosen from it too.
+              final GlassTabBar tabBar = GlassTabBar.bottom(
                   selectedIndex: _currentIndex,
                   // Maps page position 0…2 onto the pill's alignment space -1…1 —
                   // same mapping as computeAlignment, on a continuous position.
@@ -437,12 +459,22 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
                   // The tint has to invert with the theme, because the pill is a step
                   // in brightness away from the bar and the bar's glass sits at
                   // opposite ends in the two themes. White at 0.12 is a visible lift
-                  // on dark glass and *nothing at all* on light glass — which is what
-                  // made the light-mode pill disappear — so light mode darkens by the
-                  // same idea instead.
+                  // on dark glass; light mode steps *up* toward a blue-tinted fill
+                  // instead of down toward black.
+                  //
+                  // Light mode used to darken here — `Color(0xFF1F2126)` at low alpha
+                  // — on the theory that a light bar needs a dark pill to be found.
+                  // On Impeller that composites through the glass to a faint grey; on
+                  // web, where the glass shader is dropped, the same near-black tint
+                  // painted straight through as an opaque black slab over the icon and
+                  // label, animating from black→grey→light as its alpha rose across a
+                  // trip. A constant, opaque, blue-tinted fill resolved from the brand
+                  // (`#DBEAFE`, primary at ~12% over white) can never resolve dark, and
+                  // does not animate its alpha. The selected icon/label below stay the
+                  // brand blue and read cleanly on it (≈4.7:1 and up).
                   indicatorColor: brightness == Brightness.dark
                       ? Colors.white.withValues(alpha: 0.12)
-                      : const Color(0xFF1F2126).withValues(alpha: 0.10),
+                      : GlassNavTheme.lightIndicatorFill,
 
                   // The *travelling* pill, light mode only.
                   //
@@ -503,6 +535,45 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
                   magnification: 1.0,
                   pressScale: 1.0,
 
+                  // The tap glow, disabled on light web (bug item 4).
+                  //
+                  // Press feedback is a `GlassGlow` — an additive radial glare
+                  // that follows the pointer and clears on pointer-up/cancel.
+                  // On a touch web build there is no `PointerExit` to fall back
+                  // on, and a tap that ends without a clean up event leaves the
+                  // glare latched: the grey disc that stayed painted, off-centre,
+                  // after the finger lifted. `none` removes the glow sensor
+                  // entirely (`hasGlow` is false, so the wrapper is skipped), so
+                  // there is nothing left to latch; the pill already carries the
+                  // selection. App builds and web dark keep the full iOS-26
+                  // interaction — the latch was only ever the light-web case the
+                  // bug was filed against.
+                  interactionBehavior: opaqueWebBar
+                      ? GlassInteractionBehavior.none
+                      : GlassInteractionBehavior.full,
+
+                  // The pill keeps its resting chip for the whole gesture, on
+                  // light web only.
+                  //
+                  // The package paints the pill in two passes that trade places
+                  // on the jelly spring: the chip (`indicatorColor` above) while
+                  // it is parked, and a glass lens (`indicatorSettings`) while it
+                  // travels. Which one is on screen depends on how the pill was
+                  // moved — a page slide leaves the spring at rest and keeps the
+                  // chip, a drag *on the bar* raises it and hands over to the
+                  // lens. On Impeller the two match, so the swap is invisible.
+                  //
+                  // On web there is no glass shader, so the lens falls back to
+                  // painting a flat body of its own tint at full alpha: dragging
+                  // the pill along the bar turned it into an opaque light-blue
+                  // slab that covered its own icon and label, while the same pill
+                  // slid correctly when the *page* was swiped. That asymmetry is
+                  // the whole bug. Pinning the chip removes the second pass, so
+                  // both gestures render the one appearance that was already
+                  // right. Geometry is untouched — the pill still stretches and
+                  // travels on the same spring.
+                  staticIndicator: opaqueWebBar,
+
                   selectedIconColor: GlassNavTheme.selectedIcon(brightness),
                   selectedLabelColor: GlassNavTheme.selectedLabel(brightness),
                   unselectedIconColor: unselectedContent,
@@ -542,7 +613,61 @@ class _RootScreenState extends State<RootScreen> with WidgetsBindingObserver {
                       semanticLabel: 'Profile',
                     ),
                   ],
-                ),
+                );
+
+              // The opaque white pad, light-web-only. A shape-matched
+              // `#FFFFFF` fill clipped to the capsule, with a soft shadow and a
+              // 1px hairline (`Color(0x14000000)`) so the seated bar reads as a
+              // deliberate surface rather than bare see-through glass. It sits
+              // *behind* the bar in a Stack, so the bar's tuned glass now
+              // composites over solid white instead of over live page content.
+              //
+              // Inset to match the capsule: the bar's glass sits
+              // [GlassNavTheme.horizontalInset] / [GlassNavTheme.verticalInset]
+              // inside its own widget box (that is where `horizontalPadding` /
+              // `verticalPadding` above place it), so a pad inset by the same
+              // amounts lands exactly under the capsule and never pokes past its
+              // rounded ends, at every width.
+              final Widget barContent = opaqueWebBar
+                  ? Stack(
+                      children: <Widget>[
+                        Positioned.fill(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: GlassNavTheme.horizontalInset,
+                              vertical: GlassNavTheme.verticalInset,
+                            ),
+                            child: IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(
+                                    GlassNavTheme.barRadius,
+                                  ),
+                                  border: Border.all(
+                                    color: const Color(0x14000000),
+                                  ),
+                                  boxShadow: const <BoxShadow>[
+                                    BoxShadow(
+                                      color: Color(0x1A000000),
+                                      blurRadius: 18,
+                                      offset: Offset(0, 6),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        tabBar,
+                      ],
+                    )
+                  : tabBar;
+
+              final Widget navBar = Padding(
+                key: const Key('bottom_nav_bar'),
+                padding: EdgeInsets.only(bottom: systemNavInset),
+                child: barContent,
               );
 
               // Cap the bar to the content column on a desktop browser.

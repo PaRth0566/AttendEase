@@ -81,6 +81,7 @@ class TabBarBottomLayout extends StatefulWidget {
     this.interactionBehavior = GlassInteractionBehavior.full,
     this.pressScale = 1.04,
     this.platformViewBackdrop = false,
+    this.staticIndicator = false, // AttendEase patch
     this.adaptiveBrightness = false,
     this.onBrightnessChanged,
     this.brightnessOverride,
@@ -137,6 +138,9 @@ class TabBarBottomLayout extends StatefulWidget {
   final GlassInteractionBehavior interactionBehavior;
   final double pressScale;
   final bool platformViewBackdrop;
+
+  /// AttendEase patch: forwarded to [TabIndicator.staticIndicator].
+  final bool staticIndicator;
   final bool adaptiveBrightness;
   final ValueChanged<Brightness>? onBrightnessChanged;
   final ValueListenable<Brightness>? brightnessOverride;
@@ -275,6 +279,7 @@ class _TabBarBottomLayoutState extends State<TabBarBottomLayout> {
                           maskingQuality: widget.maskingQuality,
                           indicatorExpansion: widget.indicatorExpansion,
                           platformViewBackdrop: widget.platformViewBackdrop,
+                          staticIndicator: widget.staticIndicator,
                           interactionGlowColor:
                               widget.interactionBehavior.hasGlow
                                   ? effectiveInteractionGlowColor
