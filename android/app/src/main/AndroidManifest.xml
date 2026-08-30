@@ -1,10 +1,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <!-- RECEIVE_BOOT_COMPLETED, POST_NOTIFICATIONS, SCHEDULE_EXACT_ALARM,
+         USE_EXACT_ALARM and USE_FULL_SCREEN_INTENT used to be declared here.
+         They belonged to flutter_local_notifications, which was dropped from
+         pubspec.yaml in 908fd15 along with the notifications feature; the
+         permissions and the plugin's boot receiver were left behind.
+
+         Nothing declares or needs them now — no plugin, no Dart, no Kotlin —
+         and none of them arrive from a dependency manifest, so removing them
+         genuinely removes them from what Play shows users rather than being
+         re-merged. USE_EXACT_ALARM and USE_FULL_SCREEN_INTENT are also
+         Play-policy-restricted, and an attendance tracker has no alarm or
+         calling feature to justify either.
+
+         Anything scheduled in future needs the matching permission back. -->
 
     <!-- Advertising ID. No AttendEase code reads it. It arrives with
          firebase-analytics (play-services-measurement -> play-services-ads-identifier),
@@ -129,25 +138,6 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.update_provider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/update_file_paths" />
-        </provider>
-
-        <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED"/>
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
-            </intent-filter>
-        </receiver>
 
     </application>
 

@@ -10,10 +10,9 @@ import 'firebase_options.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
-import 'services/update_service.dart';
+import 'services/play_update_service.dart';
 import 'widgets/incoming_pdf_handler.dart';
 import 'widgets/theme_crossfade.dart';
-import 'widgets/update_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -151,33 +150,10 @@ class _AttendEaseAppState extends State<AttendEaseApp>
     _startupFlowRan = true;
     await Future<void>.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
-    try {
-      // Reconcile a completed install and show "What's New" exactly once.
-      final installedNotes = await UpdateService.instance
-          .reconcileInstalledUpdate();
-      final notesContext = AppRouter.rootNavigatorKey.currentContext;
-      if (installedNotes != null &&
-          notesContext != null &&
-          notesContext.mounted) {
-        await UpdateService.instance.runExclusiveSheet(
-          () => showPatchNotesSheet(
-            notesContext,
-            installedNotes,
-            markViewed: true,
-          ),
-        );
-      }
-      // Then check for a newer release. Guarded so a manual check can't stack.
-      final update = await UpdateService.instance.checkForUpdate();
-      final updateContext = AppRouter.rootNavigatorKey.currentContext;
-      if (update != null && updateContext != null && updateContext.mounted) {
-        await UpdateService.instance.runExclusiveSheet(
-          () => showUpdateBottomSheet(updateContext, update),
-        );
-      }
-    } catch (error) {
-      debugPrint('Automatic update check skipped: $error');
-    }
+    // Ask Google Play whether a newer build is on the user's track and, if so,
+    // download it flexibly in the background then prompt to restart. No-op on
+    // non-Play builds; every failure is swallowed inside the service.
+    await PlayUpdateService.instance.checkAndStartFlexibleUpdate();
   }
 
   @override

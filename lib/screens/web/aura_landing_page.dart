@@ -539,12 +539,12 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                         ),
                       ),
                     ),
-                    // Android icon
+                    // Google Play icon
                     Tooltip(
-                      message: 'Download Android App',
+                      message: 'Get it on Google Play',
                       child: IconButton(
                         onPressed: () => launchUrl(
-                          Uri.parse('https://github.com/PaRth0566/AttendEase/releases/download/v1.0.5/AttendEase.apk'),
+                          Uri.parse('https://play.google.com/store/apps/details?id=com.parthm.attendease'),
                           mode: LaunchMode.externalApplication,
                         ),
                         icon: Icon(

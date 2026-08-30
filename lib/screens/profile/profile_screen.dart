@@ -11,7 +11,7 @@ import '../../database/subject_dao.dart';
 import '../../router/app_router.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_sync_service.dart';
-import '../../services/update_service.dart';
+import '../../services/review_service.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/app_dimens.dart';
@@ -23,7 +23,6 @@ import '../../widgets/backup_sync_card.dart';
 import '../../widgets/pressable.dart';
 import '../../widgets/smooth_theme_switch.dart';
 import '../../widgets/theme_crossfade.dart';
-import '../../widgets/update_dialog.dart';
 import '../root/tab_page_state.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -57,7 +56,6 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
 
   bool _loading = true;
   String _appVersion = '';
-  bool _checkingForUpdate = false;
 
   /// Drives the chevron rotation while the semester picker sheet is open.
   bool _semesterPickerOpen = false;
@@ -224,48 +222,21 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
     await _loadProfileData();
   }
 
-  Future<void> _checkForUpdates() async {
-    if (kIsWeb) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('In-app updates are available on Android.'),
+  /// Opens the Play Store listing so the user can rate/review. On Android this
+  /// is the native listing; on web it opens the listing in a new tab. If the
+  /// listing can't be opened (e.g. the app is not yet public on Play), tell the
+  /// user rather than leaving them on Play's "URL not found" page.
+  Future<void> _rateApp() async {
+    final opened = await ReviewService.instance.openStoreListing();
+    if (!mounted || opened) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          "AttendEase isn't publicly listed on Google Play yet — "
+          'rating will open once it is published.',
         ),
-      );
-      return;
-    }
-    if (_checkingForUpdate) return;
-    // If the automatic startup sheet is already on screen, don't stack another.
-    if (UpdateService.instance.isUpdateSheetVisible) return;
-    setState(() => _checkingForUpdate = true);
-    try {
-      final update = await UpdateService.instance.checkForUpdate();
-      if (!mounted) return;
-      if (update == null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Already up to date.')));
-      } else {
-        await UpdateService.instance.runExclusiveSheet(
-          () => showUpdateBottomSheet(context, update),
-        );
-      }
-    } on UpdateException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(error.message)));
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not check for updates. Please try again.'),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _checkingForUpdate = false);
-    }
+      ),
+    );
   }
 
   /// Asks whether to log out anyway after the cloud backup failed. Logging out
@@ -531,22 +502,15 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                           onTap: () => context.go('/app/profile/bug-report'),
                         ),
 
+                        // No manual "Check for Updates" tile: Google Play
+                        // auto-updates in the background, and the app already
+                        // runs a silent flexible-update check on launch (see
+                        // PlayUpdateService in main.dart). A manual button on
+                        // top of both was redundant.
                         _profileTile(
-                          icon: Icons.system_update_rounded,
-                          title: _checkingForUpdate
-                              ? 'Checking for updates…'
-                              : 'Check for Updates',
-                          enabled: !_checkingForUpdate,
-                          trailing: _checkingForUpdate
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : null,
-                          onTap: _checkForUpdates,
+                          icon: Icons.star_rounded,
+                          title: 'Rate AttendEase',
+                          onTap: _rateApp,
                         ),
 
                         _profileTile(
@@ -1045,8 +1009,6 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
     required String title,
     required VoidCallback onTap,
     bool isRedAlert = false,
-    bool enabled = true,
-    Widget? trailing,
   }) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -1055,9 +1017,8 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
       padding: const EdgeInsets.only(bottom: AppDimens.space12),
       child: ContainerTransformAnchor(
         borderRadius: AppDimens.radiusMd,
-        enabled: enabled,
         child: Pressable(
-          onTap: enabled ? onTap : null,
+          onTap: onTap,
           borderRadius: AppDimens.brMd,
           child: Card(
             elevation: 0,
@@ -1089,14 +1050,11 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
                       : theme.textTheme.bodyLarge?.color,
                 ),
               ),
-              trailing:
-                  trailing ??
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    size: 16,
-                    color: isRedAlert ? Colors.red : Colors.grey,
-                  ),
-              enabled: enabled,
+              trailing: Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: isRedAlert ? Colors.red : Colors.grey,
+              ),
             ),
           ),
         ),

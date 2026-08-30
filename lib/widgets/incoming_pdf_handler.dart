@@ -53,8 +53,7 @@ class _IncomingPdfHandlerState extends State<IncomingPdfHandler> {
   /// key gets a context underneath both.
   BuildContext? get _uiContext => AppRouter.rootNavigatorKey.currentContext;
 
-  /// Guards against a second PDF stacking a dialog on the first, in the spirit
-  /// of `UpdateService.runExclusiveSheet`.
+  /// Guards against a second PDF stacking a dialog on the first.
   bool _busy = false;
 
   StreamSubscription<User?>? _authSub;

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/app_refresh_bus.dart';
 import '../services/attendance_report_sync_service.dart';
+import '../services/review_service.dart';
 import '../theme/app_colors.dart';
 import '../theme/app_dimens.dart';
 import '../theme/app_motion.dart';
@@ -120,6 +121,13 @@ class _SyncReportButtonState extends State<SyncReportButton> {
                   '(Sem ${result.semester}).',
         isError: false,
       );
+
+      // A completed sync is the app's clearest "something good just happened"
+      // moment, so it's where we count toward — and occasionally fire — the Play
+      // in-app review prompt. Gated inside the service (min actions, not the
+      // first one, once per 30 days); a failed sync never reaches here.
+      await ReviewService.instance.registerPositiveAction();
+      await ReviewService.instance.maybeRequestReview();
 
       await Future<void>.delayed(_doneLinger);
       if (mounted) setState(() => _justFinished = false);
