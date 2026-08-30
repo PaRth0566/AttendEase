@@ -1,10 +1,10 @@
 <div align="center">
   <h1>AttendEase</h1>
   <img src="assets/icon/app_icon2.png" alt="Attend Ease Logo" width="120" height="120" /><br /><br />
-<a href="https://github.com/PaRth0566/AttendEase/releases/download/v1.0.5/AttendEase.apk"><img src="https://img.shields.io/badge/Download-APK-2D80EC?logo=android" width="226" ></a> &nbsp&nbsp&nbsp&nbsp
+<a href="https://play.google.com/store/apps/details?id=com.parthm.attendease"><img src="https://img.shields.io/badge/Get_it_on-Google_Play-2D80EC?logo=googleplay&logoColor=white" width="226" ></a> &nbsp&nbsp&nbsp&nbsp
 <a href="https://attendease-cbc6f.web.app"><img src="https://img.shields.io/badge/Open_Web-APP-ff9a00?logo=firebase&logoColor=FFCA28" width="230"></a><br><br>
 <a href="https://github.com/neo999in/AttendEase-backend"><img src="https://img.shields.io/badge/Backend-Repository-339933?logo=nodedotjs" width="180" ></a><br><br>
-<a href="https://github.com/PaRth0566/AttendEase/releases/tag/v1.0.5"><img src="https://img.shields.io/badge/version-1.0.5-22C55E?labelColor=333333&logo=github&logoColor=white" alt="version 1.0.5" height="24" hspace="6" vspace="3" /></a><img src="https://img.shields.io/badge/platforms-Android%20%7C%20Web-A855F7?labelColor=333333" alt="platforms: Android and Web" height="24" hspace="6" vspace="3" /><a href="https://docs.flutter.dev/release/archive"><img src="https://img.shields.io/badge/Flutter-3.10.7+-00CCFF?labelColor=333333&logo=flutter&logoColor=00CCFF" alt="Flutter 3.10.7+" height="24" hspace="6" vspace="3" /></a><a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-D97706?labelColor=333333&logo=opensourceinitiative&logoColor=white" alt="MIT license" height="24" hspace="6" vspace="3" /></a>
+<a href="https://play.google.com/store/apps/details?id=com.parthm.attendease"><img src="https://img.shields.io/badge/version-1.1.1-22C55E?labelColor=333333&logo=googleplay&logoColor=white" alt="version 1.1.1" height="24" hspace="6" vspace="3" /></a><img src="https://img.shields.io/badge/platforms-Android%20%7C%20Web-A855F7?labelColor=333333" alt="platforms: Android and Web" height="24" hspace="6" vspace="3" /><a href="https://docs.flutter.dev/release/archive"><img src="https://img.shields.io/badge/Flutter-3.10.7+-00CCFF?labelColor=333333&logo=flutter&logoColor=00CCFF" alt="Flutter 3.10.7+" height="24" hspace="6" vspace="3" /></a><a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-D97706?labelColor=333333&logo=opensourceinitiative&logoColor=white" alt="MIT license" height="24" hspace="6" vspace="3" /></a>
 </div>
 
 ---
@@ -61,8 +61,8 @@ Reports are parsed locally on-device by default. Gemini handles the web upload p
 - 🚦 **Login Throttling**: 5 failed attempts trigger a 60-second lockout with a live countdown.
 - ☁️ **Conflict-Safe Cloud Sync**: Firestore transactions with optimistic locking, so a stale device can't clobber a newer backup. Guest users are isolated from backup and restore entirely.
 - 🚪 **Account-Isolated Sign-Out**: Signing out wipes the local database and preferences on *both* Android and web — where the store is IndexedDB and used to be skipped, which left one account's subjects visible to the next person on a shared browser. The router's cached "has setup data?" verdict is invalidated in the same step, so nobody inherits the previous session's screen.
-- 🔄 **Verified OTA Updates**: Checks GitHub Releases, downloads with live progress, and verifies the APK against its published **SHA-256** before handing it to Android's installer. Download URLs are restricted to official GitHub hosts; drafts and prereleases are ignored.
-- 📝 **"What's New" Sheet**: Release notes are parsed from the GitHub release body and shown exactly once after an install completes, with a 20-entry history.
+- 🔄 **Play In-App Updates**: The app ships through Google Play, so Play distributes and signs every build. On launch AttendEase asks Play whether a newer build is on the user's track and, if so, downloads it in the background (flexible flow) and prompts to restart — no sideloading, no self-installed APK.
+- ⭐ **Gated In-App Review**: The native Play rating dialog is fired only at a genuine positive moment (a completed report sync), never on first use, and at most once every 30 days. A **Rate AttendEase** tile in Profile always opens the store listing directly.
 
 #### 🎨 Look and feel
 - 💧 **Liquid Glass Navigation**: A genuinely translucent bottom bar whose selection pill is a brighter lens on glass, not a solid fill — with per-theme tuning to hold WCAG AA contrast on a surface that has no guaranteed background.
@@ -82,7 +82,7 @@ Before you begin, ensure you have met the following requirements:
 * **Node.js**: `v22.0.0` or higher — the backend is an ES-module project, and `file-type` v22 sets the floor at Node 22.
 * **IDE**: [Android Studio](https://developer.android.com/studio) or [VS Code](https://code.visualstudio.com/) with Flutter/Dart plugins.
 * **Platform**:
-    - **Android**: Uses Flutter's default `minSdk`. Requires the *Install unknown apps* permission for in-app updates.
+    - **Android**: Uses Flutter's default `minSdk`. In-app updates and the review prompt need a build installed from Google Play; on a `flutter run` or sideloaded build they are silent no-ops.
     - **Web**: Modern browser with WebGL and JavaScript enabled (the glass shaders degrade gracefully without WebGL).
 * **Firebase**: Your own project. `firebase_options.dart` and `google-services.json` are intentionally untracked — see [Getting Started](#-getting-started).
 
@@ -153,7 +153,8 @@ flutter test
 | `cloud_firestore` | Cloud backup and restore |
 | `go_router` | Routing with redirect guards |
 | `liquid_glass_widgets` | Glass nav surfaces (vendored) |
-| `package_info_plus` · `http` · `crypto` | OTA updates, SHA-256 checks |
+| `in_app_update` · `in_app_review` | Play in-app updates and rating prompt |
+| `package_info_plus` · `http` | Version display, backend upload |
 | `file_picker` · `url_launcher` | Upload and external links |
 | `connectivity_plus` | Network reachability |
 
@@ -171,7 +172,7 @@ AttendEase/
 │   ├── screens/     # Feature UI (auth, dashboard, calendar…)
 │   ├── widgets/     # Glass buttons, overlays, nav icons
 │   ├── theme/       # Tokens: colors, dimens, motion
-│   ├── services/    # Auth, sync, PDF import, OTA update
+│   ├── services/    # Auth, sync, PDF import/export, Play update
 │   ├── database/    # SQLite helper + DAOs
 │   ├── models/      # Subject, TimetableEntry
 │   ├── utils/       # Skip projections, attendance math
@@ -193,8 +194,8 @@ AttendEase/
 - **Report ownership** — a report for a different student or course raises the replace dialog, a continuation of your own reports does not (so a routine sync is never interrupted), and the profile header follows the imported report.
 - **Account isolation** — signing out wipes the local database on every platform, so the next user starts clean.
 - **Editing & input** — delete-with-undo and the undo snackbar's placement, not-conducted-lecture visibility, and target-percentage input formatting.
-- **Update pipeline** — semantic version comparison: numeric rather than lexicographic ordering, tags and build metadata accepted, downgrades and equal versions rejected.
-- **Navigation & layout** — pill drag, jelly direction *and area conservation*, icon replay, overlay layout, container transforms, bottom-nav safe-area insets, and web desktop rendering.
+- **Report export** — the generated PDF's own arithmetic: percentages and the on-track test match the screen exactly, and "lectures to spare" / "lectures to attend" are solved rather than estimated.
+- **Navigation & layout** — pill drag, jelly direction *and area conservation*, icon replay, overlay layout, container transforms, bottom-nav safe-area insets, light-theme nav bar, and web desktop rendering.
 - **Contrast** — the glass nav bar's WCAG AA ratios are asserted, not eyeballed, because "pick a color and hope" is how a translucent bar becomes unreadable.
 
 > [!NOTE]

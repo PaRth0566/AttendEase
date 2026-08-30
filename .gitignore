@@ -17,9 +17,15 @@ migrate_working_dir/
 *.env
 *.jks
 *.keystore
+*.p12
+*.pem
 local.properties
 **/google-services.json
 **/GoogleService-Info.plist
+# Service-account / admin credentials for firebase-admin and the Play API.
+**/*service-account*.json
+**/serviceAccountKey*.json
+**/play-store-credentials*.json
 
 # IDE related
 .idea/
@@ -50,6 +56,23 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+/android/.kotlin/
+/android/app/build/
+
+# Release artifacts. Built locally and uploaded to Play; a signed bundle or APK
+# in the repo is both dead weight and a distribution channel nobody audits.
+*.aab
+*.apk
+*.aar
+*.symbols.zip
+/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+
+# Crash / JVM dumps from Gradle
+hs_err_pid*.log
+replay_pid*.log
+
+# Test output
+/test/failures/
 
 # Backend
 **/node_modules/
