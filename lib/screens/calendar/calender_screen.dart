@@ -1016,8 +1016,9 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
         builder: (ctx, setSheetState) {
           final theme = Theme.of(context);
           return Container(
-            // Keyboard inset is handled centrally by showAppModalSheet's
-            // scroll view; adding viewInsets here too would double the gap.
+            // Keyboard and system-navigation-bar insets are both handled
+            // centrally by showAppModalSheet; adding either here would double
+            // the gap.
             padding: const EdgeInsets.only(
               left: 24,
               right: 24,

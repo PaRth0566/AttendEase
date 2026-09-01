@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../theme/app_motion.dart';
@@ -107,12 +109,14 @@ Future<T?> showAppDialog<T>({
 /// By default the sheet is height-capped at [maxHeightFactor] of the viewport
 /// and its content is wrapped in a scroll view, so a tall sheet — or a short one
 /// that grows past the viewport at large OS font scales — scrolls instead of
-/// overflowing. The wrapper also lifts content above the soft keyboard, so call
-/// sites should *not* add their own `viewInsets.bottom` padding.
+/// overflowing. The wrapper also lifts content above the soft keyboard *and*
+/// above the Android 3-button navigation bar, so call sites should *not* add
+/// their own `viewInsets.bottom` or safe-area padding.
 ///
 /// Pass `selfSizing: true` for sheets that manage their own height and expect a
 /// bounded constraint — e.g. a frame whose child is `Flexible` around a
 /// `ListView`. Those break under the scroll view, which offers infinite height.
+/// They still get the same bottom inset applied.
 Future<T?> showAppModalSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
@@ -156,20 +160,54 @@ Future<T?> showAppModalSheet<T>({
       final Widget content = padding == null
           ? builder(context)
           : Padding(padding: padding, child: builder(context));
-      if (selfSizing) return content;
+
+      // How much of the sheet's own bottom edge the system covers.
+      //
+      // The app renders edge-to-edge, so a bottom sheet's box extends to the
+      // *physical* screen edge — underneath Android's 3-button navigation bar
+      // where one is present. Without this the last rows of a sheet (Semester 8
+      // in the Profile semester picker) were painted behind the back / home /
+      // recents glyphs.
+      //
+      // `viewPadding`, not `padding`: `padding` is consumed by ancestor
+      // `SafeArea`s and collapses to 0 while the keyboard is up, whereas
+      // `viewPadding` is the raw inset the OS reports and nothing can eat it.
+      // It is 0 on gesture-navigation and opaque-bar devices — there the OS
+      // shrinks the window itself — so this is a no-op and those layouts are
+      // unchanged. (Same reasoning as the nav capsule's inset in RootScreen.)
+      //
+      // `max`, not a sum: an open keyboard is drawn *over* the navigation bar,
+      // so the two insets overlap rather than stack. Adding them would leave a
+      // nav-bar-sized gap above the keyboard.
+      final double bottomInset = math.max(
+        MediaQuery.viewInsetsOf(context).bottom,
+        MediaQuery.viewPaddingOf(context).bottom,
+      );
+
+      // Padding *outside* the scroll view, so the scroll viewport itself ends
+      // above the system bar and rows never travel underneath it mid-scroll.
+      // The sheet's Material still paints down to the screen edge, so the
+      // surface stays flush with the bottom of the display.
+      if (selfSizing) {
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: content,
+        );
+      }
       // Cap at a fraction of the viewport and scroll the overflow. The
       // ConstrainedBox alone is not enough — without the scroll view a Column
-      // taller than the cap still throws.
-      return ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * maxHeightFactor,
-        ),
-        child: SingleChildScrollView(
-          // Lift content above the soft keyboard when a sheet contains inputs.
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(context).bottom,
+      // taller than the cap still throws. The inset comes off the cap so the
+      // sheet's overall height (content + inset) still honours it.
+      return Padding(
+        padding: EdgeInsets.only(bottom: bottomInset),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight:
+                (MediaQuery.sizeOf(context).height * maxHeightFactor -
+                        bottomInset)
+                    .clamp(0.0, double.infinity),
           ),
-          child: content,
+          child: SingleChildScrollView(child: content),
         ),
       );
     },
