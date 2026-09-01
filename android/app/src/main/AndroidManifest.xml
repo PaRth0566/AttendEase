@@ -146,5 +146,18 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+
+        <!-- The Play Store, so PlayReviewLauncher can see it.
+             Android 11+ filters package visibility: an intent pinned with
+             setPackage("com.android.vending") resolves to null from an app that
+             has not declared it, no matter that Play is installed. Without
+             these two entries the "Rate AttendEase" review deep link would
+             silently report "no Play app" on every modern device and fall
+             through to the browser. -->
+        <package android:name="com.android.vending"/>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="market"/>
+        </intent>
     </queries>
 </manifest>

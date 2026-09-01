@@ -150,12 +150,16 @@ swallows and `debugPrint`s).
 
 **In-app review:**
 
-1. The **Rate AttendEase** tile in Profile always works — it opens the store
-   listing.
+1. The **Rate AttendEase** tile in Profile opens Play's review page for the app
+   — the ratings section, where "Write feedback" is — on every tap, including for
+   a user who has already reviewed. It does *not* use the in-app sheet: that is
+   quota-gated and undetectable, so a button wired to it silently does nothing.
+   Verify by tapping it twice in a row; both taps must land on the same page.
 2. The automatic native prompt (`requestReview()`) fires from the report-sync
    success path, gated: after 3 successful syncs, not the first action, at most
-   once per 30 days. Play may still legitimately show **nothing** (quota) — that
-   is normal, not a bug, and cannot be forced on demand.
+   once per 30 days. Play may still legitimately show **nothing** (quota, or the
+   user already reviewed) — that is normal, not a bug, and cannot be forced on
+   demand. Tapping the tile does not consume this prompt's 30-day floor.
 3. A review can only be **submitted** from the **production** track; on
    internal/closed tracks the dialog's submit is disabled, so you can confirm the
    dialog appears but not complete a rating. Once submitted (on production) or

@@ -222,12 +222,15 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
     await _loadProfileData();
   }
 
-  /// Opens the Play Store listing so the user can rate/review. On Android this
-  /// is the native listing; on web it opens the listing in a new tab. If the
-  /// listing can't be opened (e.g. the app is not yet public on Play), tell the
-  /// user rather than leaving them on Play's "URL not found" page.
+  /// Opens Play's review page for AttendEase, deep-linked to the ratings
+  /// section where "Write feedback" lives. The same page opens on every tap,
+  /// whether or not the user has already reviewed — see ReviewService for why
+  /// the in-app sheet is deliberately not used here. On web it opens the web
+  /// listing in a new tab. If nothing can be opened (e.g. the app is not yet
+  /// public on Play), tell the user rather than leaving them on Play's "URL not
+  /// found" page.
   Future<void> _rateApp() async {
-    final opened = await ReviewService.instance.openStoreListing();
+    final opened = await ReviewService.instance.openReviewComposer();
     if (!mounted || opened) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

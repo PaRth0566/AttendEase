@@ -10,6 +10,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val incomingPdfChannel = "com.parthm.attendease/incoming_pdf"
+    private val playReviewChannel = "com.parthm.attendease/play_review"
 
     /** The channel Dart listens on, once the engine is up. Null before that. */
     private var incomingPdf: MethodChannel? = null
@@ -49,6 +50,20 @@ class MainActivity : FlutterActivity() {
                         }
                         else -> result.notImplemented()
                     }
+                }
+            }
+
+        // Opening Play's review page needs an explicit package and a
+        // resolveActivity check, neither of which url_launcher exposes — see
+        // PlayReviewLauncher.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, playReviewChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "openReviewPage" -> {
+                        val packageId = call.argument<String>("packageId") ?: packageName
+                        result.success(PlayReviewLauncher.open(this, packageId))
+                    }
+                    else -> result.notImplemented()
                 }
             }
 
