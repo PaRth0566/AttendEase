@@ -53,7 +53,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
       vsync: this,
       duration: const Duration(seconds: 15),
     )..repeat(reverse: true);
-    
+
     // Guard: if trying to access dashboard directly without data, redirect to upload
     if (_currentIndex == 2 && _parsedSubjects == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -200,8 +200,12 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                           gradient: RadialGradient(
                             colors: [
                               isDark
-                                  ? const Color(0xFF6366F1).withValues(alpha: 0.15)
-                                  : const Color(0xFF6366F1).withValues(alpha: 0.08),
+                                  ? const Color(
+                                      0xFF6366F1,
+                                    ).withValues(alpha: 0.15)
+                                  : const Color(
+                                      0xFF6366F1,
+                                    ).withValues(alpha: 0.08),
                               Colors.transparent,
                             ],
                             stops: const [0.0, 1.0],
@@ -222,8 +226,12 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                           gradient: RadialGradient(
                             colors: [
                               isDark
-                                  ? const Color(0xFF8B5CF6).withValues(alpha: 0.1)
-                                  : const Color(0xFF8B5CF6).withValues(alpha: 0.05),
+                                  ? const Color(
+                                      0xFF8B5CF6,
+                                    ).withValues(alpha: 0.1)
+                                  : const Color(
+                                      0xFF8B5CF6,
+                                    ).withValues(alpha: 0.05),
                               Colors.transparent,
                             ],
                             stops: const [0.0, 1.0],
@@ -301,7 +309,6 @@ class _AuraLandingPageState extends State<AuraLandingPage>
             subjects: _parsedSubjects!,
             attendanceStats: _parsedStats!,
             overallTarget: _overallTarget,
-            subjectTarget: _subjectTarget,
             reportMeta: _reportMeta,
           );
         }
@@ -498,15 +505,24 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                           duration: const Duration(milliseconds: 350),
                           switchInCurve: Curves.easeInOutCubic,
                           switchOutCurve: Curves.easeInOutCubic,
-                          transitionBuilder: (child, anim) => RotationTransition(
-                            turns: Tween<double>(begin: 0.5, end: 1.0).animate(anim),
-                            child: ScaleTransition(scale: anim, child: child),
-                          ),
+                          transitionBuilder: (child, anim) =>
+                              RotationTransition(
+                                turns: Tween<double>(
+                                  begin: 0.5,
+                                  end: 1.0,
+                                ).animate(anim),
+                                child: ScaleTransition(
+                                  scale: anim,
+                                  child: child,
+                                ),
+                              ),
                           child: Icon(
                             themeProvider.isDarkMode
                                 ? Icons.dark_mode_rounded
                                 : Icons.wb_sunny_rounded,
-                            key: ValueKey(themeProvider.isDarkMode ? 'dark' : 'light'),
+                            key: ValueKey(
+                              themeProvider.isDarkMode ? 'dark' : 'light',
+                            ),
                             color: isDark
                                 ? const Color(0xFFC7D2FE)
                                 : const Color(0xFF6366F1),
@@ -531,9 +547,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                           width: 22,
                           height: 22,
                           colorFilter: ColorFilter.mode(
-                            isDark
-                                ? Colors.white
-                                : const Color(0xFF0F172A),
+                            isDark ? Colors.white : const Color(0xFF0F172A),
                             BlendMode.srcIn,
                           ),
                         ),
@@ -544,7 +558,9 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                       message: 'Get it on Google Play',
                       child: IconButton(
                         onPressed: () => launchUrl(
-                          Uri.parse('https://play.google.com/store/apps/details?id=com.parthm.attendease'),
+                          Uri.parse(
+                            'https://play.google.com/store/apps/details?id=com.parthm.attendease',
+                          ),
                           mode: LaunchMode.externalApplication,
                         ),
                         icon: Icon(
@@ -567,15 +583,24 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                           duration: const Duration(milliseconds: 350),
                           switchInCurve: Curves.easeInOutCubic,
                           switchOutCurve: Curves.easeInOutCubic,
-                          transitionBuilder: (child, anim) => RotationTransition(
-                            turns: Tween<double>(begin: 0.5, end: 1.0).animate(anim),
-                            child: ScaleTransition(scale: anim, child: child),
-                          ),
+                          transitionBuilder: (child, anim) =>
+                              RotationTransition(
+                                turns: Tween<double>(
+                                  begin: 0.5,
+                                  end: 1.0,
+                                ).animate(anim),
+                                child: ScaleTransition(
+                                  scale: anim,
+                                  child: child,
+                                ),
+                              ),
                           child: Icon(
                             themeProvider.isDarkMode
                                 ? Icons.dark_mode_rounded
                                 : Icons.wb_sunny_rounded,
-                            key: ValueKey(themeProvider.isDarkMode ? 'dark' : 'light'),
+                            key: ValueKey(
+                              themeProvider.isDarkMode ? 'dark' : 'light',
+                            ),
                             color: isDark
                                 ? const Color(0xFFC7D2FE)
                                 : const Color(0xFF6366F1),
@@ -812,7 +837,9 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF6366F1).withValues(alpha: 0.4),
+                            color: const Color(
+                              0xFF6366F1,
+                            ).withValues(alpha: 0.4),
                             blurRadius: 20,
                           ),
                         ],
@@ -944,7 +971,9 @@ class _AuraLandingPageState extends State<AuraLandingPage>
                       child: Icon(
                         Icons.info_outline_rounded,
                         size: 18,
-                        color: isDark ? Colors.red.shade400 : Colors.red.shade700,
+                        color: isDark
+                            ? Colors.red.shade400
+                            : Colors.red.shade700,
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -1074,8 +1103,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
         final int columns = AppBreakpoints.isWebDesktop(context) ? 4 : 2;
         // Subtract the inter-card gaps before dividing, so columns * cardW plus
         // the gaps lands exactly on the available width instead of just over it.
-        final double cardW =
-            (available - spacing * (columns - 1)) / columns;
+        final double cardW = (available - spacing * (columns - 1)) / columns;
 
         return Wrap(
           spacing: spacing,
@@ -1192,99 +1220,99 @@ class _AuraLandingPageState extends State<AuraLandingPage>
     return Container(
       width: isMobile ? double.infinity : null,
       padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 14 : 16,
-          vertical: isMobile ? 10 : 14,
-        ),
-        decoration: BoxDecoration(
+        horizontal: isMobile ? 14 : 16,
+        vertical: isMobile ? 10 : 14,
+      ),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.04)
+            : const Color(0xFFFFF7ED),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.04)
-              : const Color(0xFFFFF7ED),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.08)
-                : const Color(0xFFFDBA74).withValues(alpha: 0.5),
-          ),
+              ? Colors.white.withValues(alpha: 0.08)
+              : const Color(0xFFFDBA74).withValues(alpha: 0.5),
         ),
-        child: isMobile
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.school_rounded,
-                        size: 16,
+      ),
+      child: isMobile
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.school_rounded,
+                      size: 16,
+                      color: isDark
+                          ? const Color(0xFFFBBF24)
+                          : const Color(0xFFD97706),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'SVKM / Mithibai students? Get your report from',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          height: 1.4,
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.6)
+                              : const Color(0xFF92400E),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _sapPortalChip(isDark, isMobile: true),
+              ],
+            )
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.school_rounded,
+                  size: 16,
+                  color: isDark
+                      ? const Color(0xFFFBBF24)
+                      : const Color(0xFFD97706),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text.rich(
+                    TextSpan(
+                      text: 'SVKM / Mithibai students? ',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                         color: isDark
                             ? const Color(0xFFFBBF24)
                             : const Color(0xFFD97706),
                       ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          'SVKM / Mithibai students? Get your report from',
+                      children: [
+                        TextSpan(
+                          text: 'Get your report from ',
                           style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            height: 1.4,
+                            fontWeight: FontWeight.w400,
                             color: isDark
-                                ? Colors.white.withValues(alpha: 0.6)
+                                ? Colors.white.withValues(alpha: 0.5)
                                 : const Color(0xFF92400E),
                           ),
-                          textAlign: TextAlign.center,
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  _sapPortalChip(isDark, isMobile: true),
-                ],
-              )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.school_rounded,
-                    size: 16,
-                    color: isDark
-                        ? const Color(0xFFFBBF24)
-                        : const Color(0xFFD97706),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text.rich(
-                      TextSpan(
-                        text: 'SVKM / Mithibai students? ',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? const Color(0xFFFBBF24)
-                              : const Color(0xFFD97706),
-                        ),
-                        children: [
-                          TextSpan(
-                            text: 'Get your report from ',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w400,
-                              color: isDark
-                                  ? Colors.white.withValues(alpha: 0.5)
-                                  : const Color(0xFF92400E),
-                            ),
-                          ),
-                        ],
-                      ),
-                      textAlign: TextAlign.center,
+                      ],
                     ),
+                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(width: 8),
-                  _sapPortalChip(isDark),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                _sapPortalChip(isDark),
+              ],
+            ),
     );
   }
 

@@ -30,11 +30,11 @@
 # turns up, add a keep for that one class with a note on why — do not restore a
 # package wildcard.
 
-# Retaining these two is what keeps release stack traces readable now that most
-# of the DEX is obfuscated. AGP bundles the R8 mapping file into the AAB, so
-# Play deobfuscates Android vitals on its own, but only if the attributes
-# survive to be mapped back.
--keepattributes SourceFile,LineNumberTable
+# Keep line numbers for useful Play Console deobfuscation while allowing R8 to
+# discard the original source-file names. The uploaded mapping file is enough
+# to recover obfuscated Android stack traces, and avoiding SourceFile metadata
+# gives R8 one less item to retain across every class.
+-keepattributes LineNumberTable
 -renamesourcefileattribute SourceFile
 
 # Moves classes into the unnamed top-level package so the DEX string pool stops
@@ -53,9 +53,19 @@
 # Firestore's protobuf wire types (com.google.firestore.v1, com.google.protobuf)
 # need nothing here: they were never covered by the old blanket keeps either and
 # have always worked, because R8 understands protobuf-lite natively.
--keep class * extends io.grpc.ManagedChannelProvider { *; }
--keep class * extends io.grpc.NameResolverProvider { *; }
--keep class * extends io.grpc.LoadBalancerProvider { *; }
+#
+# Provider classes are instantiated through ServiceLoader, so their no-arg
+# constructors must remain. Their other methods implement non-reflective base
+# class APIs and can still be optimized, shrunk and renamed safely.
+-keep,allowoptimization,allowobfuscation class * extends io.grpc.ManagedChannelProvider {
+    <init>();
+}
+-keep,allowoptimization,allowobfuscation class * extends io.grpc.NameResolverProvider {
+    <init>();
+}
+-keep,allowoptimization,allowobfuscation class * extends io.grpc.LoadBalancerProvider {
+    <init>();
+}
 -dontwarn io.grpc.**
 
 # Play Core (referenced by Flutter's deferred-components support; the library

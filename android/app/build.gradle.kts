@@ -73,6 +73,9 @@ android {
         release {
             signingConfig = signingConfigs.getByName("release")
 
+            // Keep full-mode R8 and optimized resource shrinking enabled for
+            // every store artifact. These are the two switches Play Console
+            // uses for its optimization and shrinking checks.
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

@@ -102,3 +102,7 @@ skills-lock.json
 # Firebase Hosting deploy cache
 .firebase/
 
+
+# Local Dart/Android tooling output
+/.dart_appdata/
+/com/

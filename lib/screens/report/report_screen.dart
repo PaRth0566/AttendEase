@@ -52,6 +52,7 @@ class _ReportScreenState extends State<ReportScreen> {
   List<Subject> _subjects = [];
   Map<int, Map<String, int>> _stats = {};
   double _overallPercent = 0.0;
+  double _overallRequiredPercent = 75.0;
   int _totalLectures = 0;
   int _totalAttended = 0;
 
@@ -76,6 +77,8 @@ class _ReportScreenState extends State<ReportScreen> {
     if (!mounted) return;
     setState(() {
       _selectedSemester = prefs.getInt('semester') ?? 1;
+      _overallRequiredPercent =
+          prefs.getDouble('overall_required_attendance') ?? 75.0;
     });
     await _loadRecordBounds();
   }
@@ -84,7 +87,9 @@ class _ReportScreenState extends State<ReportScreen> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// Re-reads the record span for [_selectedSemester] and drops any already
@@ -1077,7 +1082,9 @@ class _ReportScreenState extends State<ReportScreen> {
                 style: TextStyle(
                   fontSize: 38,
                   fontWeight: FontWeight.bold,
-                  color: _overallPercent >= 75 ? c.success : c.danger,
+                  color: _overallPercent >= _overallRequiredPercent
+                      ? c.success
+                      : c.danger,
                 ),
               ),
             ),

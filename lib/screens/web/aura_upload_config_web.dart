@@ -197,7 +197,8 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
     if (!_hasConsented) {
       setState(() {
         _isDragging = false;
-        _errorMessage = 'Please check the AI Privacy Consent box before uploading.';
+        _errorMessage =
+            'Please check the AI Privacy Consent box before uploading.';
       });
       return;
     }
@@ -207,7 +208,8 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
     if (!name.toLowerCase().endsWith('.pdf')) {
       setState(() {
         _isDragging = false;
-        _errorMessage = 'Please drop a valid .pdf file. Only PDF files are supported.';
+        _errorMessage =
+            'Please drop a valid .pdf file. Only PDF files are supported.';
       });
       return;
     }
@@ -216,7 +218,10 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
       final bytes = base64Decode(base64);
       _processFile(name, bytes);
     } catch (e) {
-      setState(() => _errorMessage = 'Could not read the dropped file. Try the click to upload option instead.');
+      setState(
+        () => _errorMessage =
+            'Could not read the dropped file. Try the click to upload option instead.',
+      );
     }
   }
 
@@ -250,7 +255,8 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
   Future<void> _handleUpload() async {
     if (!_hasConsented) {
       setState(() {
-        _errorMessage = 'Please check the AI Privacy Consent box before uploading.';
+        _errorMessage =
+            'Please check the AI Privacy Consent box before uploading.';
       });
       return;
     }
@@ -319,7 +325,7 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
   /// Maps [LocalPdfParser] output onto the (subjects, stats, meta) shape the
   /// dashboard consumes. Returns null if the parse produced no usable subjects.
   (List<Subject>, Map<int, Map<String, int>>, Map<String, String>)?
-      _buildFromLocalData(Map<String, dynamic> data) {
+  _buildFromLocalData(Map<String, dynamic> data) {
     final subjectNames = data['subjects'];
     if (subjectNames is! List || subjectNames.isEmpty) return null;
     final rawStats = data['subjectStats'] is Map
@@ -335,12 +341,14 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
       final s = rawStats[name];
       final attended = s is Map ? (s['attended'] as num?)?.toInt() ?? 0 : 0;
       final total = s is Map ? (s['total'] as num?)?.toInt() ?? 0 : 0;
-      subjects.add(Subject(
-        id: id,
-        name: name,
-        requiredPercent: _subjectTarget,
-        semester: 1,
-      ));
+      subjects.add(
+        Subject(
+          id: id,
+          name: name,
+          requiredPercent: _subjectTarget,
+          semester: 1,
+        ),
+      );
       stats[id] = {'attended': attended, 'total': total};
       id++;
     }
@@ -373,7 +381,13 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
     });
     _stopProgressAnimation();
     if (widget.onConfigured != null) {
-      widget.onConfigured!(subjects, stats, meta, _overallTarget, _subjectTarget);
+      widget.onConfigured!(
+        subjects,
+        stats,
+        meta,
+        _overallTarget,
+        _subjectTarget,
+      );
     }
   }
 
@@ -541,7 +555,6 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
         subjects: _parsedSubjects!,
         attendanceStats: _parsedStats!,
         overallTarget: _overallTarget,
-        subjectTarget: _subjectTarget,
         reportMeta: _reportMeta,
       );
     }
@@ -551,67 +564,92 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
     final isWebMobile = AppBreakpoints.isWebMobile(context);
 
     return Padding(
-        padding: EdgeInsets.only(
-          left: isMobile ? 16 : 24,
-          right: isMobile ? 16 : 24,
-          top: isMobile ? 24 : 24,
-          bottom: isMobile ? 16 : 24,
-        ),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 1024),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Header Text
-                Text(
-                  'System Initialization',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: isMobile ? 24 : (isWebMobile ? 32 : 44),
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                    foreground: Paint()
-                      ..shader = LinearGradient(
-                        colors: isDark
-                            ? [
-                                const Color(0xFFA5B4FC),
-                                const Color(0xFFC7D2FE),
-                                const Color(0xFF818CF8),
-                              ]
-                            : [
-                                const Color(0xFF4F46E5),
-                                const Color(0xFF7C3AED),
-                                const Color(0xFF4338CA),
-                              ],
-                      ).createShader(const Rect.fromLTWH(0, 0, 400, 80)),
-                  ),
+      padding: EdgeInsets.only(
+        left: isMobile ? 16 : 24,
+        right: isMobile ? 16 : 24,
+        top: isMobile ? 24 : 24,
+        bottom: isMobile ? 16 : 24,
+      ),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1024),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Header Text
+              Text(
+                'System Initialization',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: isMobile ? 24 : (isWebMobile ? 32 : 44),
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
+                  foreground: Paint()
+                    ..shader = LinearGradient(
+                      colors: isDark
+                          ? [
+                              const Color(0xFFA5B4FC),
+                              const Color(0xFFC7D2FE),
+                              const Color(0xFF818CF8),
+                            ]
+                          : [
+                              const Color(0xFF4F46E5),
+                              const Color(0xFF7C3AED),
+                              const Color(0xFF4338CA),
+                            ],
+                    ).createShader(const Rect.fromLTWH(0, 0, 400, 80)),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Configure your academic parameters and provide your official data source to begin predictive tracking.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: isMobile ? 13 : 16,
-                    height: 1.5,
-                    color: isDark
-                        ? const Color(0xFFC7D2FE).withValues(alpha: 0.8)
-                        : const Color(0xFF475569),
-                  ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Configure your academic parameters and provide your official data source to begin predictive tracking.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: isMobile ? 13 : 16,
+                  height: 1.5,
+                  color: isDark
+                      ? const Color(0xFFC7D2FE).withValues(alpha: 0.8)
+                      : const Color(0xFF475569),
                 ),
-                SizedBox(height: isMobile ? 16 : 24),
+              ),
+              SizedBox(height: isMobile ? 16 : 24),
 
-                // Main Content
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final width = constraints.maxWidth;
+              // Main Content
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final width = constraints.maxWidth;
 
-                    final bannersWidget = LayoutBuilder(
-                      builder: (context, innerConstraints) {
-                        if (width < 768) {
-                          return Column(
-                            children: [
-                              _buildBanner(
+                  final bannersWidget = LayoutBuilder(
+                    builder: (context, innerConstraints) {
+                      if (width < 768) {
+                        return Column(
+                          children: [
+                            _buildBanner(
+                              isDark,
+                              Icons.warning_rounded,
+                              'SVKM/Mithibai Students',
+                              'Download your detailed attendance report directly from the SAP Portal before uploading.',
+                              false,
+                              isMobile,
+                            ),
+                            const SizedBox(height: 12),
+                            _buildBanner(
+                              isDark,
+                              Icons.info_outline_rounded,
+                              'Disclaimer',
+                              'These insights are AI-generated. Always verify predictive models with official institutional records.',
+                              true,
+                              isMobile,
+                            ),
+                          ],
+                        );
+                      }
+                      return IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(
+                              child: _buildBanner(
                                 isDark,
                                 Icons.warning_rounded,
                                 'SVKM/Mithibai Students',
@@ -619,8 +657,10 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                                 false,
                                 isMobile,
                               ),
-                              const SizedBox(height: 12),
-                              _buildBanner(
+                            ),
+                            const SizedBox(width: 24),
+                            Expanded(
+                              child: _buildBanner(
                                 isDark,
                                 Icons.info_outline_rounded,
                                 'Disclaimer',
@@ -628,139 +668,112 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                                 true,
                                 isMobile,
                               ),
-                            ],
-                          );
-                        }
-                        return IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(
-                                child: _buildBanner(
-                                  isDark,
-                                  Icons.warning_rounded,
-                                  'SVKM/Mithibai Students',
-                                  'Download your detailed attendance report directly from the SAP Portal before uploading.',
-                                  false,
-                                  isMobile,
-                                ),
-                              ),
-                              const SizedBox(width: 24),
-                              Expanded(
-                                child: _buildBanner(
-                                  isDark,
-                                  Icons.info_outline_rounded,
-                                  'Disclaimer',
-                                  'These insights are AI-generated. Always verify predictive models with official institutional records.',
-                                  true,
-                                  isMobile,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    );
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
 
-                    final bentoWidget = LayoutBuilder(
-                      builder: (context, innerConstraints) {
-                        if (width < 900) {
-                          return Column(
-                            children: [
-                              _buildSettingsCard(isDark, isMobile),
-                              const SizedBox(height: 16),
-                              _buildUploadCard(isDark, isMobile),
-                              const SizedBox(height: 16),
-                              _buildConsentCheckbox(isDark, isMobile),
-                            ],
-                          );
-                        }
+                  final bentoWidget = LayoutBuilder(
+                    builder: (context, innerConstraints) {
+                      if (width < 900) {
                         return Column(
                           children: [
-                            IntrinsicHeight(
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Expanded(
-                                    flex: 1,
-                                    child: _buildSettingsCard(isDark, isMobile),
-                                  ),
-                                  const SizedBox(width: 32),
-                                  Expanded(
-                                    flex: 2,
-                                    child: _buildUploadCard(isDark, isMobile),
-                                  ),
-                                ],
-                              ),
-                            ),
+                            _buildSettingsCard(isDark, isMobile),
+                            const SizedBox(height: 16),
+                            _buildUploadCard(isDark, isMobile),
                             const SizedBox(height: 16),
                             _buildConsentCheckbox(isDark, isMobile),
                           ],
                         );
-                      },
-                    );
-
-                    if (isMobile) {
+                      }
                       return Column(
                         children: [
-                          bentoWidget,
-                          const SizedBox(height: 24),
-                          bannersWidget,
-                        ],
-                      );
-                    } else {
-                      return Column(
-                        children: [
-                          bannersWidget,
-                          const SizedBox(height: 24),
-                          bentoWidget,
-                        ],
-                      );
-                    }
-                  },
-                ),
-
-                if (_errorMessage != null) ...[
-                  const SizedBox(height: 32),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFF9F1239).withValues(alpha: 0.2)
-                          : const Color(0xFFFFE4E6),
-                      border: Border.all(
-                        color: isDark
-                            ? const Color(0xFFBE123C).withValues(alpha: 0.4)
-                            : const Color(0xFFFDA4AF),
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.error_outline_rounded,
-                          color: Color(0xFFF43F5E),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _errorMessage!,
-                            style: TextStyle(
-                              color: isDark
-                                  ? const Color(0xFFFDA4AF)
-                                  : const Color(0xFF9F1239),
+                          IntrinsicHeight(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(
+                                  flex: 1,
+                                  child: _buildSettingsCard(isDark, isMobile),
+                                ),
+                                const SizedBox(width: 32),
+                                Expanded(
+                                  flex: 2,
+                                  child: _buildUploadCard(isDark, isMobile),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
+                          const SizedBox(height: 16),
+                          _buildConsentCheckbox(isDark, isMobile),
+                        ],
+                      );
+                    },
+                  );
+
+                  if (isMobile) {
+                    return Column(
+                      children: [
+                        bentoWidget,
+                        const SizedBox(height: 24),
+                        bannersWidget,
                       ],
+                    );
+                  } else {
+                    return Column(
+                      children: [
+                        bannersWidget,
+                        const SizedBox(height: 24),
+                        bentoWidget,
+                      ],
+                    );
+                  }
+                },
+              ),
+
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 32),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF9F1239).withValues(alpha: 0.2)
+                        : const Color(0xFFFFE4E6),
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFFBE123C).withValues(alpha: 0.4)
+                          : const Color(0xFFFDA4AF),
                     ),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ],
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline_rounded,
+                        color: Color(0xFFF43F5E),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: TextStyle(
+                            color: isDark
+                                ? const Color(0xFFFDA4AF)
+                                : const Color(0xFF9F1239),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
-            ),
+            ],
           ),
         ),
-      );
+      ),
+    );
   }
 
   Widget _buildBanner(
@@ -1046,12 +1059,16 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1B4B).withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.8),
+        color: isDark
+            ? const Color(0xFF1E1B4B).withValues(alpha: 0.4)
+            : Colors.white.withValues(alpha: 0.8),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: _hasConsented
               ? (isDark ? const Color(0xFF10B981) : const Color(0xFF059669))
-              : (isDark ? const Color(0xFF818CF8).withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.05)),
+              : (isDark
+                    ? const Color(0xFF818CF8).withValues(alpha: 0.2)
+                    : Colors.black.withValues(alpha: 0.05)),
         ),
       ),
       child: Row(
@@ -1164,12 +1181,16 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
                                 color: isDark
-                                    ? const Color(0xFF312E81).withValues(alpha: 0.4)
+                                    ? const Color(
+                                        0xFF312E81,
+                                      ).withValues(alpha: 0.4)
                                     : const Color(0xFFEEF2FF),
                                 shape: BoxShape.circle,
                                 border: Border.all(
                                   color: isDark
-                                      ? const Color(0xFF818CF8).withValues(alpha: 0.4)
+                                      ? const Color(
+                                          0xFF818CF8,
+                                        ).withValues(alpha: 0.4)
                                       : const Color(0xFFC7D2FE),
                                 ),
                                 boxShadow: [
@@ -1226,7 +1247,9 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
                               style: TextStyle(
                                 fontSize: isMobile ? 12 : 14,
                                 color: isDark
-                                    ? const Color(0xFFC7D2FE).withValues(alpha: 0.7)
+                                    ? const Color(
+                                        0xFFC7D2FE,
+                                      ).withValues(alpha: 0.7)
                                     : const Color(0xFF64748B),
                               ),
                             ),
@@ -1366,4 +1389,3 @@ class _AuraUploadConfigState extends State<AuraUploadConfig> {
     ); // closes GestureDetector
   }
 }
-

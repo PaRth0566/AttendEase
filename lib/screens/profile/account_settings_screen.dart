@@ -68,8 +68,11 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     if (isGoogleUser && !hasPassword) {
       // Re-auth via Google
       try {
-        await GoogleSignIn().signOut(); // Force prompt for recent login
-        final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+        final googleSignIn = GoogleSignIn(
+          serverClientId: AuthService.googleServerClientId,
+        );
+        await googleSignIn.signOut(); // Force prompt for recent login
+        final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
         if (googleUser == null) return false;
         final googleAuth = await googleUser.authentication;
         final credential = GoogleAuthProvider.credential(
@@ -138,8 +141,6 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     );
     return success;
   }
-
-
 
   Future<void> _changePassword() async {
     final user = _auth.currentUser;
@@ -272,7 +273,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
       // Reuse AuthService's Google flow so the credential handling and the
       // error-to-message mapping live in exactly one place. It signs the
       // Google SDK out first, so the account chooser always appears.
-      final GoogleSignIn googleSignIn = GoogleSignIn();
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        serverClientId: AuthService.googleServerClientId,
+      );
       try {
         await googleSignIn.signOut();
       } catch (_) {}
@@ -663,8 +666,9 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     // Destructive rows carry status through the icon chip, title and a hairline
     // red border — not a filled red panel, which fought the app's flat cards.
     final Color accent = isDestructive ? c.danger : theme.colorScheme.primary;
-    final Color titleColor =
-        isDestructive ? c.danger : theme.textTheme.bodyLarge?.color ?? accent;
+    final Color titleColor = isDestructive
+        ? c.danger
+        : theme.textTheme.bodyLarge?.color ?? accent;
 
     return Container(
       decoration: BoxDecoration(

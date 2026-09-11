@@ -23,8 +23,17 @@ class AuthFailure implements Exception {
 }
 
 class AuthService {
+  // The OAuth 2.0 *web* client ID is the audience Firebase expects in the
+  // Google ID token. It is public configuration, and passing it explicitly
+  // keeps Android sign-in working even when the generated
+  // `default_web_client_id` resource is unavailable in a build variant.
+  static const String googleServerClientId =
+      '645842511929-jr72m5715907vmh716ja48eer2k4dgto.apps.googleusercontent.com';
+
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    serverClientId: googleServerClientId,
+  );
 
   User? get currentUser => _auth.currentUser;
 
