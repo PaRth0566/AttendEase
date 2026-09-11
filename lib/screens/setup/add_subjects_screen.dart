@@ -28,7 +28,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
   final List<int> _deletedSubjectIds = [];
 
   int _activeSemester = 1;
-  double _defaultRequiredPercent = 75.0;
+  double _defaultRequiredPercent = 70.0;
 
   @override
   void initState() {
@@ -46,7 +46,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
     final prefs = await SharedPreferences.getInstance();
     _activeSemester = prefs.getInt('semester') ?? 1;
     _defaultRequiredPercent =
-        prefs.getDouble('subject_required_attendance') ?? 75.0;
+        prefs.getDouble('subject_required_attendance') ?? 70.0;
 
     final data = await _subjectDao.getSubjectsBySemester(_activeSemester);
     if (!mounted) return;
@@ -89,7 +89,7 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
         // title in bodyLarge's colour at 18/bold, and the field's default is
         // bodyLarge. Both raw TextStyles only restated the colour, and a
         // hand-built TextStyle is what resets fontFamily to null. See
-        // 
+        //
         title: const Text('Edit Subject'),
         content: TextField(
           controller: controller,
@@ -97,7 +97,9 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
           style: Theme.of(context).textTheme.bodyLarge,
           decoration: InputDecoration(
             hintText: 'Enter subject name',
-            hintStyle: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
+            hintStyle: TextStyle(
+              color: Theme.of(context).textTheme.bodyMedium?.color,
+            ),
             focusedBorder: UnderlineInputBorder(
               borderSide: BorderSide(
                 color: Theme.of(context).colorScheme.primary,
@@ -116,8 +118,8 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
               // primary action. Derived from the theme so it keeps the bundled
               // font.
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Theme.of(context).textTheme.bodyMedium?.color,
-                  ),
+                color: Theme.of(context).textTheme.bodyMedium?.color,
+              ),
             ),
           ),
           IconButton(
@@ -168,7 +170,9 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
     await _loadSubjects();
 
     // Ensure every subject has a seed slot (day=0) for calendar attendance
-    final savedSubjects = await _subjectDao.getSubjectsBySemester(_activeSemester);
+    final savedSubjects = await _subjectDao.getSubjectsBySemester(
+      _activeSemester,
+    );
     for (final sub in savedSubjects) {
       await _timetableDao.ensureSeedEntry(sub.id!);
     }
@@ -209,137 +213,141 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 600),
             child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: AppBreakpoints.isMobile(context) ? 24 : 40,
-          vertical: 16,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.isEditMode
-                  ? 'Edit Sem $_activeSemester Subjects'
-                  : 'Add Your Subjects',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-                color: theme.textTheme.bodyLarge?.color, // ✅ Dynamic Title
+              padding: EdgeInsets.symmetric(
+                horizontal: AppBreakpoints.isMobile(context) ? 24 : 40,
+                vertical: 16,
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              widget.isEditMode
-                  ? 'Tap a subject to edit its name'
-                  : 'Add all subjects for this semester',
-              style: TextStyle(
-                fontSize: 16,
-                color: theme.textTheme.bodyMedium?.color,
-              ), // ✅ Dynamic Subtitle
-            ),
-            const SizedBox(height: 32),
-
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _subjectController,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    widget.isEditMode
+                        ? 'Edit Sem $_activeSemester Subjects'
+                        : 'Add Your Subjects',
                     style: TextStyle(
-                      color: theme.textTheme.bodyLarge?.color,
-                    ), // ✅ Dynamic typing text
-                    decoration: InputDecoration(
-                      hintText: 'Enter subject name',
-                      hintStyle: TextStyle(color: theme.textTheme.bodyMedium?.color),
-                      filled: true,
-                      fillColor: theme.cardColor, // ✅ Dynamic input background
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 18,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: theme.colorScheme.primary,
-                          width: 2,
-                        ),
-                      ),
+                      fontSize: 26,
+                      fontWeight: FontWeight.bold,
+                      color:
+                          theme.textTheme.bodyLarge?.color, // ✅ Dynamic Title
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                IconButton.filled(
-                  icon: const Icon(Icons.add, size: 28),
-                  onPressed: _addSubject,
-                  style: IconButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size(56, 56),
+                  const SizedBox(height: 4),
+                  Text(
+                    widget.isEditMode
+                        ? 'Tap a subject to edit its name'
+                        : 'Add all subjects for this semester',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: theme.textTheme.bodyMedium?.color,
+                    ), // ✅ Dynamic Subtitle
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(height: 32),
 
-            const SizedBox(height: 24),
-
-            Expanded(
-              child: ListView.builder(
-                itemCount: _subjects.length,
-                itemBuilder: (_, i) {
-                  final subject = _subjects[i];
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: theme
-                          .cardColor, // ✅ Dynamic background for the list item
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: theme.dividerColor,
-                      ), // ✅ Dynamic border
-                    ),
-                    child: ListTile(
-                      title: Text(
-                        subject.name,
-                        // Two lines: this list is how you identify which
-                        // subject you are editing, so the name has to be
-                        // readable in full at any system font size.
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          height: 1.25,
-                          color: theme
-                              .textTheme
-                              .bodyLarge
-                              ?.color, // ✅ Dynamic Text
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _subjectController,
+                          style: TextStyle(
+                            color: theme.textTheme.bodyLarge?.color,
+                          ), // ✅ Dynamic typing text
+                          decoration: InputDecoration(
+                            hintText: 'Enter subject name',
+                            hintStyle: TextStyle(
+                              color: theme.textTheme.bodyMedium?.color,
+                            ),
+                            filled: true,
+                            fillColor:
+                                theme.cardColor, // ✅ Dynamic input background
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 18,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: theme.colorScheme.primary,
+                                width: 2,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                      onTap: () => _editSubject(i),
-                      trailing: IconButton(
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: Color(0xFFEF4444),
+                      const SizedBox(width: 12),
+                      IconButton.filled(
+                        icon: const Icon(Icons.add, size: 28),
+                        onPressed: _addSubject,
+                        style: IconButton.styleFrom(
+                          backgroundColor: theme.colorScheme.primary,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(56, 56),
                         ),
-                        onPressed: () => _deleteSubject(i),
                       ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: _subjects.length,
+                      itemBuilder: (_, i) {
+                        final subject = _subjects[i];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: theme
+                                .cardColor, // ✅ Dynamic background for the list item
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: theme.dividerColor,
+                            ), // ✅ Dynamic border
+                          ),
+                          child: ListTile(
+                            title: Text(
+                              subject.name,
+                              // Two lines: this list is how you identify which
+                              // subject you are editing, so the name has to be
+                              // readable in full at any system font size.
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                height: 1.25,
+                                color: theme
+                                    .textTheme
+                                    .bodyLarge
+                                    ?.color, // ✅ Dynamic Text
+                              ),
+                            ),
+                            onTap: () => _editSubject(i),
+                            trailing: IconButton(
+                              icon: const Icon(
+                                Icons.delete_outline,
+                                color: Color(0xFFEF4444),
+                              ),
+                              onPressed: () => _deleteSubject(i),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  );
-                },
+                  ),
+
+                  SetupNavButtons(
+                    onBack: () => Navigator.pop(context),
+                    onNext: hasSubjects ? _saveAndProceed : null,
+                    nextLabel: widget.isEditMode ? 'Save Changes' : 'Next',
+                  ),
+                ],
               ),
             ),
-
-            SetupNavButtons(
-              onBack: () => Navigator.pop(context),
-              onNext: hasSubjects ? _saveAndProceed : null,
-              nextLabel: widget.isEditMode ? 'Save Changes' : 'Next',
-            ),
-          ],
+          ),
         ),
-      ),
-        ),
-      ),
       ),
     );
   }

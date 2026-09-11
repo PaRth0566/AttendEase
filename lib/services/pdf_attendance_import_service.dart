@@ -55,6 +55,12 @@ class PdfAttendanceImportService {
     bool updateSemesterBounds = true,
   }) async {
     final db = await DBHelper.instance.database;
+    final prefs = await SharedPreferences.getInstance();
+    // Reports can introduce subjects after onboarding. Those subjects must use
+    // the minimum selected in Attendance Preferences; a fixed 75% here made
+    // their status and skip calculations disagree with the saved setting.
+    final subjectRequiredPercent =
+        prefs.getDouble('subject_required_attendance') ?? 70.0;
     final subjects = data['subjects'] is List
         ? data['subjects'] as List
         : const [];
@@ -73,7 +79,11 @@ class PdfAttendanceImportService {
       final key = nameKey(subjectName);
       if (key.isEmpty || existingNames.contains(key)) continue;
       await _subjectDao.insertSubject(
-        Subject(name: subjectName, requiredPercent: 75.0, semester: semester),
+        Subject(
+          name: subjectName,
+          requiredPercent: subjectRequiredPercent,
+          semester: semester,
+        ),
       );
       existingNames.add(key);
       subjectsCreated++;
@@ -81,7 +91,8 @@ class PdfAttendanceImportService {
 
     final insertedSubjects = await _subjectDao.getSubjectsBySemester(semester);
     final subjectNameToId = {
-      for (final subject in insertedSubjects) nameKey(subject.name): subject.id!,
+      for (final subject in insertedSubjects)
+        nameKey(subject.name): subject.id!,
     };
 
     final subjectIdToSeedEntryId = <int, int>{};
@@ -136,8 +147,9 @@ class PdfAttendanceImportService {
     await db.transaction((txn) async {
       for (final rawRecord in records) {
         if (rawRecord is! Map) continue;
-        final normalized =
-            _normalizeRecord(Map<String, dynamic>.from(rawRecord));
+        final normalized = _normalizeRecord(
+          Map<String, dynamic>.from(rawRecord),
+        );
         if (normalized == null) continue;
         importedDates.add(normalized.date.split('_').first);
 
@@ -409,8 +421,7 @@ class PdfAttendanceImportService {
         ? 'NC'
         : rawStatus;
     if (rawDate == null || subjectName == null || status == null) return null;
-    if (subjectName.isEmpty ||
-        !const {'P', 'A', 'NU', 'NC'}.contains(status)) {
+    if (subjectName.isEmpty || !const {'P', 'A', 'NU', 'NC'}.contains(status)) {
       return null;
     }
 

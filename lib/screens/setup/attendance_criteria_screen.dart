@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../database/subject_dao.dart';
-import '../../models/subject.dart';
+import '../../services/app_refresh_bus.dart';
+import '../../services/attendance_preferences_service.dart';
 import '../../services/cloud_sync_service.dart';
 import '../../theme/app_breakpoints.dart';
 import '../../widgets/app_buttons.dart';
@@ -21,6 +21,8 @@ class AttendanceCriteriaScreen extends StatefulWidget {
 class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
   final TextEditingController overallController = TextEditingController();
   final TextEditingController subjectController = TextEditingController();
+  final AttendancePreferencesService _preferencesService =
+      AttendancePreferencesService();
 
   @override
   void initState() {
@@ -29,18 +31,28 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
   }
 
   Future<void> _loadSavedData() async {
-    // Pre-fill defaults first — the user can always edit them
-    overallController.text = '75';
-    subjectController.text = '70';
+    // Pre-fill defaults first - the user can always edit them.
+    overallController.text = AttendancePreferencesService.defaultOverall
+        .toStringAsFixed(0);
+    subjectController.text = AttendancePreferencesService.defaultSubject
+        .toStringAsFixed(0);
 
-    // Override with previously saved values if available
+    // Override with previously saved values if available.
     final prefs = await SharedPreferences.getInstance();
-    final overall = prefs.getDouble('overall_required_attendance');
-    final subject = prefs.getDouble('subject_required_attendance');
+    final overall = prefs.getDouble(AttendancePreferencesService.overallKey);
+    final subject = prefs.getDouble(AttendancePreferencesService.subjectKey);
 
     if (mounted) {
-      if (overall != null) overallController.text = overall.toStringAsFixed(overall.truncateToDouble() == overall ? 0 : 1);
-      if (subject != null) subjectController.text = subject.toStringAsFixed(subject.truncateToDouble() == subject ? 0 : 1);
+      if (overall != null) {
+        overallController.text = overall.toStringAsFixed(
+          overall.truncateToDouble() == overall ? 0 : 1,
+        );
+      }
+      if (subject != null) {
+        subjectController.text = subject.toStringAsFixed(
+          subject.truncateToDouble() == subject ? 0 : 1,
+        );
+      }
     }
   }
 
@@ -58,23 +70,15 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
       return;
     }
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('overall_required_attendance', overall);
-    await prefs.setDouble('subject_required_attendance', subject);
+    await _preferencesService.save(
+      overallPercent: overall,
+      subjectPercent: subject,
+    );
 
-    final subjectDao = SubjectDao();
-    final existingSubjects = await subjectDao.getAllSubjects();
-
-    for (final s in existingSubjects) {
-      await subjectDao.updateSubject(
-        Subject(
-          id: s.id,
-          name: s.name,
-          requiredPercent: subject,
-          semester: s.semester,
-        ),
-      );
-    }
+    // Dashboard and Profile stay mounted behind this edit screen. Re-read the
+    // saved overall target and the updated per-subject targets immediately so
+    // every insight and skip calculation uses the new criteria.
+    AppRefreshBus.instance.refreshAll();
 
     if (!mounted) return;
 

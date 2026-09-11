@@ -94,9 +94,7 @@ void main() {
       {'date': '2026-07-08', 'subject': 'Financial Accounting', 'status': 'P'},
       {'date': '2026-07-08', 'subject': 'Business Law', 'status': 'P'},
     ],
-    'inferredTimetable': {
-      '${DateTime.wednesday}': reportSubjects,
-    },
+    'inferredTimetable': {'${DateTime.wednesday}': reportSubjects},
   };
 
   group('ReportOwnerCheck', () {
@@ -287,6 +285,44 @@ void main() {
         dates.map((row) => row['d']).toList(),
         ['2026-07-01', '2026-07-08'],
         reason: "no record of the old course's week may remain",
+      );
+    });
+
+    test('new PDF subjects inherit the saved per-subject minimum', () async {
+      await freshDatabase();
+      SharedPreferences.setMockInitialValues({
+        'subject_required_attendance': 82.5,
+      });
+
+      await PdfAttendanceImportService().replaceSemesterFromParsedPdf(
+        data: reportForCourseB(),
+        semester: 3,
+      );
+
+      final subjects = await SubjectDao().getSubjectsBySemester(3);
+      expect(subjects, isNotEmpty);
+      expect(
+        subjects.every((subject) => subject.requiredPercent == 82.5),
+        isTrue,
+        reason: 'PDF imports must obey Attendance Preferences',
+      );
+    });
+
+    test('new PDF subjects use the onboarding default when unset', () async {
+      await freshDatabase();
+      SharedPreferences.setMockInitialValues({});
+
+      await PdfAttendanceImportService().replaceSemesterFromParsedPdf(
+        data: reportForCourseB(),
+        semester: 3,
+      );
+
+      final subjects = await SubjectDao().getSubjectsBySemester(3);
+      expect(subjects, isNotEmpty);
+      expect(
+        subjects.every((subject) => subject.requiredPercent == 70.0),
+        isTrue,
+        reason: 'the onboarding per-subject default is 70%',
       );
     });
 

@@ -261,6 +261,15 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
         'skips': skips,
       };
     } else {
+      // Once a lecture has been missed, attending more lectures only approaches
+      // 100%; it can never make the ratio exactly 100% again. Apart from being
+      // clearer to the user, this avoids dividing by zero below.
+      if (requiredPercent >= 100) {
+        return {
+          'text': 'A 100% target cannot be recovered after a missed lecture.',
+          'isSafe': false,
+        };
+      }
       int attends = (((reqFrac * total) - attended) / (1 - reqFrac)).ceil();
       return {
         'text':
@@ -320,199 +329,202 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
                 return false;
               },
               child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(
-                MediaQuery.of(context).size.width > 600
-                    ? AppDimens.space32
-                    : AppDimens.space16,
-                AppDimens.headerContentGap,
-                MediaQuery.of(context).size.width > 600
-                    ? AppDimens.space32
-                    : AppDimens.space16,
-                // The Scaffold reports the floating glass nav bar's height as
-                // bottom padding (it uses extendBody), so the last card can be
-                // scrolled clear of it instead of sitting under the glass.
-                AppDimens.space16 + MediaQuery.paddingOf(context).bottom,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Overall attendance card ──────────────────────────
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppDimens.space16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(
+                  MediaQuery.of(context).size.width > 600
+                      ? AppDimens.space32
+                      : AppDimens.space16,
+                  AppDimens.headerContentGap,
+                  MediaQuery.of(context).size.width > 600
+                      ? AppDimens.space32
+                      : AppDimens.space16,
+                  // The Scaffold reports the floating glass nav bar's height as
+                  // bottom padding (it uses extendBody), so the last card can be
+                  // scrolled clear of it instead of sitting under the glass.
+                  AppDimens.space16 + MediaQuery.paddingOf(context).bottom,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Overall attendance card ──────────────────────────
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppDimens.space16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text.rich(
+                                        TextSpan(
+                                          children: [
+                                            TextSpan(
+                                              text: 'Overall Attendance ',
+                                              style: theme.textTheme.bodyMedium,
+                                            ),
+                                            TextSpan(
+                                              text: '(Sem $_activeSemester)',
+                                              style: theme.textTheme.bodyMedium
+                                                  ?.copyWith(
+                                                    color: AppTheme.primaryBlue,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: AppDimens.space4),
+                                      FittedBox(
+                                        fit: BoxFit.scaleDown,
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          '${_currentOverall.toStringAsFixed(1)}%',
+                                          style: theme.textTheme.displaySmall
+                                              ?.copyWith(
+                                                color: theme
+                                                    .textTheme
+                                                    .bodyLarge
+                                                    ?.color,
+                                                // The one number the card exists
+                                                // to show, sized to dominate it
+                                                // as in the reference.
+                                                fontSize: 30,
+                                                height: 1.1,
+                                              ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: AppDimens.space2),
+                                      Text(
+                                        'Target: ${_requiredTarget.toStringAsFixed(1)}%',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: statusColor,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: AppDimens.space16),
+                                Stack(
+                                  alignment: Alignment.center,
                                   children: [
-                                    Text.rich(
-                                      TextSpan(
-                                        children: [
-                                          TextSpan(
-                                            text: 'Overall Attendance ',
-                                            style: theme.textTheme.bodyMedium,
-                                          ),
-                                          TextSpan(
-                                            text: '(Sem $_activeSemester)',
-                                            style: theme.textTheme.bodyMedium?.copyWith(
-                                              color: AppTheme.primaryBlue,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: AppDimens.space4),
-                                    FittedBox(
-                                      fit: BoxFit.scaleDown,
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        '${_currentOverall.toStringAsFixed(1)}%',
-                                        style: theme.textTheme.displaySmall
-                                            ?.copyWith(
-                                              color: theme
-                                                  .textTheme
-                                                  .bodyLarge
-                                                  ?.color,
-                                              // The one number the card exists
-                                              // to show, sized to dominate it
-                                              // as in the reference.
-                                              fontSize: 30,
-                                              height: 1.1,
+                                    SizedBox(
+                                      height: 68,
+                                      width: 68,
+                                      child: TweenAnimationBuilder<double>(
+                                        // Sweep from 0 only on the first app-open;
+                                        // afterwards jump straight to the value so
+                                        // it doesn't re-animate on every tab return.
+                                        tween: Tween(
+                                          begin: _sweepsPlayed
+                                              ? _currentOverall / 100
+                                              : 0,
+                                          end: _currentOverall / 100,
+                                        ),
+                                        duration: _sweepsPlayed
+                                            ? Duration.zero
+                                            : AppMotion.duration(
+                                                context,
+                                                AppMotion.slow,
+                                              ),
+                                        curve: AppMotion.enter,
+                                        onEnd: () => _sweepsPlayed = true,
+                                        builder: (context, value, _) =>
+                                            CircularProgressIndicator(
+                                              value: value,
+                                              backgroundColor:
+                                                  theme.dividerColor,
+                                              color: statusColor,
+                                              strokeWidth: 9,
                                             ),
                                       ),
                                     ),
-                                    const SizedBox(height: AppDimens.space2),
-                                    Text(
-                                      'Target: ${_requiredTarget.toStringAsFixed(1)}%',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: statusColor,
-                                        fontWeight: FontWeight.w600,
-                                      ),
+                                    Icon(
+                                      isSafe
+                                          ? Icons.check_rounded
+                                          : Icons.close_rounded,
+                                      color: statusColor,
+                                      size: 26,
+                                      weight: 900,
                                     ),
                                   ],
                                 ),
-                              ),
-                              const SizedBox(width: AppDimens.space16),
-                              Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  SizedBox(
-                                    height: 68,
-                                    width: 68,
-                                    child: TweenAnimationBuilder<double>(
-                                      // Sweep from 0 only on the first app-open;
-                                      // afterwards jump straight to the value so
-                                      // it doesn't re-animate on every tab return.
-                                      tween: Tween(
-                                        begin: _sweepsPlayed
-                                            ? _currentOverall / 100
-                                            : 0,
-                                        end: _currentOverall / 100,
-                                      ),
-                                      duration: _sweepsPlayed
-                                          ? Duration.zero
-                                          : AppMotion.duration(
-                                              context,
-                                              AppMotion.slow,
-                                            ),
-                                      curve: AppMotion.enter,
-                                      onEnd: () => _sweepsPlayed = true,
-                                      builder: (context, value, _) =>
-                                          CircularProgressIndicator(
-                                            value: value,
-                                            backgroundColor: theme.dividerColor,
-                                            color: statusColor,
-                                            strokeWidth: 9,
-                                          ),
-                                    ),
-                                  ),
-                                  Icon(
-                                    isSafe
-                                        ? Icons.check_rounded
-                                        : Icons.close_rounded,
-                                    color: statusColor,
-                                    size: 26,
-                                    weight: 900,
-                                  ),
-                                ],
+                              ],
+                            ),
+                            if (_totalLecturesOverall > 0) ...[
+                              const SizedBox(height: AppDimens.space12),
+                              _InsightFooter(
+                                isSafe: overallInsight['isSafe'] as bool,
+                                text: overallInsight['text'] as String,
+                                // The lecture count is the number you act on, so
+                                // it carries the status colour while the sentence
+                                // around it stays body text.
+                                highlight: (overallInsight['isSafe'] as bool)
+                                    ? overallInsight['skips'] as int?
+                                    : overallInsight['attends'] as int?,
                               ),
                             ],
-                          ),
-                          if (_totalLecturesOverall > 0) ...[
-                            const SizedBox(height: AppDimens.space12),
-                            _InsightFooter(
-                              isSafe: overallInsight['isSafe'] as bool,
-                              text: overallInsight['text'] as String,
-                              // The lecture count is the number you act on, so
-                              // it carries the status colour while the sentence
-                              // around it stays body text.
-                              highlight: (overallInsight['isSafe'] as bool)
-                                  ? overallInsight['skips'] as int?
-                                  : overallInsight['attends'] as int?,
-                            ),
+                            if (_weekSkipPlan != null) ...[
+                              const SizedBox(height: AppDimens.space16),
+                              Divider(height: 1, color: theme.dividerColor),
+                              const SizedBox(height: AppDimens.space12),
+                              _SkippableDaysSection(
+                                plan: _weekSkipPlan!,
+                                subjectNames: _subjectNames,
+                                popover: _dayPopover,
+                              ),
+                            ],
                           ],
-                          if (_weekSkipPlan != null) ...[
-                            const SizedBox(height: AppDimens.space16),
-                            Divider(height: 1, color: theme.dividerColor),
-                            const SizedBox(height: AppDimens.space12),
-                            _SkippableDaysSection(
-                              plan: _weekSkipPlan!,
-                              subjectNames: _subjectNames,
-                              popover: _dayPopover,
-                            ),
-                          ],
-                        ],
+                        ),
                       ),
                     ),
-                  ),
 
-                  const SizedBox(height: AppDimens.space24),
-                  Text('Your Subjects', style: theme.textTheme.titleLarge),
-                  const SizedBox(height: AppDimens.space12),
+                    const SizedBox(height: AppDimens.space24),
+                    Text('Your Subjects', style: theme.textTheme.titleLarge),
+                    const SizedBox(height: AppDimens.space12),
 
-                  // ── Subject list ─────────────────────────────────────
-                  if (_subjects.isEmpty)
-                    SizedBox(
-                      width: double.infinity,
-                      child: EmptyState(
-                        icon: Icons.inbox_outlined,
-                        title: 'No records for this semester',
-                        message:
-                            'Upload a PDF report or add subjects to get started.',
-                        compact: true,
-                      ),
-                    )
-                  else
-                    for (int i = 0; i < _subjects.length; i++) ...[
-                      if (i > 0) const SizedBox(height: AppDimens.space12),
-                      _buildSubjectCard(_subjects[i]),
-                    ],
+                    // ── Subject list ─────────────────────────────────────
+                    if (_subjects.isEmpty)
+                      SizedBox(
+                        width: double.infinity,
+                        child: EmptyState(
+                          icon: Icons.inbox_outlined,
+                          title: 'No records for this semester',
+                          message:
+                              'Upload a PDF report or add subjects to get started.',
+                          compact: true,
+                        ),
+                      )
+                    else
+                      for (int i = 0; i < _subjects.length; i++) ...[
+                        if (i > 0) const SizedBox(height: AppDimens.space12),
+                        _buildSubjectCard(_subjects[i]),
+                      ],
 
-                  const SizedBox(height: AppDimens.space16),
-                  CalloutBox(
-                    kind: CalloutKind.info,
-                    icon: Icons.info_outline_rounded,
-                    title: 'Attendance Disclaimer',
-                    message:
-                        'This app tracks attendance based on your SAP PDF report. '
-                        'Always verify with your official college records. '
-                        'AttendEase is not responsible for any discrepancies.',
-                  ),
-                  const SizedBox(height: AppDimens.space24),
-                ],
+                    const SizedBox(height: AppDimens.space16),
+                    CalloutBox(
+                      kind: CalloutKind.info,
+                      icon: Icons.info_outline_rounded,
+                      title: 'Attendance Disclaimer',
+                      message:
+                          'This app tracks attendance based on your SAP PDF report. '
+                          'Always verify with your official college records. '
+                          'AttendEase is not responsible for any discrepancies.',
+                    ),
+                    const SizedBox(height: AppDimens.space24),
+                  ],
+                ),
               ),
-            ),
             ),
           ),
         ),
@@ -570,7 +582,9 @@ class _InsightFooter extends StatelessWidget {
   List<InlineSpan> _spans(Color accent, Color base) {
     final n = highlight;
     if (n == null || n <= 0) return [TextSpan(text: text)];
-    final match = RegExp(r'(?<!\d)' + n.toString() + r'(?!\d)').firstMatch(text);
+    final match = RegExp(
+      r'(?<!\d)' + n.toString() + r'(?!\d)',
+    ).firstMatch(text);
     if (match == null) return [TextSpan(text: text)];
     return [
       TextSpan(text: text.substring(0, match.start)),
@@ -746,18 +760,21 @@ class _SkippableDaysSection extends StatelessWidget {
                   ),
                   child: Icon(
                     switch (plan.days[i].verdict) {
-                      SkipVerdict.skippable => Icons.check_circle_outline_rounded,
-                      SkipVerdict.unsafe || SkipVerdict.past => Icons.cancel_outlined,
+                      SkipVerdict.skippable =>
+                        Icons.check_circle_outline_rounded,
+                      SkipVerdict.unsafe ||
+                      SkipVerdict.past => Icons.cancel_outlined,
                       // Marked-and-done reads as a completed day, not as an
                       // out-of-session dash.
                       SkipVerdict.settled => Icons.task_alt_rounded,
-                      SkipVerdict.noClasses => Icons.remove_circle_outline_rounded,
+                      SkipVerdict.noClasses =>
+                        Icons.remove_circle_outline_rounded,
                     },
                     size: 14,
                     color: plan.days[i].verdict == SkipVerdict.skippable
                         ? c.success
                         : (theme.textTheme.bodyLarge?.color ?? c.success)
-                            .withValues(alpha: _iconAlpha(plan.days[i])),
+                              .withValues(alpha: _iconAlpha(plan.days[i])),
                   ),
                 ),
               ),
@@ -805,15 +822,15 @@ class _SkippableDaysSection extends StatelessWidget {
   }
 
   Widget _legendDivider(ThemeData theme) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppDimens.space10),
-        child: Text(
-          '|',
-          // bodyMedium is already 14, so this is the same glyph at the same
-          // size — derived from the theme rather than hand-built. See
-          // 
-          style: theme.textTheme.bodyMedium?.copyWith(color: theme.dividerColor),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: AppDimens.space10),
+    child: Text(
+      '|',
+      // bodyMedium is already 14, so this is the same glyph at the same
+      // size — derived from the theme rather than hand-built. See
+      //
+      style: theme.textTheme.bodyMedium?.copyWith(color: theme.dividerColor),
+    ),
+  );
 
   /// Alpha for a verdict icon in the separated icons row. Mirrors the logic
   /// that was previously inline in [_DayCell.build].
@@ -1103,77 +1120,77 @@ class _DayCellState extends State<_DayCell> {
       child: TapRegion(
         groupId: widget.popover.groupId,
         child: GestureDetector(
-        onTap: _togglePopover,
-        behavior: HitTestBehavior.opaque,
-        // Excludes only the visual children — the initial and the date numeral,
-        // which read as "W / 29" and say nothing. It must sit *inside* the
-        // GestureDetector so the button stays activatable.
-        child: ExcludeSemantics(
-          // The tile: weekday name over date number, bordered box.
-          // AspectRatio(1) makes it square from the Expanded width.
-          // The weekday/date stack sits inside a FittedBox (below), which
-          // measures it unbounded and scales it down to fit the square — so
-          // the inner Column uses mainAxisSize.min and can never overflow the
-          // tile even at max text scale on a narrow device.
-          // _tileKey measures this tile so the popover anchors under it.
-          child: AspectRatio(
-            aspectRatio: 1,
-            child: AnimatedContainer(
-              key: _tileKey,
-              duration: AppMotion.duration(context, AppMotion.fast),
-              curve: AppMotion.enter,
-              decoration: BoxDecoration(
-                color: fill,
-                borderRadius: AppDimens.brSm,
-                border: Border.all(color: border, width: borderWidth),
-              ),
-              // FittedBox scales the weekday-over-date stack down to fit the
-              // square on devices whose text scale (or a narrow width) would
-              // otherwise push the Column past the tile's height and trip a
-              // vertical overflow. Where it already fits, scaleDown is a no-op,
-              // so devices that render fine are untouched. Padding keeps a hair
-              // of breathing room from the border at any scale.
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 2,
-                  vertical: 2,
+          onTap: _togglePopover,
+          behavior: HitTestBehavior.opaque,
+          // Excludes only the visual children — the initial and the date numeral,
+          // which read as "W / 29" and say nothing. It must sit *inside* the
+          // GestureDetector so the button stays activatable.
+          child: ExcludeSemantics(
+            // The tile: weekday name over date number, bordered box.
+            // AspectRatio(1) makes it square from the Expanded width.
+            // The weekday/date stack sits inside a FittedBox (below), which
+            // measures it unbounded and scales it down to fit the square — so
+            // the inner Column uses mainAxisSize.min and can never overflow the
+            // tile even at max text scale on a narrow device.
+            // _tileKey measures this tile so the popover anchors under it.
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: AnimatedContainer(
+                key: _tileKey,
+                duration: AppMotion.duration(context, AppMotion.fast),
+                curve: AppMotion.enter,
+                decoration: BoxDecoration(
+                  color: fill,
+                  borderRadius: AppDimens.brSm,
+                  border: Border.all(color: border, width: borderWidth),
                 ),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        label,
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.3,
-                          color: isSkippable
-                              ? c.success
-                              : on.withValues(alpha: isPast ? 0.35 : 0.55),
+                // FittedBox scales the weekday-over-date stack down to fit the
+                // square on devices whose text scale (or a narrow width) would
+                // otherwise push the Column past the tile's height and trip a
+                // vertical overflow. Where it already fits, scaleDown is a no-op,
+                // so devices that render fine are untouched. Padding keeps a hair
+                // of breathing room from the border at any scale.
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 2,
+                    vertical: 2,
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.3,
+                            color: isSkippable
+                                ? c.success
+                                : on.withValues(alpha: isPast ? 0.35 : 0.55),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: AppDimens.space2),
-                      Text(
-                        '${day.date.day}',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: isToday
-                              ? FontWeight.w900
-                              : FontWeight.w700,
-                          color: dateColor,
+                        const SizedBox(height: AppDimens.space2),
+                        Text(
+                          '${day.date.day}',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: isToday
+                                ? FontWeight.w900
+                                : FontWeight.w700,
+                            color: dateColor,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -1261,8 +1278,9 @@ class _SubjectCard extends StatelessWidget {
                                   subject.name,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.titleSmall
-                                      ?.copyWith(height: 1.25),
+                                  style: theme.textTheme.titleSmall?.copyWith(
+                                    height: 1.25,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: AppDimens.space4),

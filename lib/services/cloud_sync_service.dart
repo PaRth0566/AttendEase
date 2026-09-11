@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 
 import '../database/db_helper.dart'; // Ensure this path matches your project!
+import 'attendance_preferences_service.dart';
 import '../utils/db_utils.dart';
 
 /// Thrown inside the backup transaction to abort it when the cloud copy is
@@ -43,7 +44,9 @@ class CloudSyncService {
     try {
       final user = _auth.currentUser;
       if (user == null || user.isAnonymous) {
-        debugPrint('☁️ [Sync] Backup skipped: No user logged in or user is anonymous.');
+        debugPrint(
+          '☁️ [Sync] Backup skipped: No user logged in or user is anonymous.',
+        );
         return false;
       }
 
@@ -102,9 +105,12 @@ class CloudSyncService {
           if (snapshot.exists) {
             final existing = snapshot.data();
             if (existing != null && existing['last_backed_up'] is Timestamp) {
-              final cloudTime = (existing['last_backed_up'] as Timestamp).toDate();
+              final cloudTime = (existing['last_backed_up'] as Timestamp)
+                  .toDate();
               if (cloudTime.isAfter(syncTime)) {
-                debugPrint('☁️ [Sync] Cloud data is newer — skipping overwrite.');
+                debugPrint(
+                  '☁️ [Sync] Cloud data is newer — skipping overwrite.',
+                );
                 throw const _SkipBackup();
               }
             }
@@ -144,7 +150,10 @@ class CloudSyncService {
         return false;
       }
 
-      final docSnapshot = await _firestore.collection('users').doc(user.uid).get();
+      final docSnapshot = await _firestore
+          .collection('users')
+          .doc(user.uid)
+          .get();
 
       // If no document exists, they are a brand new user
       if (!docSnapshot.exists || docSnapshot.data() == null) {
@@ -166,7 +175,10 @@ class CloudSyncService {
       debugPrint('☁️ [Sync] Starting Cloud Restoration...');
 
       // Keys that must always be stored as double (even when Firestore returns int)
-      const doubleKeys = {'overall_required_attendance', 'subject_required_attendance'};
+      const doubleKeys = {
+        'overall_required_attendance',
+        'subject_required_attendance',
+      };
 
       // Keys that we intentionally skip during bulk restore and handle separately
       // 'semester' is protected so a stale cloud value doesn't overwrite the
@@ -213,7 +225,8 @@ class CloudSyncService {
       final List<dynamic> subjects = data['subjects'] ?? [];
       final List<dynamic> timetable = data['timetable'] ?? [];
       final List<dynamic> attendanceRecords = data['attendance_records'] ?? [];
-      final List<dynamic> importedReportDates = data['imported_report_dates'] ?? [];
+      final List<dynamic> importedReportDates =
+          data['imported_report_dates'] ?? [];
 
       debugPrint(
         '☁️ [Sync] Restoring DB: ${subjects.length} subjects, ${attendanceRecords.length} records.',
@@ -226,15 +239,29 @@ class CloudSyncService {
         await txn.delete('imported_report_dates');
 
         for (var subject in subjects) {
-          final sanitized = DbUtils.sanitizeRow(Map<String, dynamic>.from(subject));
-          await txn.insert('subjects', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
+          final sanitized = DbUtils.sanitizeRow(
+            Map<String, dynamic>.from(subject),
+          );
+          await txn.insert(
+            'subjects',
+            sanitized,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
         }
         for (var session in timetable) {
-          final sanitized = DbUtils.sanitizeRow(Map<String, dynamic>.from(session));
-          await txn.insert('timetable', sanitized, conflictAlgorithm: ConflictAlgorithm.replace);
+          final sanitized = DbUtils.sanitizeRow(
+            Map<String, dynamic>.from(session),
+          );
+          await txn.insert(
+            'timetable',
+            sanitized,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
         }
         for (var record in attendanceRecords) {
-          final sanitized = DbUtils.sanitizeRow(Map<String, dynamic>.from(record));
+          final sanitized = DbUtils.sanitizeRow(
+            Map<String, dynamic>.from(record),
+          );
           await txn.insert(
             'attendance_records',
             sanitized,
@@ -242,7 +269,9 @@ class CloudSyncService {
           );
         }
         for (var reportDate in importedReportDates) {
-          final sanitized = DbUtils.sanitizeRow(Map<String, dynamic>.from(reportDate));
+          final sanitized = DbUtils.sanitizeRow(
+            Map<String, dynamic>.from(reportDate),
+          );
           await txn.insert(
             'imported_report_dates',
             sanitized,
@@ -263,6 +292,13 @@ class CloudSyncService {
         }
       });
 
+      // The preference is the source of truth for every subject. Older backups
+      // may contain per-subject targets from before the preference was changed.
+      final restoredSubjectTarget =
+          prefs.getDouble(AttendancePreferencesService.subjectKey) ??
+          AttendancePreferencesService.defaultSubject;
+      await db.update('subjects', {'required_percent': restoredSubjectTarget});
+
       // 4. Robust Semester Resolution
       // Priority order:
       //   1. Local semester the user had selected before restore (highest priority)
@@ -272,7 +308,9 @@ class CloudSyncService {
       if (localSemesterBeforeRestore != null) {
         // User already had a semester selected locally — keep it.
         await prefs.setInt('semester', localSemesterBeforeRestore);
-        debugPrint('☁️ [Sync] Kept local semester: $localSemesterBeforeRestore');
+        debugPrint(
+          '☁️ [Sync] Kept local semester: $localSemesterBeforeRestore',
+        );
       } else {
         // No local semester — try to use cloud value first
         final cloudSem = prefsData['semester'];
@@ -302,7 +340,9 @@ class CloudSyncService {
 
             if (target != null) {
               await prefs.setInt('semester', target);
-              debugPrint('☁️ [Sync] Auto-detected semester from subjects: $target');
+              debugPrint(
+                '☁️ [Sync] Auto-detected semester from subjects: $target',
+              );
             }
           } else {
             // Only default to 1 if we literally have NO subjects
@@ -313,11 +353,18 @@ class CloudSyncService {
       }
 
       // Update local sync time after successful restore
-      if (data.containsKey('last_backed_up') && data['last_backed_up'] is Timestamp) {
+      if (data.containsKey('last_backed_up') &&
+          data['last_backed_up'] is Timestamp) {
         final cloudTs = data['last_backed_up'] as Timestamp;
-        await prefs.setString('last_sync_time', cloudTs.toDate().toIso8601String());
+        await prefs.setString(
+          'last_sync_time',
+          cloudTs.toDate().toIso8601String(),
+        );
       } else {
-        await prefs.setString('last_sync_time', DateTime.now().toUtc().toIso8601String());
+        await prefs.setString(
+          'last_sync_time',
+          DateTime.now().toUtc().toIso8601String(),
+        );
       }
       debugPrint('☁️ [Sync] Restoration Complete!');
 
@@ -342,8 +389,11 @@ class CloudSyncService {
 
       if (_isSyncing) return 'syncing';
 
-      final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
-      if (connectivityResult.contains(ConnectivityResult.none)) return 'no_network';
+      final List<ConnectivityResult> connectivityResult = await Connectivity()
+          .checkConnectivity();
+      if (connectivityResult.contains(ConnectivityResult.none)) {
+        return 'no_network';
+      }
 
       final userDoc = _firestore.collection('users').doc(user.uid);
       final docSnapshot = await userDoc.get();
@@ -375,7 +425,8 @@ class CloudSyncService {
 
       // If cloud is newer than local (by at least 1 second to avoid clock jitter), restore
       if (cloudTime != null &&
-          (localTime == null || cloudTime.difference(localTime).inSeconds > 1)) {
+          (localTime == null ||
+              cloudTime.difference(localTime).inSeconds > 1)) {
         debugPrint('☁️ [Sync] Cloud is newer. Restoring...');
         bool success = await restoreDataFromCloud();
         return success ? 'restored' : 'error';

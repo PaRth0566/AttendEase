@@ -260,36 +260,33 @@ void main() {
     },
   );
 
-  test(
-    'week skip plan uses replacement lecture history, not weekly plan',
-    () {
-      final plan = computeWeekSkipPlan(
-        subjectStats: {
-          1: {'attended': 3, 'total': 3},
-          2: {'attended': 3, 'total': 3},
-        },
-        subjectRequired: {1: 75, 2: 75},
-        subjectHistory: {
-          1: [
-            {'date': '2026-07-18', 'status': 'P'},
-            {'date': '2026-07-25', 'status': 'P'},
-          ],
-          2: [
-            {'date': '2026-07-18', 'status': 'P'},
-            {'date': '2026-07-25', 'status': 'P'},
-          ],
-        },
-        overallRequired: 75,
-        today: DateTime(2026, 7, 22), // Wed
-      )!;
+  test('week skip plan uses replacement lecture history, not weekly plan', () {
+    final plan = computeWeekSkipPlan(
+      subjectStats: {
+        1: {'attended': 3, 'total': 3},
+        2: {'attended': 3, 'total': 3},
+      },
+      subjectRequired: {1: 75, 2: 75},
+      subjectHistory: {
+        1: [
+          {'date': '2026-07-18', 'status': 'P'},
+          {'date': '2026-07-25', 'status': 'P'},
+        ],
+        2: [
+          {'date': '2026-07-18', 'status': 'P'},
+          {'date': '2026-07-25', 'status': 'P'},
+        ],
+      },
+      overallRequired: 75,
+      today: DateTime(2026, 7, 22), // Wed
+    )!;
 
-      // Both subjects recur on Saturdays only, inferred from the two records.
-      final sat = plan.days[5];
-      expect(sat.date, DateTime(2026, 7, 25));
-      expect(sat.verdict, SkipVerdict.skippable);
-      expect(sat.lectureCount, 2);
-    },
-  );
+    // Both subjects recur on Saturdays only, inferred from the two records.
+    final sat = plan.days[5];
+    expect(sat.date, DateTime(2026, 7, 25));
+    expect(sat.verdict, SkipVerdict.skippable);
+    expect(sat.lectureCount, 2);
+  });
 
   group('computeWeekSkipPlan', () {
     // A Monday-only subject. Two prior Mondays establish the weekday; note the
@@ -380,7 +377,10 @@ void main() {
 
       expect(plan.isNextWeek, isTrue);
       expect(plan.weekStart, DateTime(2026, 7, 27)); // next Monday
-      expect(plan.days.map((d) => d.verdict), isNot(contains(SkipVerdict.past)));
+      expect(
+        plan.days.map((d) => d.verdict),
+        isNot(contains(SkipVerdict.past)),
+      );
     });
 
     test('cumulative: a one-lecture buffer is not offered twice', () {
@@ -500,7 +500,10 @@ void main() {
           1: [
             {'date': '2026-07-06', 'status': 'P'},
             {'date': '2026-07-13', 'status': 'P'},
-            {'date': '2026-07-20', 'status': 'NU'}, // today, conducted, unmarked
+            {
+              'date': '2026-07-20',
+              'status': 'NU',
+            }, // today, conducted, unmarked
           ],
         },
         overallRequired: 75,
@@ -512,25 +515,28 @@ void main() {
       expect(plan.days[0].lectureCount, 1);
     });
 
-    test('an NC lecture today settles the slot without charging attendance', () {
-      final plan = computeWeekSkipPlan(
-        subjectStats: {
-          1: {'attended': 3, 'total': 4},
-        },
-        subjectRequired: {1: 75},
-        subjectHistory: {
-          1: [
-            {'date': '2026-07-06', 'status': 'P'},
-            {'date': '2026-07-13', 'status': 'P'},
-            {'date': '2026-07-20', 'status': 'NC'}, // today, never happened
-          ],
-        },
-        overallRequired: 75,
-        today: DateTime(2026, 7, 20), // Mon
-      )!;
+    test(
+      'an NC lecture today settles the slot without charging attendance',
+      () {
+        final plan = computeWeekSkipPlan(
+          subjectStats: {
+            1: {'attended': 3, 'total': 4},
+          },
+          subjectRequired: {1: 75},
+          subjectHistory: {
+            1: [
+              {'date': '2026-07-06', 'status': 'P'},
+              {'date': '2026-07-13', 'status': 'P'},
+              {'date': '2026-07-20', 'status': 'NC'}, // today, never happened
+            ],
+          },
+          overallRequired: 75,
+          today: DateTime(2026, 7, 20), // Mon
+        )!;
 
-      expect(plan.days[0].verdict, SkipVerdict.settled);
-    });
+        expect(plan.days[0].verdict, SkipVerdict.settled);
+      },
+    );
 
     test('one of two same-day lectures marked leaves the other in play', () {
       // Twice-on-Monday subject with only one of today's two lectures marked.
@@ -614,6 +620,49 @@ void main() {
         today: DateTime(2026, 7, 22),
       )!;
       expect(damaged.days[4].verdict, SkipVerdict.unsafe);
+    });
+
+    test('overall and per-subject preferences both constrain skip advice', () {
+      final history = {
+        1: [
+          {'date': '2026-07-07', 'status': 'P'},
+          {'date': '2026-07-14', 'status': 'P'},
+        ],
+        2: [
+          {'date': '2026-07-08', 'status': 'P'},
+          {'date': '2026-07-15', 'status': 'P'},
+        ],
+      };
+      final stats = {
+        1: {'attended': 8, 'total': 10},
+        2: {'attended': 10, 'total': 10},
+      };
+
+      WeekSkipPlan plan({required double overall, required double subjectOne}) {
+        return computeWeekSkipPlan(
+          subjectStats: stats,
+          subjectRequired: {1: subjectOne, 2: 70},
+          subjectHistory: history,
+          overallRequired: overall,
+          today: DateTime(2026, 7, 20),
+        )!;
+      }
+
+      expect(
+        plan(overall: 80, subjectOne: 70).days[1].verdict,
+        SkipVerdict.skippable,
+        reason: 'a lower overall preference should permit this skip',
+      );
+      expect(
+        plan(overall: 90, subjectOne: 70).days[1].verdict,
+        SkipVerdict.unsafe,
+        reason: 'a higher overall preference should block this skip',
+      );
+      expect(
+        plan(overall: 80, subjectOne: 75).days[1].verdict,
+        SkipVerdict.unsafe,
+        reason: 'the subject preference should independently block the skip',
+      );
     });
 
     test('a verdict resting on a future day is flagged conditional', () {
