@@ -281,6 +281,15 @@ class PdfAttendanceImportService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('semester_start_$semester', startStr);
     await prefs.setString('semester_end_$semester', endStr);
+    if (data['collegeType'] == 'junior' ||
+        data['term'] != null ||
+        semester == 11 ||
+        semester == 12) {
+      final term = data['term']?.toString() ??
+          (semester == 12 ? 'SYJC' : 'FYJC');
+      await prefs.setString('junior_term_start_$term', startStr);
+      await prefs.setString('junior_term_end_$term', endStr);
+    }
     debugPrint('Updated semester bounds from PDF: $startStr to $endStr');
   }
 

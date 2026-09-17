@@ -259,4 +259,163 @@ void main() {
       expect(LocalPdfParser.inferWeeklyTimetable([]), isEmpty);
     });
   });
+
+  group('extractJuniorCollegeTerm', () {
+    const jcHeaderFYJC =
+        'Attendance Report Student Name NEEL DOLIA '
+        'Student Number 40104260737 Roll No. G018 '
+        'Academic Year & Academic Session 2026-2027, F.Y.J.C '
+        'Program Name H.S.C.- Commerce (MBC) '
+        'Attendance Report Duration : From 01.08.2026 to 01.09.2026';
+
+    const jcHeaderSYJC =
+        'Attendance Report Student Name JOHN DOE '
+        'Student Number 40104260999 Roll No. G020 '
+        'Academic Year & Academic Session 2026-2027, S.Y.J.C '
+        'Program Name H.S.C.- Science '
+        'Attendance Report Duration : From 01.08.2026 to 01.09.2026';
+
+    test('extracts FYJC term from report header and variations', () {
+      expect(LocalPdfParser.extractJuniorCollegeTerm(jcHeaderFYJC), 'FYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('2026-2027, F.Y.J.C'), 'FYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('2026-2027, FYJC'), 'FYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('2026-2027, F Y J C'), 'FYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('FYJC Session'), 'FYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('F.Y.J.C.'), 'FYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('F. Y. J. C.'), 'FYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('F . Y . J . C'), 'FYJC');
+    });
+
+    test('extracts SYJC term from report header and variations', () {
+      expect(LocalPdfParser.extractJuniorCollegeTerm(jcHeaderSYJC), 'SYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('2026-2027, S.Y.J.C'), 'SYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('2026-2027, SYJC'), 'SYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('2026-2027, S Y J C'), 'SYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('SYJC Session'), 'SYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('S.Y.J.C.'), 'SYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('S. Y. J. C.'), 'SYJC');
+      expect(LocalPdfParser.extractJuniorCollegeTerm('S . Y . J . C'), 'SYJC');
+    });
+
+    test('returns null for Degree College headers', () {
+      const degreeHeader =
+          'Attendance Report Student Name PARTH RATHOD '
+          'Academic Year & Academic Session 2026-2027, Semester V '
+          'Program Name Bachelor of Science (Computer Science)';
+      expect(LocalPdfParser.extractJuniorCollegeTerm(degreeHeader), isNull);
+    });
+  });
+
+  group('detectCollegeType', () {
+    test('detects junior college when F.Y.J.C / FYJC / F Y J C is present', () {
+      expect(
+        LocalPdfParser.detectCollegeType('Academic Year & Academic Session 2026-2027, F.Y.J.C'),
+        'junior',
+      );
+      expect(
+        LocalPdfParser.detectCollegeType('Academic Year & Academic Session 2026-2027, FYJC'),
+        'junior',
+      );
+      expect(
+        LocalPdfParser.detectCollegeType('Academic Year & Academic Session 2026-2027, F Y J C'),
+        'junior',
+      );
+      expect(
+        LocalPdfParser.detectCollegeType('Academic Year & Academic Session 2026-2027, F.Y.J.C.'),
+        'junior',
+      );
+    });
+
+    test('detects junior college when S.Y.J.C / SYJC / S Y J C is present', () {
+      expect(
+        LocalPdfParser.detectCollegeType('Academic Year & Academic Session 2026-2027, S.Y.J.C'),
+        'junior',
+      );
+      expect(
+        LocalPdfParser.detectCollegeType('Academic Year & Academic Session 2026-2027, SYJC'),
+        'junior',
+      );
+      expect(
+        LocalPdfParser.detectCollegeType('Academic Year & Academic Session 2026-2027, S Y J C'),
+        'junior',
+      );
+      expect(
+        LocalPdfParser.detectCollegeType('Academic Year & Academic Session 2026-2027, S.Y.J.C.'),
+        'junior',
+      );
+    });
+
+    test('detects junior college on full actual report format from screenshot', () {
+      // Uses the ACTUAL text from the device — Syncfusion concatenates tokens
+      // without whitespace (e.g. "F.Y.J.CAcademic", "DOLIAStudent").
+      const actualNeelDoliaFYJC =
+          'Page 1 of 8Attendance Report NEEL DOLIAStudent Name '
+          '40104260737Student Number G018Roll No. '
+          '2026-2027, F.Y.J.CAcademic Year & Academic Session '
+          'H.S.C.- Commerce (MBC)Program Name '
+          'From 01.08.2026 to 01.09.2026';
+
+      const actualNeelDoliaSYJC =
+          'Page 1 of 8Attendance Report NEEL DOLIAStudent Name '
+          '40104260737Student Number G018Roll No. '
+          '2026-2027, S.Y.J.CAcademic Year & Academic Session '
+          'H.S.C.- Commerce (MBC)Program Name '
+          'From 01.08.2026 to 01.09.2026';
+
+      // Also test the spaced format (from earlier assumptions)
+      const spacedFYJC =
+          'Academic Year & Academic Session 2026-2027, F.Y.J.C '
+          'Program Name H.S.C.- Commerce (MBC)';
+
+      expect(LocalPdfParser.detectCollegeType(actualNeelDoliaFYJC), 'junior');
+      expect(LocalPdfParser.extractJuniorCollegeTerm(actualNeelDoliaFYJC), 'FYJC');
+
+      expect(LocalPdfParser.detectCollegeType(actualNeelDoliaSYJC), 'junior');
+      expect(LocalPdfParser.extractJuniorCollegeTerm(actualNeelDoliaSYJC), 'SYJC');
+
+      expect(LocalPdfParser.detectCollegeType(spacedFYJC), 'junior');
+      expect(LocalPdfParser.extractJuniorCollegeTerm(spacedFYJC), 'FYJC');
+    });
+
+    test('detects degree college when Semester is present', () {
+      expect(
+        LocalPdfParser.detectCollegeType('Academic Year & Academic Session 2026-2027, Semester V'),
+        'degree',
+      );
+      expect(
+        LocalPdfParser.detectCollegeType('Semester 3 Attendance Report'),
+        'degree',
+      );
+    });
+
+    test('returns null when neither is detected rather than defaulting to degree', () {
+      expect(
+        LocalPdfParser.detectCollegeType('Attendance Report 2026-2027'),
+        isNull,
+      );
+    });
+
+    test('extracts correct start and end dates from Junior report duration', () {
+      const actualNeelDoliaFYJC =
+          'Page 1 of 8Attendance Report NEEL DOLIAStudent Name '
+          '40104260737Student Number G018Roll No. '
+          '2026-2027, F.Y.J.CAcademic Year & Academic Session '
+          'H.S.C.- Commerce (MBC)Program Name '
+          'From 01.08.2026 to 01.09.2026';
+
+      final dateSpanMatch = RegExp(
+        r'From\s+(\d{2})[\.\-\/](\d{2})[\.\-\/](\d{4})\s+to\s+(\d{2})[\.\-\/](\d{2})[\.\-\/](\d{4})',
+        caseSensitive: false,
+      ).firstMatch(actualNeelDoliaFYJC);
+
+      expect(dateSpanMatch, isNotNull);
+      final startDate =
+          '${dateSpanMatch!.group(3)}-${dateSpanMatch.group(2)}-${dateSpanMatch.group(1)}';
+      final endDate =
+          '${dateSpanMatch.group(6)}-${dateSpanMatch.group(5)}-${dateSpanMatch.group(4)}';
+
+      expect(startDate, '2026-08-01');
+      expect(endDate, '2026-09-01');
+    });
+  });
 }

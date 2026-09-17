@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:attend_ease/database/attendance_dao.dart';
@@ -13,6 +14,7 @@ import 'package:attend_ease/utils/calculation_utils.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfi;
 
