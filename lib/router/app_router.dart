@@ -297,6 +297,8 @@ class AppRouter {
                               subject: args.subject,
                               reportRange: args.range,
                               reportLabel: args.label,
+                              collegeType: args.collegeType,
+                              juniorOverallSafe: args.juniorOverallSafe,
                             ),
                           );
                         },

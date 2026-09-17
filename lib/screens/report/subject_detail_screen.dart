@@ -28,11 +28,27 @@ class SubjectDetailScreen extends StatefulWidget {
   /// is a statement about lectures *after* that period — is not shown.
   final String? reportLabel;
 
+  /// College type ('junior' or 'degree'). When null, inferred from subject's semester.
+  final String? collegeType;
+
+  /// Overall Junior term compliance status (true if overall >= 75%).
+  /// When provided, immediately styles the progress bar for Junior College.
+  /// If null and collegeType is junior, computed from DB stats during _loadHistory.
+  final bool? juniorOverallSafe;
+
+  /// Optional test overrides for fast widget testing without database setup.
+  final int? overrideAttended;
+  final int? overrideTotal;
+
   const SubjectDetailScreen({
     super.key,
     required this.subject,
     this.reportRange,
     this.reportLabel,
+    this.collegeType,
+    this.juniorOverallSafe,
+    this.overrideAttended,
+    this.overrideTotal,
   });
 
   @override
@@ -54,6 +70,8 @@ typedef SubjectReportArgs = ({
   Subject subject,
   DateTimeRange? range,
   String label,
+  String? collegeType,
+  bool? juniorOverallSafe,
 });
 
 class _SubjectDetailScreenState extends State<SubjectDetailScreen>
@@ -64,6 +82,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
   List<Map<String, dynamic>> _history = [];
   int _attended = 0;
   int _total = 0;
+  bool _juniorOverallSafe = false;
 
   // Skip calculator state
   List<DateTime> _skippableDates = [];
@@ -72,6 +91,14 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
+
+  /// True when the subject belongs to Junior College.
+  bool get _isJunior {
+    if (widget.collegeType != null) {
+      return widget.collegeType == 'junior';
+    }
+    return widget.subject.semester == 11 || widget.subject.semester == 12;
+  }
 
   /// True when the page was opened from Analytics & Reports, so it describes a
   /// closed period rather than the live standing. Drives two things: the figures
@@ -90,6 +117,14 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
   @override
   void initState() {
     super.initState();
+    if (widget.juniorOverallSafe != null) {
+      _juniorOverallSafe = widget.juniorOverallSafe!;
+    }
+    if (widget.overrideAttended != null && widget.overrideTotal != null) {
+      _attended = widget.overrideAttended!;
+      _total = widget.overrideTotal!;
+      _isLoading = false;
+    }
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
@@ -98,7 +133,9 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
       parent: _animController,
       curve: Curves.easeOutCubic,
     );
-    _loadHistory();
+    if (widget.overrideAttended == null) {
+      _loadHistory();
+    }
   }
 
   @override
@@ -150,9 +187,29 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
     // for the live view: a report covers a period that has already closed, so
     // projecting lectures past its end date says nothing about it — see
     // [_isReportScope]. Left uncomputed rather than merely unrendered, so the
-    // report path does no work it cannot use.
-    if (!_isReportScope) {
+    // report path does no work it cannot use. For Junior College, subject-level
+    // compliance targets and skip counts do not exist.
+    if (!_isReportScope && !_isJunior) {
       _calculateSkippableDates(records, attendedCount, totalCount);
+    }
+
+    bool? juniorSafe = widget.juniorOverallSafe;
+    if (_isJunior && juniorSafe == null) {
+      final stats = keys == null
+          ? await _attendanceDao.getAttendanceStats(widget.subject.semester)
+          : await _attendanceDao.getAttendanceStatsForDateRange(
+              keys.start,
+              keys.end,
+              widget.subject.semester,
+            );
+      int totAtt = 0;
+      int totLec = 0;
+      for (final s in stats.values) {
+        totAtt += s['attended'] ?? 0;
+        totLec += s['total'] ?? 0;
+      }
+      final double overall = totLec == 0 ? 0.0 : (totAtt / totLec) * 100;
+      juniorSafe = overall >= 75.0 - 1e-9;
     }
 
     if (!mounted) return;
@@ -160,6 +217,9 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
       _history = records;
       _total = totalCount;
       _attended = attendedCount;
+      if (juniorSafe != null) {
+        _juniorOverallSafe = juniorSafe;
+      }
       _isLoading = false;
     });
     _animController.forward(from: 0);
@@ -238,7 +298,16 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
     final c = context.appColors;
 
     final percent = _total == 0 ? 0.0 : (_attended / _total) * 100;
+    final isJunior = _isJunior;
     final isSafe = percent >= widget.subject.requiredPercent;
+    final Color percentColor = isJunior
+        ? (theme.textTheme.bodyLarge?.color ?? theme.colorScheme.primary)
+        : (isSafe ? c.success : c.danger);
+    final Color barColor = isJunior
+        ? (_juniorOverallSafe
+            ? const Color(0xFF49AD4F)
+            : const Color(0xFFF14134))
+        : (isSafe ? c.success : c.danger);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -384,7 +453,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
                                       style: TextStyle(
                                         fontSize: 48,
                                         fontWeight: FontWeight.bold,
-                                        color: isSafe ? c.success : c.danger,
+                                        color: percentColor,
                                       ),
                                     ),
                                   ),
@@ -409,7 +478,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
                                     builder: (context, value, _) =>
                                         LinearProgressIndicator(
                                           value: value,
-                                          color: isSafe ? c.success : c.danger,
+                                          color: barColor,
                                           backgroundColor: theme.dividerColor,
                                           minHeight: 6,
                                           borderRadius: BorderRadius.circular(
@@ -417,14 +486,17 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
                                           ),
                                         ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Required: ${widget.subject.requiredPercent}%',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: theme.textTheme.bodyMedium?.color,
+                                  if (!isJunior) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Required: ${widget.subject.requiredPercent}%',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color:
+                                            theme.textTheme.bodyMedium?.color,
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -440,7 +512,7 @@ class _SubjectDetailScreenState extends State<SubjectDetailScreen>
                       // dashboard's live view and not here. `_maxSkips` is left
                       // at 0 for a report scope, so the guard is belt and
                       // braces — but it is the guard that states the rule.
-                      if (!_isReportScope && _maxSkips > 0)
+                      if (!isJunior && !_isReportScope && _maxSkips > 0)
                         SliverToBoxAdapter(
                           child: FadeTransition(
                             opacity: _fadeAnim,
