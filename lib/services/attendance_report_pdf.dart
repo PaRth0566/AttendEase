@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
@@ -105,6 +106,29 @@ class _Ink {
   static final ruleSoft = PdfColor.fromInt(0xFFF1F5F9);
   static final wash = PdfColor.fromInt(0xFFF8FAFC);
 }
+
+/// The color for Junior College subject progress bars.
+///
+/// For Junior College, subject percentages are informational only.
+/// All subject progress bars reflect ONLY the overall Junior attendance status:
+/// - GREEN if overall attendance >= 75%
+/// - RED if overall attendance < 75%
+PdfColor juniorSubjectBarColor({
+  required double overallPercent,
+  double requiredPercent = 75.0,
+}) {
+  final isSafe = overallPercent >= (requiredPercent - 1e-9);
+  return isSafe ? _Ink.good : _Ink.bad;
+}
+
+@visibleForTesting
+PdfColor get reportColorGood => _Ink.good;
+
+@visibleForTesting
+PdfColor get reportColorBad => _Ink.bad;
+
+@visibleForTesting
+PdfColor get reportColorBrand => _Ink.brand;
 
 class _ReportFonts {
   const _ReportFonts(this.regular, this.bold);
@@ -217,8 +241,9 @@ pw.Widget _metaPair(String label, String value) {
 /// clears the bar, and this puts the bar literally on the page. Painted directly
 /// rather than composed, because the pdf package has no fractional-width box and
 /// the fill width is only known once the row's column width is resolved.
-class _Meter extends pw.Widget {
-  _Meter({
+@visibleForTesting
+class ReportMeter extends pw.Widget {
+  ReportMeter({
     required this.value,
     this.target,
     required this.color,
@@ -290,6 +315,8 @@ class _Meter extends pw.Widget {
     }
   }
 }
+
+typedef _Meter = ReportMeter;
 
 /// Renders the attendance report PDF.
 ///
@@ -392,7 +419,15 @@ Future<Uint8List> buildAttendanceReportPdf({
             style: pw.TextStyle(fontSize: 9, color: _Ink.muted),
           )
         else
-          isJunior ? _buildJuniorTable(rows) : _buildDegreeTable(rows),
+          isJunior
+              ? _buildJuniorTable(
+                  rows,
+                  barColor: juniorSubjectBarColor(
+                    overallPercent: overall,
+                    requiredPercent: target,
+                  ),
+                )
+              : _buildDegreeTable(rows),
       ],
     ),
   );
@@ -731,7 +766,20 @@ final _juniorBreakdownColumns = <int, pw.TableColumnWidth>{
   3: const pw.FlexColumnWidth(1.4), // attendance
 };
 
-pw.Widget _buildJuniorTable(List<ReportSubjectRow> rows) {
+@visibleForTesting
+pw.Widget buildJuniorTable(
+  List<ReportSubjectRow> rows, {
+  required PdfColor barColor,
+}) => _buildJuniorTable(rows, barColor: barColor);
+
+@visibleForTesting
+pw.Widget buildDegreeTable(List<ReportSubjectRow> rows) =>
+    _buildDegreeTable(rows);
+
+pw.Widget _buildJuniorTable(
+  List<ReportSubjectRow> rows, {
+  required PdfColor barColor,
+}) {
   return pw.Table(
     columnWidths: _juniorBreakdownColumns,
     children: [
@@ -750,12 +798,16 @@ pw.Widget _buildJuniorTable(List<ReportSubjectRow> rows) {
         ],
       ),
       for (var i = 0; i < rows.length; i++)
-        _juniorBreakdownRow(rows[i], shade: i.isOdd),
+        _juniorBreakdownRow(rows[i], shade: i.isOdd, barColor: barColor),
     ],
   );
 }
 
-pw.TableRow _juniorBreakdownRow(ReportSubjectRow r, {required bool shade}) {
+pw.TableRow _juniorBreakdownRow(
+  ReportSubjectRow r, {
+  required bool shade,
+  required PdfColor barColor,
+}) {
   final hasData = r.total > 0;
 
   pw.Widget cell(pw.Widget child, {bool right = false}) => pw.Padding(
@@ -784,7 +836,7 @@ pw.TableRow _juniorBreakdownRow(ReportSubjectRow r, {required bool shade}) {
             _Meter(
               value: hasData ? r.percent / 100 : 0,
               target: null,
-              color: _Ink.brand,
+              color: barColor,
               height: 3.5,
             ),
           ],
