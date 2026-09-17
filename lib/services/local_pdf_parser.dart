@@ -199,6 +199,50 @@ class LocalPdfParser {
   static int? semesterNumberFrom(String raw) =>
       extractSemesterNumber(raw) ?? semesterTokenValue(raw);
 
+  // ── Junior College & College Type resolution ─────────────────────────
+
+  /// Matches Junior College term tokens: "F.Y.J.C", "FYJC", "F Y J C", etc.
+  ///
+  /// The trailing boundary is deliberately absent. Real PDFs from SVKM's
+  /// Syncfusion extractor concatenate tokens without whitespace — e.g.
+  /// `F.Y.J.CAcademic` — so requiring a non-alphanumeric after C rejects
+  /// valid matches. The leading boundary + unique F-Y-J-C sequence is
+  /// specific enough to prevent false positives.
+  static final _fyjcRe = RegExp(
+    r'(?:^|[^A-Za-z0-9])(?:F[\s.\-/]*Y[\s.\-/]*J[\s.\-/]*C|f[\s.\-/]*y[\s.\-/]*j[\s.\-/]*c)(?:[\s.\-/]|(?=[^a-z])|$)',
+  );
+
+  /// Matches Junior College term tokens: "S.Y.J.C", "SYJC", "S Y J C", etc.
+  static final _syjcRe = RegExp(
+    r'(?:^|[^A-Za-z0-9])(?:S[\s.\-/]*Y[\s.\-/]*J[\s.\-/]*C|s[\s.\-/]*y[\s.\-/]*j[\s.\-/]*c)(?:[\s.\-/]|(?=[^a-z])|$)',
+  );
+
+  /// Matches H.S.C (Higher Secondary Certificate) — a strong indicator of
+  /// Junior College when FYJC/SYJC tokens are not found.
+  static final _hscRe = RegExp(
+    r'(?:^|[^A-Za-z0-9])H[\s.\-]*S[\s.\-]*C(?:[\s.\-]|(?=[^a-z])|$)',
+  );
+
+  /// Reads the Junior College term ('FYJC' or 'SYJC') out of header text.
+  /// Returns null if neither term is matched.
+  static String? extractJuniorCollegeTerm(String text) {
+    if (_fyjcRe.hasMatch(text)) return 'FYJC';
+    if (_syjcRe.hasMatch(text)) return 'SYJC';
+    return null;
+  }
+
+  /// Determines the college section from header text.
+  /// Returns 'junior' if Junior College markers (FYJC/SYJC or H.S.C.) are
+  /// found, 'degree' if Degree College markers (semester) are found,
+  /// or null if neither can be identified with confidence.
+  static String? detectCollegeType(String text) {
+    if (extractJuniorCollegeTerm(text) != null) return 'junior';
+    if (extractSemesterNumber(text) != null) return 'degree';
+    // Fallback: H.S.C. in the course/header strongly implies Junior College
+    if (_hscRe.hasMatch(text)) return 'junior';
+    return null;
+  }
+
   // ── Core parsing ──────────────────────────────────────────────────────
 
   static Map<String, dynamic> _parse(Uint8List bytes) {
@@ -215,6 +259,8 @@ class LocalPdfParser {
     int? semesterNumber;
     String startDate = '';
     String endDate = '';
+    String? collegeType;
+    String? term;
 
     var text = '';
 
@@ -264,8 +310,28 @@ class LocalPdfParser {
       final yearMatch = RegExp(r'(\d{4}\s*-\s*\d{4})').firstMatch(text);
       if (yearMatch != null) year = yearMatch.group(1)!.replaceAll(' ', '');
 
+      final juniorTerm = extractJuniorCollegeTerm(text);
       semesterNumber = extractSemesterNumber(text);
-      semester = semesterNumber == null ? '' : 'Semester $semesterNumber';
+
+      if (juniorTerm != null) {
+        collegeType = 'junior';
+        term = juniorTerm;
+        semester = '';
+        semesterNumber = null;
+      } else if (semesterNumber != null) {
+        collegeType = 'degree';
+        term = null;
+        semester = 'Semester $semesterNumber';
+      } else if (_hscRe.hasMatch(text)) {
+        collegeType = 'junior';
+        term = null;
+        semester = '';
+        semesterNumber = null;
+      } else {
+        collegeType = null;
+        term = null;
+        semester = '';
+      }
 
       // Program: Match between "Academic Session" and "Program Name"
       final progExact = RegExp(
@@ -275,13 +341,22 @@ class LocalPdfParser {
       if (progExact != null) {
         course = progExact.group(1)!.trim();
       } else {
-        // Fallback
+        // Fallback: Check for standard degree degrees or H.S.C junior college programs
         final progMatch = RegExp(
-          r'((?:Bachelor|Master|B\.?\s*(?:Sc|Tech|E|A|Com)|M\.?\s*(?:Sc|Tech|E|A|Com))'
+          r'((?:Bachelor|Master|B\.?\s*(?:Sc|Tech|E|A|Com)|M\.?\s*(?:Sc|Tech|E|A|Com)|H\.?\s*S\.?\s*C\.?[^,\n\r]*?)'
           r'(?:\w|\s)*?(?:\([^)]+\))?)',
           caseSensitive: false,
         ).firstMatch(text);
-        if (progMatch != null) course = progMatch.group(1)!.trim();
+        if (progMatch != null) {
+          course = progMatch.group(1)!.trim();
+        } else {
+          // Secondary fallback: Match after "Program Name" label if header layout varies
+          final progAfterLabel = RegExp(
+            r'Program Name\s+([A-Za-z0-9 .+#&()\-/,’]+?)(?=\s*(?:Attendance Report Duration|From|\d{2}[\.\-\/]\d{2}[\.\-\/]\d{4}|$))',
+            caseSensitive: false,
+          ).firstMatch(text);
+          if (progAfterLabel != null) course = progAfterLabel.group(1)!.trim();
+        }
       }
 
       // Start / End Date Extract: "From 01.11.2025 to 25.02.2026"
@@ -406,7 +481,7 @@ class LocalPdfParser {
       );
     }
 
-    return {
+    final result = {
       'name': studentName,
       'year': year,
       'semester': semester,
@@ -421,7 +496,10 @@ class LocalPdfParser {
       'subjectStats': stats,
       'attendanceRecords': records,
       'inferredTimetable': inferredTimetable,
+      'collegeType': collegeType,
+      'term': term,
     };
+    return result;
   }
 
   // ── Weekly timetable reconstruction ─────────────────────────────────────

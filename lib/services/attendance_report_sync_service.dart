@@ -26,6 +26,8 @@ class AttendanceReportSyncResult {
   const AttendanceReportSyncResult({
     required this.semester,
     this.replacedPreviousData = false,
+    this.collegeType,
+    this.term,
   });
 
   /// The semester the report was detected for — the one now active.
@@ -34,6 +36,20 @@ class AttendanceReportSyncResult {
   /// Whether this import began by erasing the data of a different course, so a
   /// caller can say "replaced" rather than "updated".
   final bool replacedPreviousData;
+
+  /// The college section detected ('junior' or 'degree').
+  final String? collegeType;
+
+  /// The term detected for Junior College ('FYJC' or 'SYJC').
+  final String? term;
+
+  /// Formatted period label for user-facing messages.
+  String get periodLabel {
+    if (term != null && term!.isNotEmpty) return term!;
+    if (semester == 11) return 'FYJC';
+    if (semester == 12) return 'SYJC';
+    return 'Sem $semester';
+  }
 }
 
 /// Picks an attendance PDF and folds it into the local database.
@@ -121,6 +137,8 @@ class AttendanceReportSyncService {
     return AttendanceReportSyncResult(
       semester: applied.semester,
       replacedPreviousData: applied.replaced,
+      collegeType: applied.collegeType,
+      term: applied.term,
     );
   }
 
@@ -133,20 +151,60 @@ class AttendanceReportSyncService {
   ///
   /// Null when the report describes a different course and the replacement was
   /// declined — in which case nothing at all has been written.
-  Future<({int semester, bool replaced})?> _applyData(
+  Future<({int semester, bool replaced, String? term, String? collegeType})?> _applyData(
     Map<String, dynamic> data,
     ReportReplaceConfirm? confirmReplace,
   ) async {
     final prefs = await SharedPreferences.getInstance();
     final activeSemester = prefs.getInt('semester') ?? 1;
+    final currentCollegeType = prefs.getString('college_type') ?? 'degree';
 
-    // The parser resolves the number itself (see LocalPdfParser's semester
-    // notes): it must be read before "Semester" appears, the way SAP lays the
-    // cell out, and a trailing date fragment must not be mistaken for it.
+    final detectedCollegeType = data['collegeType'] as String?;
+    final detectedTerm = data['term'] as String?;
     final parsed = data['semesterNumber'];
-    final targetSemester = parsed is int && parsed >= 1
-        ? parsed
-        : activeSemester;
+
+    final int targetSemester;
+    final String? targetTerm;
+    final String targetCollegeType;
+
+    if (detectedCollegeType == 'junior' || detectedTerm != null) {
+      // ── Junior College report routing ──
+      // The uploaded report is authoritative for its term.
+      if (detectedTerm == 'FYJC') {
+        targetTerm = 'FYJC';
+        targetSemester = 11;
+      } else if (detectedTerm == 'SYJC') {
+        targetTerm = 'SYJC';
+        targetSemester = 12;
+      } else {
+        throw const FormatException(
+          'Could not detect Junior College term (FYJC/SYJC) from this report. '
+          'Please verify the report or configure manually.',
+        );
+      }
+      targetCollegeType = 'junior';
+    } else if (currentCollegeType == 'junior') {
+      // Current profile is Junior, but uploaded PDF was not identified as Junior.
+      // If a Degree semester was explicitly detected, route to that semester.
+      // Otherwise, do NOT guess or fall back to the active Junior term.
+      if (parsed is int && parsed >= 1) {
+        targetSemester = parsed;
+        targetTerm = null;
+        targetCollegeType = 'degree';
+      } else {
+        throw const FormatException(
+          'Could not detect academic term from this report. '
+          'Please verify the report or configure manually.',
+        );
+      }
+    } else {
+      // ── Existing Degree College routing (preserved exactly) ──
+      targetSemester = parsed is int && parsed >= 1
+          ? parsed
+          : activeSemester;
+      targetTerm = null;
+      targetCollegeType = 'degree';
+    }
 
     // Before anything is written, and specifically before the profile fields
     // below: the check compares the *stored* name and course against the
@@ -166,14 +224,31 @@ class AttendanceReportSyncService {
     }
 
     await prefs.setInt('semester', targetSemester);
+    if (targetCollegeType == 'junior' && targetTerm != null) {
+      await prefs.setString('college_type', 'junior');
+      await prefs.setString('term', targetTerm);
+    } else if (targetCollegeType == 'degree') {
+      await prefs.setString('college_type', 'degree');
+    }
     await applyProfileFields(data, prefs);
 
     await PdfAttendanceImportService().replaceSemesterFromParsedPdf(
       data: data,
       semester: targetSemester,
     );
-    return (semester: targetSemester, replaced: replaced);
+    return (
+      semester: targetSemester,
+      replaced: replaced,
+      term: targetTerm,
+      collegeType: targetCollegeType,
+    );
   }
+
+  @visibleForTesting
+  Future<({int semester, bool replaced, String? term, String? collegeType})?> applyDataForTesting(
+    Map<String, dynamic> data, [
+    ReportReplaceConfirm? confirmReplace,
+  ]) => _applyData(data, confirmReplace);
 
   /// Refreshes the student's name, programme and academic year from the report.
   ///

@@ -24,6 +24,8 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
   final AttendancePreferencesService _preferencesService =
       AttendancePreferencesService();
 
+  String _collegeType = 'degree';
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +33,9 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
   }
 
   Future<void> _loadSavedData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final colType = prefs.getString('college_type') ?? 'degree';
+
     // Pre-fill defaults first - the user can always edit them.
     overallController.text = AttendancePreferencesService.defaultOverall
         .toStringAsFixed(0);
@@ -38,11 +43,13 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
         .toStringAsFixed(0);
 
     // Override with previously saved values if available.
-    final prefs = await SharedPreferences.getInstance();
     final overall = prefs.getDouble(AttendancePreferencesService.overallKey);
     final subject = prefs.getDouble(AttendancePreferencesService.subjectKey);
 
     if (mounted) {
+      setState(() {
+        _collegeType = colType;
+      });
       if (overall != null) {
         overallController.text = overall.toStringAsFixed(
           overall.truncateToDouble() == overall ? 0 : 1,
@@ -58,22 +65,31 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
 
   Future<void> _saveData() async {
     final overall = double.tryParse(overallController.text.trim());
-    final subject = double.tryParse(subjectController.text.trim());
 
-    if (overall == null || subject == null) {
-      _showError('Please enter valid percentages');
-      return;
-    }
-
-    if (overall <= 0 || overall > 100 || subject <= 0 || subject > 100) {
+    if (overall == null || overall <= 0 || overall > 100) {
       _showError('Percentage must be between 1 and 100');
       return;
     }
 
-    await _preferencesService.save(
-      overallPercent: overall,
-      subjectPercent: subject,
-    );
+    if (_collegeType == 'junior') {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(AttendancePreferencesService.overallKey, overall);
+    } else {
+      final subject = double.tryParse(subjectController.text.trim());
+      if (subject == null) {
+        _showError('Please enter valid percentages');
+        return;
+      }
+      if (subject <= 0 || subject > 100) {
+        _showError('Percentage must be between 1 and 100');
+        return;
+      }
+
+      await _preferencesService.save(
+        overallPercent: overall,
+        subjectPercent: subject,
+      );
+    }
 
     // Dashboard and Profile stay mounted behind this edit screen. Re-read the
     // saved overall target and the updated per-subject targets immediately so
@@ -174,7 +190,9 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Default values are pre-filled — edit them to match your college requirements.',
+                            _collegeType == 'junior'
+                                ? 'Default requirement is 75% overall — edit it to match your college requirements.'
+                                : 'Default values are pre-filled — edit them to match your college requirements.',
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -206,27 +224,32 @@ class _AttendanceCriteriaScreenState extends State<AttendanceCriteriaScreen> {
                             decoration: _inputStyle('e.g. 75 (default)', theme),
                           ),
 
-                          const SizedBox(height: 24),
-
-                          Text(
-                            'Minimum Attendance Per Subject (%)',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: theme.textTheme.bodyMedium?.color,
+                          if (_collegeType != 'junior') ...[
+                            const SizedBox(height: 24),
+                            Text(
+                              'Minimum Attendance Per Subject (%)',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: theme.textTheme.bodyMedium?.color,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: subjectController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: subjectController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              style: TextStyle(
+                                color: theme.textTheme.bodyLarge?.color,
+                              ),
+                              decoration: _inputStyle(
+                                'e.g. 70 (default)',
+                                theme,
+                              ),
                             ),
-                            style: TextStyle(
-                              color: theme.textTheme.bodyLarge?.color,
-                            ),
-                            decoration: _inputStyle('e.g. 70 (default)', theme),
-                          ),
+                          ],
                           const SizedBox(height: 24),
                         ],
                       ),

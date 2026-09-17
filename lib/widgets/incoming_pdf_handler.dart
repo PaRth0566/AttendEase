@@ -232,8 +232,8 @@ class _IncomingPdfHandlerState extends State<IncomingPdfHandler> {
   /// previous course's data or merely folded a semester in.
   String _successMessage(AttendanceReportSyncResult result) =>
       result.replacedPreviousData
-      ? 'Replaced your data with the new report (Sem ${result.semester}).'
-      : 'Attendance updated from your new report (Sem ${result.semester}).';
+      ? 'Replaced your data with the new report (${result.periodLabel}).'
+      : 'Attendance updated from your new report (${result.periodLabel}).';
 
   /// The error a wrong PDF gets, with the offer to pick a different one.
   ///

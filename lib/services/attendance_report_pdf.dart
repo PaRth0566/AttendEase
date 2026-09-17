@@ -56,19 +56,25 @@ class ReportMeta {
     required this.periodKind,
     required this.periodLabel,
     required this.semester,
+    this.collegeType = 'degree',
+    this.term,
+    this.overallRequiredPercent,
     this.studentName = '',
     this.course = '',
     this.year = '',
     this.generatedAt,
   });
 
-  /// What kind of period the figures cover — "Semester" or "Date range".
+  /// What kind of period the figures cover — "Semester", "Term", or "Date range".
   final String periodKind;
 
-  /// The period itself: "Semester 5", or "12 Jan – 3 Mar 2026".
+  /// The period itself: "Semester 5", "FYJC", or "12 Jan – 3 Mar 2026".
   final String periodLabel;
 
   final int semester;
+  final String collegeType;
+  final String? term;
+  final double? overallRequiredPercent;
   final String studentName;
   final String course;
   final String year;
@@ -214,7 +220,7 @@ pw.Widget _metaPair(String label, String value) {
 class _Meter extends pw.Widget {
   _Meter({
     required this.value,
-    required this.target,
+    this.target,
     required this.color,
     this.height = 5,
   });
@@ -222,8 +228,8 @@ class _Meter extends pw.Widget {
   /// Fraction of 1.
   final double value;
 
-  /// Fraction of 1. Drawn only when strictly inside the track.
-  final double target;
+  /// Fraction of 1. Drawn only when non-null and strictly inside the track.
+  final double? target;
 
   final PdfColor color;
   final double height;
@@ -247,7 +253,6 @@ class _Meter extends pw.Widget {
     final b = box!;
     final r = b.height / 2;
     final v = value.clamp(0.0, 1.0);
-    final t = target.clamp(0.0, 1.0);
 
     context.canvas
       ..drawRRect(b.left, b.bottom, b.width, b.height, r, r)
@@ -268,17 +273,20 @@ class _Meter extends pw.Widget {
         ..fillPath();
     }
 
-    if (t > 0 && t < 1) {
-      const w = 1.2;
-      context.canvas
-        ..drawRect(
-          b.left + b.width * t - w / 2,
-          b.bottom - 1.5,
-          w,
-          b.height + 3,
-        )
-        ..setFillColor(_Ink.ink)
-        ..fillPath();
+    if (target != null) {
+      final t = target!.clamp(0.0, 1.0);
+      if (t > 0 && t < 1) {
+        const w = 1.2;
+        context.canvas
+          ..drawRect(
+            b.left + b.width * t - w / 2,
+            b.bottom - 1.5,
+            w,
+            b.height + 3,
+          )
+          ..setFillColor(_Ink.ink)
+          ..fillPath();
+      }
     }
   }
 }
@@ -302,7 +310,10 @@ Future<Uint8List> buildAttendanceReportPdf({
     conducted += r.total;
   }
   final overall = conducted == 0 ? 0.0 : (attended / conducted) * 100;
-  final target = dominantTarget(rows);
+  final isJunior = meta.collegeType == 'junior';
+  final target = isJunior
+      ? (meta.overallRequiredPercent ?? 75.0)
+      : dominantTarget(rows);
   final counted = rows.where((r) => r.total > 0).toList();
   final behind = counted.where((r) => !r.isOnTrack).toList();
 
@@ -366,8 +377,9 @@ Future<Uint8List> buildAttendanceReportPdf({
           conducted: conducted,
           subjectCount: counted.length,
           behindCount: behind.length,
+          isJunior: isJunior,
         ),
-        if (behind.isNotEmpty) ...[
+        if (!isJunior && behind.isNotEmpty) ...[
           pw.SizedBox(height: 10),
           _actionNote(behind),
         ],
@@ -380,30 +392,7 @@ Future<Uint8List> buildAttendanceReportPdf({
             style: pw.TextStyle(fontSize: 9, color: _Ink.muted),
           )
         else
-          pw.Table(
-            columnWidths: _breakdownColumns,
-            children: [
-              // repeat: true carries the header onto continuation pages, so a
-              // row on page 2 still has columns you can name.
-              pw.TableRow(
-                repeat: true,
-                decoration: pw.BoxDecoration(
-                  border: pw.Border(
-                    bottom: pw.BorderSide(color: _Ink.ink, width: 0.9),
-                  ),
-                ),
-                children: [
-                  _headCell('Subject'),
-                  _headCell('Attended', align: pw.TextAlign.center),
-                  _headCell('Actual', align: pw.TextAlign.center),
-                  _headCell('Target', align: pw.TextAlign.center),
-                  _headCell('Next step', align: pw.TextAlign.right),
-                ],
-              ),
-              for (var i = 0; i < rows.length; i++)
-                _breakdownRow(rows[i], shade: i.isOdd),
-            ],
-          ),
+          isJunior ? _buildJuniorTable(rows) : _buildDegreeTable(rows),
       ],
     ),
   );
@@ -572,12 +561,20 @@ pw.Widget _masthead(ReportMeta meta, DateTime generatedAt) {
 /// The identity strip. Rendered only for the fields the profile actually holds —
 /// printing "Course: —" three times is worse than printing nothing.
 pw.Widget? _identityStrip(ReportMeta meta) {
+  final isJunior = meta.collegeType == 'junior';
+  final effectiveTerm = meta.term?.isNotEmpty == true
+      ? meta.term!
+      : (meta.semester == 2 ? 'SYJC' : 'FYJC');
+
   final pairs = <pw.Widget>[
     if (meta.studentName.trim().isNotEmpty)
       _metaPair('Student', meta.studentName.trim()),
     if (meta.course.trim().isNotEmpty) _metaPair('Course', meta.course.trim()),
     if (meta.year.trim().isNotEmpty) _metaPair('Year', meta.year.trim()),
-    _metaPair('Semester', '${meta.semester}'),
+    if (isJunior)
+      _metaPair('Term', effectiveTerm)
+    else
+      _metaPair('Semester', '${meta.semester}'),
   ];
   if (pairs.length <= 1) return null;
 
@@ -598,6 +595,7 @@ pw.Widget _headline({
   required int conducted,
   required int subjectCount,
   required int behindCount,
+  bool isJunior = false,
 }) {
   final ok = overall >= target;
   final accent = ok ? _Ink.good : _Ink.bad;
@@ -665,19 +663,29 @@ pw.Widget _headline({
             pw.Expanded(
               child: pw.Padding(
                 padding: const pw.EdgeInsets.only(top: 6),
-                child: _statStrip([
-                  _statItem('$attended / $conducted', 'attended'),
-                  _statItem('${target.toStringAsFixed(0)}%', 'target'),
-                  _statItem(
-                    '${subjectCount - behindCount} / $subjectCount',
-                    'on track',
-                  ),
-                  _statItem(
-                    '$behindCount',
-                    'at risk',
-                    color: behindCount > 0 ? _Ink.bad : _Ink.good,
-                  ),
-                ]),
+                child: isJunior
+                    ? _statStrip([
+                        _statItem('$attended / $conducted', 'attended'),
+                        _statItem('${target.toStringAsFixed(0)}%', 'required'),
+                        _statItem(
+                          ok ? 'ON TRACK' : 'BELOW REQ.',
+                          'status',
+                          color: ok ? _Ink.good : _Ink.bad,
+                        ),
+                      ])
+                    : _statStrip([
+                        _statItem('$attended / $conducted', 'attended'),
+                        _statItem('${target.toStringAsFixed(0)}%', 'target'),
+                        _statItem(
+                          '${subjectCount - behindCount} / $subjectCount',
+                          'on track',
+                        ),
+                        _statItem(
+                          '$behindCount',
+                          'at risk',
+                          color: behindCount > 0 ? _Ink.bad : _Ink.good,
+                        ),
+                      ]),
               ),
             ),
           ],
@@ -694,17 +702,152 @@ pw.Widget _headline({
           conducted == 0
               ? 'No lectures were conducted in this period, so there is nothing to '
                     'measure yet.'
-              : ok
-              ? 'Clear of the ${target.toStringAsFixed(0)}% target by '
-                    '${gap.toStringAsFixed(1)} points. The tick on the bar marks '
-                    'the target.'
-              : '${(-gap).toStringAsFixed(1)} points short of the '
-                    '${target.toStringAsFixed(0)}% target. The tick on the bar '
-                    'marks the target.',
+              : isJunior
+                  ? ok
+                      ? 'Clear of the ${target.toStringAsFixed(0)}% overall requirement by '
+                            '${gap.toStringAsFixed(1)} points. The tick on the bar marks '
+                            'the requirement.'
+                      : '${(-gap).toStringAsFixed(1)} points short of the '
+                            '${target.toStringAsFixed(0)}% overall requirement. The tick on the bar '
+                            'marks the requirement.'
+                  : ok
+                      ? 'Clear of the ${target.toStringAsFixed(0)}% target by '
+                            '${gap.toStringAsFixed(1)} points. The tick on the bar marks '
+                            'the target.'
+                      : '${(-gap).toStringAsFixed(1)} points short of the '
+                            '${target.toStringAsFixed(0)}% target. The tick on the bar '
+                            'marks the target.',
           style: pw.TextStyle(fontSize: 8, color: _Ink.muted),
         ),
       ],
     ),
+  );
+}
+
+final _juniorBreakdownColumns = <int, pw.TableColumnWidth>{
+  0: const pw.FlexColumnWidth(3.8), // subject + meter
+  1: const pw.FlexColumnWidth(1.2), // attended
+  2: const pw.FlexColumnWidth(1.2), // conducted
+  3: const pw.FlexColumnWidth(1.4), // attendance
+};
+
+pw.Widget _buildJuniorTable(List<ReportSubjectRow> rows) {
+  return pw.Table(
+    columnWidths: _juniorBreakdownColumns,
+    children: [
+      pw.TableRow(
+        repeat: true,
+        decoration: pw.BoxDecoration(
+          border: pw.Border(
+            bottom: pw.BorderSide(color: _Ink.ink, width: 0.9),
+          ),
+        ),
+        children: [
+          _headCell('Subject'),
+          _headCell('Attended', align: pw.TextAlign.center),
+          _headCell('Conducted', align: pw.TextAlign.center),
+          _headCell('Attendance', align: pw.TextAlign.right),
+        ],
+      ),
+      for (var i = 0; i < rows.length; i++)
+        _juniorBreakdownRow(rows[i], shade: i.isOdd),
+    ],
+  );
+}
+
+pw.TableRow _juniorBreakdownRow(ReportSubjectRow r, {required bool shade}) {
+  final hasData = r.total > 0;
+
+  pw.Widget cell(pw.Widget child, {bool right = false}) => pw.Padding(
+    padding: pw.EdgeInsets.fromLTRB(0, 8, right ? 0 : 8, 8),
+    child: child,
+  );
+
+  return pw.TableRow(
+    decoration: shade ? pw.BoxDecoration(color: _Ink.wash) : null,
+    verticalAlignment: pw.TableCellVerticalAlignment.middle,
+    children: [
+      cell(
+        pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+          children: [
+            pw.Text(
+              r.name,
+              maxLines: 2,
+              style: pw.TextStyle(
+                fontSize: 9.5,
+                color: _Ink.ink,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            _Meter(
+              value: hasData ? r.percent / 100 : 0,
+              target: null,
+              color: _Ink.brand,
+              height: 3.5,
+            ),
+          ],
+        ),
+      ),
+      cell(
+        pw.Text(
+          hasData ? '${r.attended}' : '—',
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(
+            fontSize: 9,
+            color: hasData ? _Ink.body : _Ink.faint,
+          ),
+        ),
+      ),
+      cell(
+        pw.Text(
+          hasData ? '${r.total}' : '—',
+          textAlign: pw.TextAlign.center,
+          style: pw.TextStyle(
+            fontSize: 9,
+            color: hasData ? _Ink.body : _Ink.faint,
+          ),
+        ),
+      ),
+      cell(
+        right: true,
+        pw.Text(
+          hasData ? '${r.percent.toStringAsFixed(1)}%' : '—',
+          textAlign: pw.TextAlign.right,
+          style: pw.TextStyle(
+            fontSize: 10,
+            color: hasData ? _Ink.ink : _Ink.faint,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+pw.Widget _buildDegreeTable(List<ReportSubjectRow> rows) {
+  return pw.Table(
+    columnWidths: _breakdownColumns,
+    children: [
+      pw.TableRow(
+        repeat: true,
+        decoration: pw.BoxDecoration(
+          border: pw.Border(
+            bottom: pw.BorderSide(color: _Ink.ink, width: 0.9),
+          ),
+        ),
+        children: [
+          _headCell('Subject'),
+          _headCell('Attended', align: pw.TextAlign.center),
+          _headCell('Actual', align: pw.TextAlign.center),
+          _headCell('Target', align: pw.TextAlign.center),
+          _headCell('Next step', align: pw.TextAlign.right),
+        ],
+      ),
+      for (var i = 0; i < rows.length; i++)
+        _breakdownRow(rows[i], shade: i.isOdd),
+    ],
   );
 }
 

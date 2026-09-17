@@ -153,5 +153,63 @@ void main() {
       );
       expect(bytes, isNotEmpty);
     });
+
+    test('renders Junior College report with TERM FYJC', () async {
+      final bytes = await buildAttendanceReportPdf(
+        meta: ReportMeta(
+          collegeType: 'junior',
+          term: 'FYJC',
+          periodKind: 'Term',
+          periodLabel: 'FYJC',
+          semester: 1,
+          studentName: 'NEEL DOLIA',
+          course: 'H.S.C.- Commerce (MBC)',
+          year: '2026-2027',
+          generatedAt: _stamp,
+        ),
+        rows: const [
+          ReportSubjectRow(
+            name: 'Economics COM DIV G',
+            attended: 12,
+            total: 22,
+            requiredPercent: 70,
+          ),
+          ReportSubjectRow(
+            name: 'Mathematics & Statistics P COM DIV G',
+            attended: 4,
+            total: 6,
+            requiredPercent: 70,
+          ),
+        ],
+      );
+      expect(bytes, isNotEmpty);
+      expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+    });
+
+    test('renders Junior College report with TERM SYJC', () async {
+      final bytes = await buildAttendanceReportPdf(
+        meta: ReportMeta(
+          collegeType: 'junior',
+          term: 'SYJC',
+          periodKind: 'Term',
+          periodLabel: 'SYJC',
+          semester: 2,
+          studentName: 'NEEL DOLIA',
+          course: 'H.S.C.- Commerce (MBC)',
+          year: '2026-2027',
+          generatedAt: _stamp,
+        ),
+        rows: const [
+          ReportSubjectRow(
+            name: 'Economics COM DIV G',
+            attended: 18,
+            total: 20,
+            requiredPercent: 70,
+          ),
+        ],
+      );
+      expect(bytes, isNotEmpty);
+      expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+    });
   });
 }

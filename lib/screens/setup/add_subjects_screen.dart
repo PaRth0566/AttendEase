@@ -28,6 +28,8 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
   final List<int> _deletedSubjectIds = [];
 
   int _activeSemester = 1;
+  String _collegeType = 'degree';
+  String _term = 'FYJC';
   double _defaultRequiredPercent = 70.0;
 
   @override
@@ -45,6 +47,9 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
   Future<void> _loadSubjects() async {
     final prefs = await SharedPreferences.getInstance();
     _activeSemester = prefs.getInt('semester') ?? 1;
+    _collegeType = prefs.getString('college_type') ?? 'degree';
+    _term = prefs.getString('term') ??
+        (_activeSemester == 12 || _activeSemester == 2 ? 'SYJC' : 'FYJC');
     _defaultRequiredPercent =
         prefs.getDouble('subject_required_attendance') ?? 70.0;
 
@@ -222,7 +227,9 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
                 children: [
                   Text(
                     widget.isEditMode
-                        ? 'Edit Sem $_activeSemester Subjects'
+                        ? (_collegeType == 'junior'
+                            ? 'Edit $_term Subjects'
+                            : 'Edit Sem $_activeSemester Subjects')
                         : 'Add Your Subjects',
                     style: TextStyle(
                       fontSize: 26,
@@ -235,7 +242,9 @@ class _AddSubjectsScreenState extends State<AddSubjectsScreen> {
                   Text(
                     widget.isEditMode
                         ? 'Tap a subject to edit its name'
-                        : 'Add all subjects for this semester',
+                        : (_collegeType == 'junior'
+                            ? 'Add all subjects for this term'
+                            : 'Add all subjects for this semester'),
                     style: TextStyle(
                       fontSize: 16,
                       color: theme.textTheme.bodyMedium?.color,

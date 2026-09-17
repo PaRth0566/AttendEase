@@ -323,6 +323,7 @@ WeekSkipPlan? computeWeekSkipPlan({
   required Map<int, List<Map<String, dynamic>>> subjectHistory,
   required double overallRequired,
   required DateTime today,
+  bool isJunior = false,
 }) {
   final schedule = _inferWeeklySchedule(subjectHistory, today: today);
   if (schedule.isEmpty) return null;
@@ -369,11 +370,13 @@ WeekSkipPlan? computeWeekSkipPlan({
   /// Returns the offending subject id, or -1 for an overall-percentage
   /// failure, or null when everything still holds.
   int? firstBreach(List<int> lectures) {
-    for (final sid in lectures) {
-      final t = total[sid] ?? 0;
-      if (t == 0) continue; // nothing recorded yet -> don't block on it
-      final req = subjectRequired[sid] ?? overallRequired;
-      if ((attended[sid] ?? 0) / t * 100 < req - 1e-9) return sid;
+    if (!isJunior) {
+      for (final sid in lectures) {
+        final t = total[sid] ?? 0;
+        if (t == 0) continue; // nothing recorded yet -> don't block on it
+        final req = subjectRequired[sid] ?? overallRequired;
+        if ((attended[sid] ?? 0) / t * 100 < req - 1e-9) return sid;
+      }
     }
     var a = 0, t = 0;
     total.forEach((sid, tt) {

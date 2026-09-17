@@ -35,6 +35,8 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
 
   int _selectedDay = 1;
   int _activeSemester = 1;
+  String _collegeType = 'degree';
+  String _term = 'FYJC';
   List<Subject> _allSubjects = [];
   List<Subject> _daySubjects = [];
   Subject? _selectedSubject;
@@ -48,6 +50,9 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
   Future<void> _initData() async {
     final prefs = await SharedPreferences.getInstance();
     _activeSemester = prefs.getInt('semester') ?? 1;
+    _collegeType = prefs.getString('college_type') ?? 'degree';
+    _term = prefs.getString('term') ??
+        (_activeSemester == 12 || _activeSemester == 2 ? 'SYJC' : 'FYJC');
 
     final data = await _subjectDao.getSubjectsBySemester(_activeSemester);
     if (!mounted) return;
@@ -156,7 +161,9 @@ class _TimetableSetupScreenState extends State<TimetableSetupScreen> {
               children: [
                 Text(
                   widget.isEditMode
-                      ? 'Edit Sem $_activeSemester Timetable'
+                      ? (_collegeType == 'junior'
+                          ? 'Edit $_term Timetable'
+                          : 'Edit Sem $_activeSemester Timetable')
                       : 'Set Your Weekly Timetable',
                   style: TextStyle(
                     fontSize: 28,

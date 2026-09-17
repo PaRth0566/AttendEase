@@ -69,6 +69,8 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
   double _currentOverall = 0.0;
   double _requiredTarget = 75.0;
   int _activeSemester = 1;
+  String _collegeType = 'degree';
+  String _term = 'FYJC';
 
   int _totalAttendedOverall = 0;
   int _totalLecturesOverall = 0;
@@ -149,8 +151,13 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
     final today = DateTime(now.year, now.month, now.day);
     try {
       final prefs = await SharedPreferences.getInstance();
-      _requiredTarget = prefs.getDouble('overall_required_attendance') ?? 75.0;
       _activeSemester = prefs.getInt('semester') ?? 1;
+      _collegeType = prefs.getString('college_type') ?? 'degree';
+      _term = prefs.getString('term') ??
+          (_activeSemester == 12 || _activeSemester == 2 ? 'SYJC' : 'FYJC');
+      _requiredTarget = _collegeType == 'junior'
+          ? 75.0
+          : (prefs.getDouble('overall_required_attendance') ?? 75.0);
 
       if (widget.overrideSubjects != null && widget.overrideStats != null) {
         _subjects = widget.overrideSubjects!;
@@ -196,6 +203,7 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
             subjectHistory: history,
             overallRequired: _requiredTarget,
             today: today,
+            isJunior: _collegeType == 'junior',
           );
         } catch (e) {
           debugPrint('Week skip-plan calc error: $e');
@@ -294,12 +302,16 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
       );
     }
 
-    final bool isSafe = _currentOverall >= _requiredTarget;
+    final bool isJunior = _collegeType == 'junior';
+    final double overallTarget = isJunior ? 75.0 : _requiredTarget;
+    final bool isSafe = isJunior
+        ? _currentOverall >= 75.0 - 1e-9
+        : _currentOverall >= _requiredTarget;
     final Color statusColor = isSafe ? c.success : c.danger;
     final overallInsight = _getPredictiveInsight(
       _totalAttendedOverall,
       _totalLecturesOverall,
-      _requiredTarget,
+      overallTarget,
     );
 
     return Scaffold(
@@ -369,7 +381,9 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
                                               style: theme.textTheme.bodyMedium,
                                             ),
                                             TextSpan(
-                                              text: '(Sem $_activeSemester)',
+                                              text: _collegeType == 'junior'
+                                                  ? '($_term)'
+                                                  : '(Sem $_activeSemester)',
                                               style: theme.textTheme.bodyMedium
                                                   ?.copyWith(
                                                     color: AppTheme.primaryBlue,
@@ -403,7 +417,7 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
                                       ),
                                       const SizedBox(height: AppDimens.space2),
                                       Text(
-                                        'Target: ${_requiredTarget.toStringAsFixed(1)}%',
+                                        'Target: ${overallTarget.toStringAsFixed(1)}%',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
@@ -499,7 +513,9 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
                         width: double.infinity,
                         child: EmptyState(
                           icon: Icons.inbox_outlined,
-                          title: 'No records for this semester',
+                          title: _collegeType == 'junior'
+                              ? 'No records for this term'
+                              : 'No records for this semester',
                           message:
                               'Upload a PDF report or add subjects to get started.',
                           compact: true,
@@ -508,7 +524,7 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
                     else
                       for (int i = 0; i < _subjects.length; i++) ...[
                         if (i > 0) const SizedBox(height: AppDimens.space12),
-                        _buildSubjectCard(_subjects[i]),
+                        _buildSubjectCard(_subjects[i], juniorOverallSafe: isSafe),
                       ],
 
                     const SizedBox(height: AppDimens.space16),
@@ -532,7 +548,7 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
     );
   }
 
-  Widget _buildSubjectCard(Subject subject) {
+  Widget _buildSubjectCard(Subject subject, {bool juniorOverallSafe = false}) {
     final stat = _attendanceStats[subject.id] ?? {'attended': 0, 'total': 0};
     final double percent = stat['total'] == 0
         ? 0.0
@@ -547,6 +563,8 @@ class DashboardScreenState extends TabPageState<DashboardScreen>
         stat['total']!,
         subject.requiredPercent,
       ),
+      isJunior: _collegeType == 'junior',
+      juniorOverallSafe: juniorOverallSafe,
     );
   }
 }
@@ -648,6 +666,8 @@ class _SkippableDaysSection extends StatelessWidget {
   });
 
   final WeekSkipPlan plan;
+
+  /// Maps subjectId -> course name, for popovers that name a specific subject.
   final Map<int, String> subjectNames;
 
   /// The shared controller that ensures only one day popover is open at a time.
@@ -1203,6 +1223,8 @@ class _SubjectCard extends StatelessWidget {
     required this.attended,
     required this.total,
     required this.insight,
+    this.isJunior = false,
+    this.juniorOverallSafe = false,
   });
 
   final Subject subject;
@@ -1210,6 +1232,8 @@ class _SubjectCard extends StatelessWidget {
   final int attended;
   final int total;
   final Map<String, dynamic> insight;
+  final bool isJunior;
+  final bool juniorOverallSafe;
 
   @override
   Widget build(BuildContext context) {
@@ -1220,13 +1244,15 @@ class _SubjectCard extends StatelessWidget {
 
     // The progress bar deliberately runs a shade brighter than the
     // percentage/label text, so these stay as their own local values rather
-    // than the single shared status token.
-    final Color barColor = isSafe
-        ? const Color(0xFF49AD4F)
-        : const Color(0xFFF14134);
-    final Color labelColor = isSafe
-        ? const Color(0xFF358D3E)
-        : const Color(0xFFF34032);
+    // than the single shared status token. For Junior College, subject
+    // percentage is purely informational (no subject compliance threshold);
+    // the bar color reflects the OVERALL Junior term attendance status.
+    final Color barColor = isJunior
+        ? (juniorOverallSafe ? const Color(0xFF49AD4F) : const Color(0xFFF14134))
+        : (isSafe ? const Color(0xFF49AD4F) : const Color(0xFFF14134));
+    final Color labelColor = isJunior
+        ? (juniorOverallSafe ? const Color(0xFF358D3E) : const Color(0xFFF34032))
+        : (isSafe ? const Color(0xFF358D3E) : const Color(0xFFF34032));
     // Message line pulls from the shared status-container tokens, which already
     // carry the per-mode green/red tints (light tint + dark text in light mode,
     // deep band + soft text in dark mode).
@@ -1343,21 +1369,23 @@ class _SubjectCard extends StatelessWidget {
                             style: theme.textTheme.bodySmall,
                           ),
                         ),
-                        const SizedBox(width: AppDimens.space8),
-                        Text(
-                          isSafe ? 'Safe' : 'Risk',
-                          style: TextStyle(
-                            color: labelColor,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
+                        if (!isJunior) ...[
+                          const SizedBox(width: AppDimens.space8),
+                          Text(
+                            isSafe ? 'Safe' : 'Risk',
+                            style: TextStyle(
+                              color: labelColor,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
                   ],
                 ),
               ),
-              if (total > 0)
+              if (total > 0 && !isJunior)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(

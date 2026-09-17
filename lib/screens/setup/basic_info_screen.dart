@@ -25,12 +25,14 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
   final _courseController = TextEditingController();
   final _yearController = TextEditingController();
 
+  String _collegeType = 'degree';
+  String _selectedTerm = 'FYJC';
   int _selectedSemester = 1;
 
-  /// Whether [_selectedSemester] came from the uploaded report. False when the
-  /// report's header did not name one, which the Semester field then says so the
-  /// student can correct it before the import runs.
-  bool _semesterFromReport = false;
+  /// Whether the academic period (semester or term) came from the uploaded report.
+  /// False when the report's header did not name one, which the field then says
+  /// so the student can correct it before the import runs.
+  bool _periodFromReport = false;
 
   DateTime? _startDate;
   DateTime? _endDate;
@@ -62,21 +64,43 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
       _endDate = DateTime.tryParse(data['endDate']);
     }
 
-    // Prefer the number the parser resolved; the display string is only a
-    // fallback for data saved before it carried one. Clamped to the dropdown's
-    // range, because a value it has no item for throws rather than rendering.
-    final parsedSem = data['semesterNumber'];
-    final semNum = parsedSem is int
-        ? parsedSem
-        : LocalPdfParser.semesterNumberFrom(data['semester']?.toString() ?? '');
+    final rawCollege = data['collegeType']?.toString();
+    final rawTerm = data['term']?.toString();
+    final rawSem = data['semester']?.toString();
 
-    setState(() {
+    // Determine if junior college: explicit collegeType or detected junior term markers
+    final detectedJuniorTerm = (rawTerm == 'SYJC' || rawTerm == 'FYJC')
+        ? rawTerm
+        : (rawSem == 'SYJC' || rawSem == 'FYJC')
+            ? rawSem
+            : LocalPdfParser.extractJuniorCollegeTerm(rawTerm ?? '') ??
+                LocalPdfParser.extractJuniorCollegeTerm(rawSem ?? '') ??
+                LocalPdfParser.extractJuniorCollegeTerm(data['course']?.toString() ?? '');
+
+    final isJunior = rawCollege == 'junior' || detectedJuniorTerm != null;
+
+    if (isJunior) {
+      _collegeType = 'junior';
+      final term = detectedJuniorTerm ??
+          (rawTerm != null && (rawTerm == 'SYJC' || rawTerm == 'FYJC') ? rawTerm : null);
+      if (term != null) {
+        _selectedTerm = term;
+        _periodFromReport = true;
+      } else {
+        _selectedTerm = 'FYJC';
+        _periodFromReport = false;
+      }
+      _selectedSemester = _selectedTerm == 'SYJC' ? 12 : 11;
+    } else {
+      _collegeType = 'degree';
+      final parsedSem = data['semesterNumber'];
+      final semNum = parsedSem is int
+          ? parsedSem
+          : LocalPdfParser.semesterNumberFrom(rawSem ?? '');
+
       _selectedSemester = (semNum ?? _selectedSemester).clamp(1, _maxSemester);
-      // The report did not say which semester it is for, so the choice is the
-      // student's. Surfaced in the UI rather than silently defaulting to 1 —
-      // that default is what filed one term's report on top of another.
-      _semesterFromReport = semNum != null;
-    });
+      _periodFromReport = semNum != null;
+    }
   }
 
   /// Highest semester the dropdown offers.
@@ -88,19 +112,30 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
       _nameController.text = prefs.getString('full_name') ?? '';
       _courseController.text = prefs.getString('course') ?? '';
       _yearController.text = prefs.getString('year') ?? '';
+      _collegeType = prefs.getString('college_type') ?? 'degree';
+      _selectedTerm = prefs.getString('term') ?? 'FYJC';
       _selectedSemester = prefs.getInt('semester') ?? 1;
     });
-    await _loadDatesForSemester(_selectedSemester);
+    await _loadDates();
   }
 
-  Future<void> _loadDatesForSemester(int sem) async {
+  Future<void> _loadDates() async {
     final prefs = await SharedPreferences.getInstance();
-    final start = prefs.getString('semester_start_$sem');
-    final end = prefs.getString('semester_end_$sem');
-    setState(() {
-      _startDate = start != null ? DateTime.parse(start) : null;
-      _endDate = end != null ? DateTime.parse(end) : null;
-    });
+    String? start;
+    String? end;
+    if (_collegeType == 'junior') {
+      start = prefs.getString('junior_term_start_$_selectedTerm');
+      end = prefs.getString('junior_term_end_$_selectedTerm');
+    } else {
+      start = prefs.getString('semester_start_$_selectedSemester');
+      end = prefs.getString('semester_end_$_selectedSemester');
+    }
+    if (start != null && end != null) {
+      setState(() {
+        _startDate = DateTime.parse(start!);
+        _endDate = DateTime.parse(end!);
+      });
+    }
   }
 
   Future<void> _pickDate(bool isStartDate) async {
@@ -162,12 +197,26 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
     await prefs.setString('full_name', _nameController.text.trim());
     await prefs.setString('course', _courseController.text.trim());
     await prefs.setString('year', _yearController.text.trim());
-    await prefs.setInt('semester', _selectedSemester);
+    await prefs.setString('college_type', _collegeType);
 
     final startStr = DateFormat('yyyy-MM-dd').format(_startDate!);
     final endStr = DateFormat('yyyy-MM-dd').format(_endDate!);
-    await prefs.setString('semester_start_$_selectedSemester', startStr);
-    await prefs.setString('semester_end_$_selectedSemester', endStr);
+
+    int effectiveSemester;
+    if (_collegeType == 'junior') {
+      await prefs.setString('term', _selectedTerm);
+      await prefs.setString('junior_term_start_$_selectedTerm', startStr);
+      await prefs.setString('junior_term_end_$_selectedTerm', endStr);
+      // Use distinct term integers (11 for FYJC, 12 for SYJC) to completely
+      // isolate Junior subjects, timetable, and attendance from Degree Semesters 1/2.
+      effectiveSemester = _selectedTerm == 'SYJC' ? 12 : 11;
+      await prefs.setInt('semester', effectiveSemester);
+    } else {
+      effectiveSemester = _selectedSemester;
+      await prefs.setInt('semester', _selectedSemester);
+      await prefs.setString('semester_start_$_selectedSemester', startStr);
+      await prefs.setString('semester_end_$_selectedSemester', endStr);
+    }
 
     if (widget.isEditMode) {
       final db = await DBHelper.instance.database;
@@ -179,7 +228,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
              WHERE s.semester = ? AND length(a.date) = 10
                AND (a.date < ? OR a.date > ?)
            )''',
-        [_selectedSemester, startStr, endStr],
+        [effectiveSemester, startStr, endStr],
       );
     } else if (widget.prefilledData != null &&
         widget.prefilledData!['subjects'] != null) {
@@ -187,7 +236,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
       if (subs.isNotEmpty) {
         await PdfAttendanceImportService().replaceSemesterFromParsedPdf(
           data: widget.prefilledData!,
-          semester: _selectedSemester,
+          semester: effectiveSemester,
           updateSemesterBounds: false,
         );
       }
@@ -248,6 +297,7 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                               color: theme.textTheme.bodyLarge?.color,
                             ),
                           ),
+
                           const SizedBox(height: 32),
 
                           _inputField(_nameController, 'Full Name', theme),
@@ -256,63 +306,111 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
 
                           const SizedBox(height: 16),
 
-                          DropdownButtonFormField<int>(
-                            initialValue: _selectedSemester,
-                            decoration: _inputDecoration('Semester', theme)
-                                .copyWith(
-                              helperText: widget.prefilledData == null
-                                  ? null
-                                  : _semesterFromReport
-                                      ? 'Detected from your report'
-                                      : "Couldn't read this from your report — "
-                                          'please check it',
-                              helperMaxLines: 2,
-                              helperStyle: _semesterFromReport
-                                  ? null
-                                  : TextStyle(color: theme.colorScheme.error),
-                            ),
-                            dropdownColor:
-                                theme.dialogTheme.backgroundColor ??
-                                theme.cardColor,
-                            // Derived from the theme, not constructed. A
-                            // `DropdownButton` *replaces* its text style with
-                            // whatever it is handed (dropdown.dart's
-                            // `_textStyle => widget.style ?? titleMedium`), so a
-                            // bare `TextStyle(color: ...)` left fontFamily null
-                            // and the menu items rendered blank on web — CanvasKit
-                            // fetches Roboto rather than shipping it. See
-                            // 
-                            style: theme.textTheme.bodyLarge,
-                            items: List.generate(
-                              _maxSemester,
-                              (i) => DropdownMenuItem(
-                                value: i + 1,
-                                child: Text('Semester ${i + 1}'),
+                          _buildCollegeSectionSelector(theme),
+
+                          const SizedBox(height: 16),
+
+                          if (_collegeType == 'junior')
+                            DropdownButtonFormField<String>(
+                              initialValue: _selectedTerm,
+                              decoration: _inputDecoration('Term', theme).copyWith(
+                                helperText: widget.prefilledData == null
+                                    ? null
+                                    : _periodFromReport
+                                        ? 'Detected from your report'
+                                        : "Couldn't read this from your report — "
+                                            'please check it',
+                                helperMaxLines: 2,
+                                helperStyle: _periodFromReport
+                                    ? null
+                                    : TextStyle(color: theme.colorScheme.error),
                               ),
+                              dropdownColor:
+                                  theme.dialogTheme.backgroundColor ??
+                                  theme.cardColor,
+                              style: theme.textTheme.bodyLarge,
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'FYJC',
+                                  child: Text('FYJC'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'SYJC',
+                                  child: Text('SYJC'),
+                                ),
+                              ],
+                              onChanged: (value) async {
+                                if (value != null) {
+                                  setState(() {
+                                    _selectedTerm = value;
+                                    _periodFromReport = true;
+                                  });
+                                  await _loadDates();
+                                }
+                              },
+                            )
+                          else
+                            DropdownButtonFormField<int>(
+                              initialValue: _selectedSemester,
+                              decoration: _inputDecoration('Semester', theme)
+                                  .copyWith(
+                                helperText: widget.prefilledData == null
+                                    ? null
+                                    : _periodFromReport
+                                        ? 'Detected from your report'
+                                        : "Couldn't read this from your report — "
+                                            'please check it',
+                                helperMaxLines: 2,
+                                helperStyle: _periodFromReport
+                                    ? null
+                                    : TextStyle(color: theme.colorScheme.error),
+                              ),
+                              dropdownColor:
+                                  theme.dialogTheme.backgroundColor ??
+                                  theme.cardColor,
+                              // Derived from the theme, not constructed. A
+                              // `DropdownButton` *replaces* its text style with
+                              // whatever it is handed (dropdown.dart's
+                              // `_textStyle => widget.style ?? titleMedium`), so a
+                              // bare `TextStyle(color: ...)` left fontFamily null
+                              // and the menu items rendered blank on web — CanvasKit
+                              // fetches Roboto rather than shipping it. See
+                              // 
+                              style: theme.textTheme.bodyLarge,
+                              items: List.generate(
+                                _maxSemester,
+                                (i) => DropdownMenuItem(
+                                  value: i + 1,
+                                  child: Text('Semester ${i + 1}'),
+                                ),
+                              ),
+                              onChanged: (value) async {
+                                if (value != null) {
+                                  setState(() {
+                                    _selectedSemester = value;
+                                    // Once the student picks, the field is settled
+                                    // and the warning has served its purpose.
+                                    _periodFromReport = true;
+                                  });
+                                  await _loadDates();
+                                }
+                              },
                             ),
-                            onChanged: (value) async {
-                              if (value != null) {
-                                setState(() {
-                                  _selectedSemester = value;
-                                  // Once the student picks, the field is settled
-                                  // and the warning has served its purpose.
-                                  _semesterFromReport = true;
-                                });
-                                await _loadDatesForSemester(value);
-                              }
-                            },
-                          ),
 
                           const SizedBox(height: 16),
                           _dateTile(
-                            label: 'Semester Start Date *',
+                            label: _collegeType == 'junior'
+                                ? 'Term Start Date *'
+                                : 'Semester Start Date *',
                             date: _startDate,
                             onTap: () => _pickDate(true),
                             theme: theme,
                           ),
                           const SizedBox(height: 12),
                           _dateTile(
-                            label: 'Semester End Date *',
+                            label: _collegeType == 'junior'
+                                ? 'Term End Date *'
+                                : 'Semester End Date *',
                             date: _endDate,
                             onTap: () => _pickDate(false),
                             theme: theme,
@@ -378,6 +476,131 @@ class _BasicInfoScreenState extends State<BasicInfoScreen> {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCollegeSectionSelector(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'College Section',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.8),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.dividerColor),
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.04)
+                : Colors.black.withValues(alpha: 0.02),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _collegeSectionPill(
+                  label: 'Degree College',
+                  isSelected: _collegeType == 'degree',
+                  onTap: () async {
+                    if (_collegeType != 'degree') {
+                      setState(() {
+                        _collegeType = 'degree';
+                        _periodFromReport = false;
+                      });
+                      await _loadDates();
+                    }
+                  },
+                  theme: theme,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Expanded(
+                child: _collegeSectionPill(
+                  label: 'Junior College',
+                  isSelected: _collegeType == 'junior',
+                  onTap: () async {
+                    if (_collegeType != 'junior') {
+                      setState(() {
+                        _collegeType = 'junior';
+                        _periodFromReport = false;
+                      });
+                      await _loadDates();
+                    }
+                  },
+                  theme: theme,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _collegeSectionPill({
+    required String label,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required ThemeData theme,
+  }) {
+    final primary = theme.colorScheme.primary;
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(9),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(9),
+            color: isSelected
+                ? (isDark
+                    ? primary.withValues(alpha: 0.25)
+                    : primary.withValues(alpha: 0.15))
+                : Colors.transparent,
+            border: Border.all(
+              color: isSelected ? primary : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                isSelected
+                    ? Icons.radio_button_checked
+                    : Icons.radio_button_unchecked,
+                size: 16,
+                color: isSelected
+                    ? primary
+                    : theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.5),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: isSelected
+                      ? (isDark ? Colors.white : primary)
+                      : theme.textTheme.bodyMedium?.color,
+                ),
+              ),
+            ],
           ),
         ),
       ),

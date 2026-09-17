@@ -125,14 +125,25 @@ class CalendarScreenState extends TabPageState<CalendarScreen>
   Future<bool> _loadSemesterBounds() async {
     final prefs = await SharedPreferences.getInstance();
     final int sem = prefs.getInt('semester') ?? 1;
+    final String collegeType = prefs.getString('college_type') ?? 'degree';
 
-    // Try the semester-specific keys first, then fall back to generic keys
-    String? startStr = prefs.getString('semester_start_$sem');
-    String? endStr = prefs.getString('semester_end_$sem');
+    String? startStr;
+    String? endStr;
 
-    // Fallback: try without semester suffix (older data format)
-    startStr ??= prefs.getString('semester_start');
-    endStr ??= prefs.getString('semester_end');
+    if (collegeType == 'junior') {
+      final String term =
+          prefs.getString('term') ?? (sem == 12 || sem == 2 ? 'SYJC' : 'FYJC');
+      startStr = prefs.getString('junior_term_start_$term');
+      endStr = prefs.getString('junior_term_end_$term');
+    } else {
+      // Try the semester-specific keys first, then fall back to generic keys
+      startStr = prefs.getString('semester_start_$sem');
+      endStr = prefs.getString('semester_end_$sem');
+
+      // Fallback: try without semester suffix (older data format)
+      startStr ??= prefs.getString('semester_start');
+      endStr ??= prefs.getString('semester_end');
+    }
 
     DateTime normalize(DateTime d) => DateTime.utc(d.year, d.month, d.day);
 

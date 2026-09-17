@@ -147,7 +147,8 @@ class _UploadPdfScreenState extends State<UploadPdfScreen> {
                   const CalloutBox(
                     kind: CalloutKind.info,
                     title: 'Note:',
-                    message: 'Semester is auto-detected from your report.',
+                    message:
+                        'College section and term / semester are auto-detected from your report.',
                   ),
                   const SizedBox(height: AppDimens.space24),
 

@@ -21,7 +21,14 @@ import '../../widgets/pressable.dart';
 import 'subject_detail_screen.dart';
 
 class ReportScreen extends StatefulWidget {
-  const ReportScreen({super.key});
+  final List<Subject>? overrideSubjects;
+  final Map<int, Map<String, int>>? overrideStats;
+
+  const ReportScreen({
+    super.key,
+    this.overrideSubjects,
+    this.overrideStats,
+  });
 
   @override
   State<ReportScreen> createState() => _ReportScreenState();
@@ -31,8 +38,10 @@ class _ReportScreenState extends State<ReportScreen> {
   final AttendanceDao _attendanceDao = AttendanceDao();
   final SubjectDao _subjectDao = SubjectDao();
 
-  int _reportType = 0; // 0 = Semester, 1 = Custom Date Range
+  int _reportType = 0; // 0 = Semester / Term, 1 = Custom Date Range
   int _selectedSemester = 1;
+  String _collegeType = 'degree';
+  String? _selectedTerm;
 
   DateTime? _startDate;
   DateTime? _endDate;
@@ -76,11 +85,42 @@ class _ReportScreenState extends State<ReportScreen> {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() {
-      _selectedSemester = prefs.getInt('semester') ?? 1;
-      _overallRequiredPercent =
-          prefs.getDouble('overall_required_attendance') ?? 75.0;
+      _collegeType = prefs.getString('college_type') ?? 'degree';
+      if (_collegeType == 'junior') {
+        final savedTerm = prefs.getString('term')?.trim();
+        if (savedTerm == 'FYJC' || savedTerm == 'SYJC') {
+          _selectedTerm = savedTerm;
+          _selectedSemester = savedTerm == 'SYJC' ? 12 : 11;
+        } else {
+          _selectedTerm = null;
+        }
+      } else {
+        _selectedSemester = prefs.getInt('semester') ?? 1;
+      }
+      _overallRequiredPercent = _collegeType == 'junior'
+          ? 75.0
+          : (prefs.getDouble('overall_required_attendance') ?? 75.0);
+
+      if (widget.overrideSubjects != null && widget.overrideStats != null) {
+        _subjects = List.of(widget.overrideSubjects!);
+        _stats = Map.of(widget.overrideStats!);
+        _totalAttended = 0;
+        _totalLectures = 0;
+        for (final s in _subjects) {
+          final stat = _stats[s.id] ?? {'attended': 0, 'total': 0};
+          _totalAttended += stat['attended']!;
+          _totalLectures += stat['total']!;
+        }
+        _overallPercent = _totalLectures == 0
+            ? 0.0
+            : (_totalAttended / _totalLectures) * 100;
+        _reportGenerated = true;
+        _boundsLoaded = true;
+      }
     });
-    await _loadRecordBounds();
+    if (widget.overrideSubjects == null) {
+      await _loadRecordBounds();
+    }
   }
 
   static DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
@@ -96,6 +136,18 @@ class _ReportScreenState extends State<ReportScreen> {
   /// picked date that the new span no longer covers — switching semesters must
   /// not leave a range behind that its own picker would now refuse.
   Future<void> _loadRecordBounds() async {
+    if (_collegeType == 'junior' && _selectedTerm == null) {
+      if (!mounted) return;
+      setState(() {
+        _recordFirstDate = null;
+        _recordLastDate = null;
+        _boundsLoaded = true;
+        _startDate = null;
+        _endDate = null;
+        _reportGenerated = false;
+      });
+      return;
+    }
     final bounds = await _attendanceDao.getAttendanceDateBoundsForSemester(
       _selectedSemester,
     );
@@ -130,14 +182,21 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Future<void> _pickDate(bool isStart) async {
+    if (_collegeType == 'junior' && _selectedTerm == null) {
+      _showMessage('Please select a term (FYJC or SYJC) first');
+      return;
+    }
     if (!_boundsLoaded) await _loadRecordBounds();
     if (!mounted) return;
 
     final DateTime? first = _recordFirstDate;
     final DateTime? last = _recordLastDate;
+    final String periodName = _collegeType == 'junior'
+        ? (_selectedTerm ?? 'Term')
+        : 'Semester $_selectedSemester';
     if (first == null || last == null) {
       _showMessage(
-        'No attendance records for Semester $_selectedSemester yet — '
+        'No attendance records for $periodName yet — '
         'there is no date range to pick from.',
       );
       return;
@@ -188,6 +247,10 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Future<void> _generateReport({bool silent = false}) async {
+    if (_collegeType == 'junior' && _selectedTerm == null) {
+      _showMessage('Please select a term before generating report');
+      return;
+    }
     if (_reportType == 1) {
       if (_startDate == null || _endDate == null) {
         _showMessage('Please select both Start and End dates');
@@ -211,10 +274,17 @@ class _ReportScreenState extends State<ReportScreen> {
 
     if (_reportType == 0) {
       final prefs = await SharedPreferences.getInstance();
-      startQuery =
-          prefs.getString('semester_start_$_selectedSemester') ?? '1970-01-01';
-      endQuery =
-          prefs.getString('semester_end_$_selectedSemester') ?? '2099-12-31';
+      if (_collegeType == 'junior') {
+        startQuery =
+            prefs.getString('junior_term_start_$_selectedTerm') ?? '1970-01-01';
+        endQuery =
+            prefs.getString('junior_term_end_$_selectedTerm') ?? '2099-12-31';
+      } else {
+        startQuery =
+            prefs.getString('semester_start_$_selectedSemester') ?? '1970-01-01';
+        endQuery =
+            prefs.getString('semester_end_$_selectedSemester') ?? '2099-12-31';
+      }
     } else {
       startQuery = DateFormat('yyyy-MM-dd').format(_startDate!);
       endQuery = DateFormat('yyyy-MM-dd').format(_endDate!);
@@ -222,7 +292,7 @@ class _ReportScreenState extends State<ReportScreen> {
 
     _subjects = await _subjectDao.getSubjectsBySemester(_selectedSemester);
     if (_reportType == 0) {
-      // Semester mode counts every record for the semester — identical to the
+      // Semester / Term mode counts every record for the semester / term — identical to the
       // Dashboard — so the two screens never disagree.
       _stats = await _attendanceDao.getAttendanceStats(_selectedSemester);
     } else {
@@ -234,14 +304,16 @@ class _ReportScreenState extends State<ReportScreen> {
     }
 
     // Pinned to whichever branch above actually ran, so a breakdown card opens
-    // on the same period its own numbers were counted over. Semester mode
-    // deliberately carries no range: it counts the semester's whole record set,
-    // not the profile's semester_start/end window.
+    // on the same period its own numbers were counted over. Semester / Term mode
+    // deliberately carries no range: it counts the term/semester's whole record set,
+    // not the profile's start/end window.
     _generatedRange = _reportType == 0
         ? null
         : DateTimeRange(start: _startDate!, end: _endDate!);
     _generatedLabel = _reportType == 0
-        ? 'Semester $_selectedSemester'
+        ? (_collegeType == 'junior'
+              ? (_selectedTerm ?? 'Term')
+              : 'Semester $_selectedSemester')
         : '${DateFormat('MMM d, yyyy').format(_startDate!)} – '
               '${DateFormat('MMM d, yyyy').format(_endDate!)}';
 
@@ -285,16 +357,24 @@ class _ReportScreenState extends State<ReportScreen> {
   /// wrapped in a [ContainerTransformAnchor], so the page grows out of it and
   /// shrinks back into it exactly as on the Dashboard.
   Future<void> _openSubject(Subject subject) async {
+    final bool isJunior = _collegeType == 'junior';
+    final bool isOverallSafe = isJunior
+        ? _overallPercent >= 75.0 - 1e-9
+        : _overallPercent >= _overallRequiredPercent;
     final SubjectReportArgs args = (
       subject: subject,
       range: _generatedRange,
       label: _generatedLabel,
+      collegeType: _collegeType,
+      juniorOverallSafe: isJunior ? isOverallSafe : null,
     );
     await context.push('/app/profile/report/subject-detail', extra: args);
     // Only worth re-reading while results are actually on screen; a mode switch
     // while the page was open has already cleared them.
     if (!mounted || !_reportGenerated) return;
-    await _generateReport(silent: true);
+    if (widget.overrideSubjects == null) {
+      await _generateReport(silent: true);
+    }
   }
 
   void _showExportOptions() {
@@ -366,6 +446,78 @@ class _ReportScreenState extends State<ReportScreen> {
 
   Future<void> _showSemesterPicker() async {
     final theme = Theme.of(context);
+
+    if (_collegeType == 'junior') {
+      final String? picked = await showAppModalSheet<String>(
+        context: context,
+        builder: (ctx) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: theme.dividerColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  'Select Term',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space12),
+                ...['FYJC', 'SYJC'].map((t) {
+                  final bool isCurrent = t == _selectedTerm;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      Icons.school_rounded,
+                      color: isCurrent
+                          ? theme.colorScheme.primary
+                          : theme.textTheme.bodyMedium?.color,
+                    ),
+                    title: Text(
+                      t,
+                      style: TextStyle(
+                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                        color: isCurrent ? theme.colorScheme.primary : null,
+                      ),
+                    ),
+                    trailing: isCurrent
+                        ? Icon(
+                            Icons.check_rounded,
+                            color: theme.colorScheme.primary,
+                          )
+                        : null,
+                    onTap: () => Navigator.of(ctx).pop(t),
+                  );
+                }),
+              ],
+            ),
+          );
+        },
+      );
+
+      if (picked != null && picked != _selectedTerm) {
+        setState(() {
+          _selectedTerm = picked;
+          _selectedSemester = picked == 'SYJC' ? 12 : 11;
+          _reportGenerated = false;
+        });
+        await _loadRecordBounds();
+      }
+      return;
+    }
+
     final int? picked = await showAppModalSheet<int>(
       context: context,
       builder: (ctx) {
@@ -438,6 +590,10 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Future<void> _processExport({required bool isShare}) async {
+    if (_collegeType == 'junior' && _selectedTerm == null) {
+      _showMessage('Please select a term first');
+      return;
+    }
     showAppDialog(
       context: context,
       barrierDismissible: false,
@@ -446,7 +602,9 @@ class _ReportScreenState extends State<ReportScreen> {
 
     try {
       final fileName = _reportType == 0
-          ? 'Semester_${_selectedSemester}_Attendance_Report.pdf'
+          ? (_collegeType == 'junior'
+              ? '${_selectedTerm ?? "Term"}_Attendance_Report.pdf'
+              : 'Semester_${_selectedSemester}_Attendance_Report.pdf')
           : 'Attendance_Report_'
                 '${DateFormat('dd-MM-yyyy').format(_startDate!)}_to_'
                 '${DateFormat('dd-MM-yyyy').format(_endDate!)}.pdf';
@@ -455,12 +613,19 @@ class _ReportScreenState extends State<ReportScreen> {
 
       final pdfBytes = await buildAttendanceReportPdf(
         meta: ReportMeta(
-          periodKind: _reportType == 0 ? 'Semester' : 'Date range',
+          collegeType: _collegeType,
+          term: _selectedTerm,
+          periodKind: _reportType == 0
+              ? (_collegeType == 'junior' ? 'Term' : 'Semester')
+              : 'Date range',
           periodLabel: _reportType == 0
-              ? 'Semester $_selectedSemester'
+              ? (_collegeType == 'junior'
+                    ? (_selectedTerm ?? 'Term')
+                    : 'Semester $_selectedSemester')
               : '${DateFormat('d MMM yyyy').format(_startDate!)} – '
                     '${DateFormat('d MMM yyyy').format(_endDate!)}',
           semester: _selectedSemester,
+          overallRequiredPercent: _overallRequiredPercent,
           studentName: prefs.getString('full_name')?.trim() ?? '',
           course: prefs.getString('course')?.trim() ?? '',
           year: prefs.getString('year')?.trim() ?? '',
@@ -691,7 +856,9 @@ class _ReportScreenState extends State<ReportScreen> {
                                         const SizedBox(width: 8),
                                         Flexible(
                                           child: Text(
-                                            'Semester',
+                                            _collegeType == 'junior'
+                                                ? 'Term'
+                                                : 'Semester',
                                             style: TextStyle(
                                               fontSize: 15,
                                               fontWeight: FontWeight.bold,
@@ -761,7 +928,9 @@ class _ReportScreenState extends State<ReportScreen> {
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Text(
-                                'Select Semester: ',
+                                _collegeType == 'junior'
+                                    ? 'Select Term: '
+                                    : 'Select Semester: ',
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
@@ -800,7 +969,9 @@ class _ReportScreenState extends State<ReportScreen> {
                                       ),
                                       const SizedBox(width: 8),
                                       Text(
-                                        'Semester $_selectedSemester',
+                                        _collegeType == 'junior'
+                                            ? (_selectedTerm ?? 'Select Term')
+                                            : 'Semester $_selectedSemester',
                                         style: TextStyle(
                                           color:
                                               theme.textTheme.bodyLarge?.color,
@@ -911,8 +1082,12 @@ class _ReportScreenState extends State<ReportScreen> {
                           Text(
                             _recordFirstDate == null || _recordLastDate == null
                                 ? _boundsLoaded
-                                      ? 'No attendance records for Semester '
-                                            '$_selectedSemester yet.'
+                                      ? _collegeType == 'junior'
+                                            ? (_selectedTerm == null
+                                                  ? 'Please select a term above to see available dates.'
+                                                  : 'No attendance records for $_selectedTerm yet.')
+                                            : 'No attendance records for Semester '
+                                                  '$_selectedSemester yet.'
                                       : 'Loading available dates…'
                                 : 'Records available '
                                       '${DateFormat('MMM dd, yyyy').format(_recordFirstDate!)}'
@@ -967,9 +1142,11 @@ class _ReportScreenState extends State<ReportScreen> {
                       theme: theme,
                       icon: Icons.assessment_outlined,
                       title: 'No report yet',
-                      message:
-                          'Choose a semester or date range above, then tap '
-                          'Generate Report to see your breakdown.',
+                      message: _collegeType == 'junior'
+                          ? 'Choose a term or date range above, then tap '
+                              'Generate Report to see your breakdown.'
+                          : 'Choose a semester or date range above, then tap '
+                              'Generate Report to see your breakdown.',
                     )
                   else if (_totalLectures == 0)
                     _emptyState(
@@ -1056,6 +1233,12 @@ class _ReportScreenState extends State<ReportScreen> {
   /// The generated-report body: overall summary card, export button, then the
   /// per-subject breakdown cards (dashboard color split).
   List<Widget> _buildResults(ThemeData theme, AppColors c) {
+    final bool isJunior = _collegeType == 'junior';
+    final bool isOverallSafe = isJunior
+        ? _overallPercent >= 75.0 - 1e-9
+        : _overallPercent >= _overallRequiredPercent;
+    final Color overallColor = isOverallSafe ? c.success : c.danger;
+
     return [
       Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -1082,9 +1265,7 @@ class _ReportScreenState extends State<ReportScreen> {
                 style: TextStyle(
                   fontSize: 38,
                   fontWeight: FontWeight.bold,
-                  color: _overallPercent >= _overallRequiredPercent
-                      ? c.success
-                      : c.danger,
+                  color: overallColor,
                 ),
               ),
             ),
@@ -1155,10 +1336,16 @@ class _ReportScreenState extends State<ReportScreen> {
         final total = stat['total']!;
         final percent = total == 0 ? 0.0 : (attended / total) * 100;
         final bool isSafe = percent >= sub.requiredPercent;
-        final Color color = isSafe ? c.success : c.danger;
-        final Color barColor = isSafe
-            ? const Color(0xFF49AD4F)
-            : const Color(0xFFF14134);
+        final Color color = isJunior
+            ? (theme.textTheme.bodyLarge?.color ?? theme.colorScheme.primary)
+            : (isSafe ? c.success : c.danger);
+        final Color barColor = isJunior
+            ? (isOverallSafe
+                ? const Color(0xFF49AD4F)
+                : const Color(0xFFF14134))
+            : (isSafe
+                ? const Color(0xFF49AD4F)
+                : const Color(0xFFF14134));
 
         return Padding(
           // The bottom gap was the Card's own `margin`, which put it inside the
