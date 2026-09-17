@@ -27,6 +27,10 @@ class CloudSyncService {
     'name',
     'full_name',
     'course',
+    'year',
+    'division',
+    'college_type',
+    'term',
     'semester',
     'semester_start_date',
     'semester_end_date',
@@ -36,6 +40,18 @@ class CloudSyncService {
     'subject_required_attendance',
     'is_setup_complete',
   };
+
+  @visibleForTesting
+  static Set<String> get prefsWhitelist => _prefsWhitelist;
+
+  @visibleForTesting
+  static bool isPrefKeyAllowed(String key) {
+    return _prefsWhitelist.contains(key) ||
+        key.startsWith('semester_start_') ||
+        key.startsWith('semester_end_') ||
+        key.startsWith('junior_term_start_') ||
+        key.startsWith('junior_term_end_');
+  }
 
   // 1. BACKUP EVERYTHING (SQLite + SharedPreferences)
   Future<bool> backupDataToCloud() async {
@@ -76,7 +92,9 @@ class CloudSyncService {
       for (String key in prefs.getKeys()) {
         if (_prefsWhitelist.contains(key) ||
             key.startsWith('semester_start_') ||
-            key.startsWith('semester_end_')) {
+            key.startsWith('semester_end_') ||
+            key.startsWith('junior_term_start_') ||
+            key.startsWith('junior_term_end_')) {
           userPrefs[key] = prefs.get(key);
         }
       }
@@ -312,42 +330,52 @@ class CloudSyncService {
           '☁️ [Sync] Kept local semester: $localSemesterBeforeRestore',
         );
       } else {
-        // No local semester — try to use cloud value first
-        final cloudSem = prefsData['semester'];
-        int? cloudSemInt;
-        if (cloudSem is int) {
-          cloudSemInt = cloudSem;
-        } else if (cloudSem is num) {
-          cloudSemInt = cloudSem.toInt();
-        }
+        final isJunior = prefs.getString('college_type') == 'junior' ||
+            prefsData['college_type'] == 'junior';
+        final restoredTerm = prefs.getString('term') ?? prefsData['term'];
 
-        if (cloudSemInt != null && cloudSemInt >= 1) {
-          await prefs.setInt('semester', cloudSemInt);
-          debugPrint('☁️ [Sync] Restored semester from cloud: $cloudSemInt');
+        if (isJunior && restoredTerm is String) {
+          final semInt = restoredTerm == 'SYJC' ? 12 : 11;
+          await prefs.setInt('semester', semInt);
+          debugPrint('☁️ [Sync] Restored Junior College semester from term: $semInt');
         } else {
-          // Fall back: detect from the highest semester present in subjects
-          final semResult = await db.rawQuery(
-            'SELECT DISTINCT semester FROM subjects ORDER BY semester DESC LIMIT 1',
-          );
-          if (semResult.isNotEmpty) {
-            final detectedSem = semResult.first['semester'];
-            int? target;
-            if (detectedSem is int) {
-              target = detectedSem;
-            } else if (detectedSem is num) {
-              target = detectedSem.toInt();
-            }
+          // No local semester — try to use cloud value first
+          final cloudSem = prefsData['semester'];
+          int? cloudSemInt;
+          if (cloudSem is int) {
+            cloudSemInt = cloudSem;
+          } else if (cloudSem is num) {
+            cloudSemInt = cloudSem.toInt();
+          }
 
-            if (target != null) {
-              await prefs.setInt('semester', target);
-              debugPrint(
-                '☁️ [Sync] Auto-detected semester from subjects: $target',
-              );
-            }
+          if (cloudSemInt != null && cloudSemInt >= 1) {
+            await prefs.setInt('semester', cloudSemInt);
+            debugPrint('☁️ [Sync] Restored semester from cloud: $cloudSemInt');
           } else {
-            // Only default to 1 if we literally have NO subjects
-            await prefs.setInt('semester', 1);
-            debugPrint('☁️ [Sync] No subjects found, defaulting to Semester 1');
+            // Fall back: detect from the highest semester present in subjects
+            final semResult = await db.rawQuery(
+              'SELECT DISTINCT semester FROM subjects ORDER BY semester DESC LIMIT 1',
+            );
+            if (semResult.isNotEmpty) {
+              final detectedSem = semResult.first['semester'];
+              int? target;
+              if (detectedSem is int) {
+                target = detectedSem;
+              } else if (detectedSem is num) {
+                target = detectedSem.toInt();
+              }
+
+              if (target != null) {
+                await prefs.setInt('semester', target);
+                debugPrint(
+                  '☁️ [Sync] Auto-detected semester from subjects: $target',
+                );
+              }
+            } else {
+              // Only default to 1 if we literally have NO subjects
+              await prefs.setInt('semester', 1);
+              debugPrint('☁️ [Sync] No subjects found, defaulting to Semester 1');
+            }
           }
         }
       }

@@ -27,14 +27,16 @@ class LocalDataResetService {
     'division',
     'semester',
     'manual_semester',
+    'term',
+    'college_type',
   };
 
-  /// Whether [key] is a per-semester date bound. Both the current
-  /// `semester_start_3` form and the legacy unsuffixed `semester_start` are
-  /// matched: an old install can still hold the bare keys, and a stale bound
-  /// silently shrinks the calendar's idea of the term.
+  /// Whether [key] is a per-semester or per-term date bound.
   static bool _isSemesterBound(String key) =>
-      key.startsWith('semester_start') || key.startsWith('semester_end');
+      key.startsWith('semester_start') ||
+      key.startsWith('semester_end') ||
+      key.startsWith('junior_term_start') ||
+      key.startsWith('junior_term_end');
 
   /// Drops every subject, timetable entry, attendance record and imported-date
   /// marker, for every semester, plus the report-derived preferences above.
