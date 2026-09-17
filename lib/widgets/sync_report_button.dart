@@ -116,9 +116,9 @@ class _SyncReportButtonState extends State<SyncReportButton> {
 
       _showMessage(
         result.replacedPreviousData
-            ? 'Replaced your data with the new report (Sem ${result.semester}).'
+            ? 'Replaced your data with the new report (${result.periodLabel}).'
             : 'Attendance updated from your new report '
-                  '(Sem ${result.semester}).',
+                  '(${result.periodLabel}).',
         isError: false,
       );
 

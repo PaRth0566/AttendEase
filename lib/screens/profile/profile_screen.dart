@@ -47,6 +47,8 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
   String year = '';
   String division = '';
   int semester = 1;
+  String collegeType = 'degree';
+  String term = 'FYJC';
 
   double overallAttendance = 0.0;
 
@@ -96,6 +98,8 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
   Future<void> _loadProfileData() async {
     final prefs = await SharedPreferences.getInstance();
     semester = prefs.getInt('semester') ?? 1;
+    collegeType = prefs.getString('college_type') ?? 'degree';
+    term = prefs.getString('term') ?? (semester == 12 || semester == 2 ? 'SYJC' : 'FYJC');
     _requiredTarget = prefs.getDouble('overall_required_attendance') ?? 75.0;
 
     final subjectsForSem = await _subjectDao.getSubjectsBySemester(semester);
@@ -132,9 +136,14 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
     } catch (_) {}
   }
 
-  Future<void> _switchSemester(int newSemester) async {
+  Future<void> _switchSemester(int newSemester, [String? newTerm]) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('semester', newSemester);
+    if (newTerm != null) {
+      await prefs.setString('term', newTerm);
+    } else if (collegeType == 'junior') {
+      await prefs.setString('term', (newSemester == 12 || newSemester == 2) ? 'SYJC' : 'FYJC');
+    }
 
     setState(() => _loading = true);
     await _loadProfileData();
@@ -143,8 +152,11 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
     CloudSyncService().backupDataToCloud();
 
     if (!mounted) return;
+    final message = collegeType == 'junior'
+        ? 'Switched to $term'
+        : 'Switched to Semester $newSemester';
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Switched to Semester $newSemester')),
+      SnackBar(content: Text(message)),
     );
   }
 
@@ -153,6 +165,74 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
   Future<void> _showSemesterPicker() async {
     setState(() => _semesterPickerOpen = true);
     final theme = Theme.of(context);
+    final isJunior = collegeType == 'junior';
+
+    if (isJunior) {
+      final String? picked = await showAppModalSheet<String>(
+        context: context,
+        builder: (ctx) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 20),
+                    decoration: BoxDecoration(
+                      color: theme.dividerColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Text(
+                  'Active Term',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: AppDimens.space12),
+                ...['FYJC', 'SYJC'].map((t) {
+                  final bool isCurrent = t == term;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      Icons.school_rounded,
+                      color: isCurrent
+                          ? theme.colorScheme.primary
+                          : theme.textTheme.bodyMedium?.color,
+                    ),
+                    title: Text(
+                      t,
+                      style: TextStyle(
+                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                        color: isCurrent ? theme.colorScheme.primary : null,
+                      ),
+                    ),
+                    trailing: isCurrent
+                        ? Icon(
+                            Icons.check_rounded,
+                            color: theme.colorScheme.primary,
+                          )
+                        : null,
+                    onTap: () => Navigator.of(ctx).pop(t),
+                  );
+                }),
+              ],
+            ),
+          );
+        },
+      );
+      if (mounted) setState(() => _semesterPickerOpen = false);
+      if (picked != null && picked != term) {
+        await _switchSemester(picked == 'SYJC' ? 12 : 11, picked);
+      }
+      return;
+    }
+
     final int? picked = await showAppModalSheet<int>(
       context: context,
       builder: (ctx) {
@@ -461,13 +541,17 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
 
                         _profileTile(
                           icon: Icons.book_rounded,
-                          title: 'Edit Subjects (Sem $semester)',
+                          title: collegeType == 'junior'
+                              ? 'Edit Subjects ($term)'
+                              : 'Edit Subjects (Sem $semester)',
                           onTap: () => context.go('/app/profile/subjects'),
                         ),
 
                         _profileTile(
                           icon: Icons.schedule_rounded,
-                          title: 'Edit Timetable (Sem $semester)',
+                          title: collegeType == 'junior'
+                              ? 'Edit Timetable ($term)'
+                              : 'Edit Timetable (Sem $semester)',
                           onTap: () => context.go('/app/profile/timetable'),
                         ),
 
@@ -865,7 +949,7 @@ class ProfileScreenState extends TabPageState<ProfileScreen>
               Icon(Icons.school_rounded, size: 16, color: primary),
               const SizedBox(width: 6),
               Text(
-                'Sem $semester',
+                collegeType == 'junior' ? term : 'Sem $semester',
                 style: TextStyle(
                   color: primary,
                   fontWeight: FontWeight.bold,

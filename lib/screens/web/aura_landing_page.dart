@@ -41,6 +41,7 @@ class _AuraLandingPageState extends State<AuraLandingPage>
   Map<int, Map<String, int>>? _parsedStats;
   Map<String, String>? _reportMeta;
   double _overallTarget = 75.0;
+  // ignore: unused_field
   double _subjectTarget = 70.0;
 
   late AnimationController _bgAnimController;
