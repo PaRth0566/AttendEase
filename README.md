@@ -4,7 +4,7 @@
 <a href="https://play.google.com/store/apps/details?id=com.parthm.attendease"><img src="https://img.shields.io/badge/Get_it_on-Google_Play-2D80EC?logo=googleplay&logoColor=white" width="226" ></a> &nbsp&nbsp&nbsp&nbsp
 <a href="https://attendease-cbc6f.web.app"><img src="https://img.shields.io/badge/Open_Web-APP-ff9a00?logo=firebase&logoColor=FFCA28" width="230"></a><br><br>
 <a href="https://github.com/neo999in/AttendEase-backend"><img src="https://img.shields.io/badge/Backend-Repository-339933?logo=nodedotjs" width="180" ></a><br><br>
-<a href="https://play.google.com/store/apps/details?id=com.parthm.attendease"><img src="https://img.shields.io/badge/version-1.1.1-22C55E?labelColor=333333&logo=googleplay&logoColor=white" alt="version 1.1.1" height="24" hspace="6" vspace="3" /></a><img src="https://img.shields.io/badge/platforms-Android%20%7C%20Web-A855F7?labelColor=333333" alt="platforms: Android and Web" height="24" hspace="6" vspace="3" /><a href="https://docs.flutter.dev/release/archive"><img src="https://img.shields.io/badge/Flutter-3.10.7+-00CCFF?labelColor=333333&logo=flutter&logoColor=00CCFF" alt="Flutter 3.10.7+" height="24" hspace="6" vspace="3" /></a><a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-D97706?labelColor=333333&logo=opensourceinitiative&logoColor=white" alt="MIT license" height="24" hspace="6" vspace="3" /></a>
+<a href="https://play.google.com/store/apps/details?id=com.parthm.attendease"><img src="https://img.shields.io/badge/version-1.1.2-22C55E?labelColor=333333&logo=googleplay&logoColor=white" alt="version 1.1.2" height="24" hspace="6" vspace="3" /></a><img src="https://img.shields.io/badge/platforms-Android%20%7C%20Web-A855F7?labelColor=333333" alt="platforms: Android and Web" height="24" hspace="6" vspace="3" /><a href="https://docs.flutter.dev/release/archive"><img src="https://img.shields.io/badge/Flutter-3.10.7+-00CCFF?labelColor=333333&logo=flutter&logoColor=00CCFF" alt="Flutter 3.10.7+" height="24" hspace="6" vspace="3" /></a><a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-D97706?labelColor=333333&logo=opensourceinitiative&logoColor=white" alt="MIT license" height="24" hspace="6" vspace="3" /></a>
 </div>
 
 ---
@@ -13,7 +13,7 @@
 <img src="assets/cover.png" alt="Attend Ease Cover" width="100%" />
 
 
-**AttendEase** is an attendance management system designed to streamline how students track and analyze their academic presence. Upload your college attendance PDF once and AttendEase turns it into a live picture of where you stand: per-subject percentages, a day-by-day calendar, and a straight answer to the question that actually matters — *can I skip tomorrow?*
+**AttendEase** is an attendance management system designed to streamline how students track and analyze their academic presence. Whether you are in **Degree College** (tracking individual subject targets and semester schedules) or **Junior College** (FYJC/SYJC adhering to the 75% overall mandate), upload your college attendance PDF once and AttendEase turns it into a live picture of where you stand: per-subject analytics, overall compliance status, a day-by-day calendar, and a straight answer to the question that actually matters — *can I skip tomorrow?*
 
 Reports are parsed locally on-device by default. Gemini handles the web upload path through a token-authenticated Node.js backend, so your API keys never ship inside the client.
 
@@ -37,22 +37,25 @@ Reports are parsed locally on-device by default. Gemini handles the web upload p
 ### ✨ Features
 
 #### 📥 Getting your data in
-- 📄 **On-Device PDF Parser**: Attendance reports are parsed locally with `syncfusion_flutter_pdf`, anchored on the date/time/status pattern of each row so the file never has to leave your device. It reads subject names that carry digits and hyphens (`Applied Mathematics-IV`, `.NET`, `C++`) instead of truncating them, keeps two variants of one stem (`…-III` and `…-IV`) from collapsing into a single merged subject, and pulls the semester off the *Academic Session* line without mistaking a date fragment for it. Runs on a background isolate, so the UI stays responsive.
+- 📄 **On-Device PDF Parser**: Attendance reports are parsed locally with `syncfusion_flutter_pdf`, anchored on the date/time/status pattern of each row so the file never has to leave your device. It intelligently identifies both **Degree College** (Semesters I–VIII) and **Junior College** (FYJC/SYJC Terms 1 & 2 across Arts, Science, and Commerce) reports, including duration-based session headers (e.g. *June to September*). It reads subject names that carry digits and hyphens (`Applied Mathematics-IV`, `.NET`, `C++`) without truncating them, keeps variants distinct, and accurately extracts academic session data without misinterpreting dates. Runs on a background isolate, so the UI stays responsive.
 - 📲 **Open With / Share to AttendEase (Android)**: Tap an attendance PDF anywhere on the phone — WhatsApp, Gmail, Drive, any file manager — pick AttendEase, and the same import runs, whether the app was cold or already open. The file is read natively (the chooser hands over a `content://` URI that Dart's `File` can't touch) and verified by its `%PDF-` header rather than its filename before it ever reaches the parser.
 - ⚡ **One-Tap Sync & SAP Shortcut**: The dashboard's AppBar pairs a shortcut to SVKM's SAP portal — where the report is downloaded — with a one-tap sync button, so "fetch, then import" is a couple of taps from the home screen. That button, the full Sync screen, and Open-With all run one shared import path rather than three copies that quietly drift apart.
 - 🤖 **AI-Powered PDF Ingestion (Web)**: Gemini reads the report on the web upload path, behind a consent checkbox and a data-retention disclosure.
 - 🔁 **Model Fallback Chain**: The backend walks Gemini 3 Flash → 2.5 Flash → 3.1 Flash Lite → 2.5 Flash Lite, advancing only on `503 overloaded`, so a busy model degrades instead of failing.
-- ♻️ **Non-Destructive Re-Import**: Refreshing a report replaces only report-derived rows inside that report's date range. Your subject IDs, planned timetable, and records outside the range survive untouched — and your name, programme, academic year, and semester follow the report header, so a new term updates the profile instead of stranding last year's on it. The whole import runs in a single transaction — what used to be a several-hundred-row, one-fsync-per-row wait that felt like a hang.
-- 🧑‍🎓 **Different-Owner Guard**: A routine sync folds a report into what's already there. But when it detects a *different student or course* — a friend's report opened to check their attendance — it stops before writing and asks, rather than silently unioning two people's curricula into one dashboard. Confirming rebuilds the app from that report alone; declining imports nothing. The check is conservative, so your own next report never trips it.
+- ♻️ **Non-Destructive Re-Import**: Refreshing a report replaces only report-derived rows inside that report's date range. Your subject IDs, planned timetable, and records outside the range survive untouched — and your name, programme, academic year, and semester or term follow the report header, updating the profile cleanly. The whole import runs in a single transaction.
+- 🧑‍🎓 **Different-Owner Guard**: A routine sync folds a report into what's already there. But when it detects a *different student or course* — a friend's report opened to check their attendance — it stops before writing and asks, rather than silently unioning two people's curricula into one dashboard. Confirming rebuilds the app from that report alone; declining imports nothing.
 - 🧹 **Ghost Record Cleanup**: If the PDF covers a date but has no lecture for a subject, a stray manual record there is treated as a ghost and removed. The report is the authority.
-- ✍️ **Manual Setup Path**: No PDF? Add subjects, set criteria, and build a weekly timetable by hand.
+- ✍️ **Manual Setup Path**: No PDF? Choose your college curriculum (Degree College with custom per-subject targets or Junior College with fixed 75% overall requirement), add subjects, and build a weekly timetable by hand.
 
 #### 📊 Making sense of it
-- 🎯 **"Can I Skip?" Projections**: Per subject, AttendEase computes the exact number of future lectures you can miss and the actual upcoming dates they fall on — solved from `attended / (total + x) ≥ required`, not estimated.
+- 🎓 **Dual Curriculum Support (Degree & Junior College)**:
+  - **Degree College**: Per-subject attendance targets (e.g. 75% or 80%), individual subject risk/safe indicators, and subject-level recovery metrics.
+  - **Junior College (FYJC & SYJC)**: Tailored for Junior College attendance rules governed strictly by an **overall 75% threshold across all subjects combined**. The main attendance ring and subject progress bars dynamically synchronize with term compliance status (Green ≥ 75%, Red < 75%) without imposing artificial per-subject quotas.
+- 🎯 **"Can I Skip?" Projections**: Per subject in Degree College, AttendEase computes the exact number of future lectures you can miss and the actual upcoming dates they fall on — solved from `attended / (total + x) ≥ required`, not estimated. In Junior College, it projects safe skips against your overall 75% requirement. For a complete mathematical breakdown, see [Attendance Calculation & Skip Logic](docs/ATTENDANCE_CALCULATION_AND_SKIP_LOGIC.md).
 - 📆 **Cumulative Week Strip**: A Mon→Sun verdict for the current week where green days *stack*. Two green days mean you can take both off, not two offers that quietly conflict. An expensive Wednesday no longer hides a cheap Friday, and on Sunday the strip rolls over to the coming week.
 - 🧠 **History-Derived Timetable**: Your weekly footprint is inferred from real attendance history rather than a configured timetable, so swaps and replacement lectures stay visible. A slot counts only when it recurs (≥2 dates) and was seen within 21 days, so a schedule that shifted mid-semester drops its stale slots.
 - 🧾 **Honest Status Handling**: `P` / `A` / `NU` / `NC` are each treated on their own terms. `NU` and `NC` never inflate your totals, but `NU` still counts as evidence a lecture was held, while `NC` doesn't. *Attendance Granted* (`AG`) normalizes to present.
-- 📈 **Subject Deep-Dive & Reports**: Per-subject detail screens plus a generated PDF report you can share straight from the app.
+- 📈 **Subject Deep-Dive & PDF Reports**: Per-subject detail screens plus tailored PDF report exports for both Degree and Junior College formats (including overall 75% compliance status and lecture breakdowns) that you can share or print straight from the app.
 - 📅 **Smart Calendar**: Visualize history, edit individual lectures, and see future in-range days projected from your timetable.
 
 #### 🔐 Platform & trust
@@ -169,7 +172,7 @@ flutter test
 ```text
 AttendEase/
 ├── lib/
-│   ├── screens/     # Feature UI (auth, dashboard, calendar…)
+│   ├── screens/     # Feature UI (auth, dashboard, calendar, reports…)
 │   ├── widgets/     # Glass buttons, overlays, nav icons
 │   ├── theme/       # Tokens: colors, dimens, motion
 │   ├── services/    # Auth, sync, PDF import/export, Play update
@@ -177,8 +180,9 @@ AttendEase/
 │   ├── models/      # Subject, TimetableEntry
 │   ├── utils/       # Skip projections, attendance math
 │   └── router/      # GoRouter config + redirect guards
+├── docs/            # Calculation logic & academic rules documentation
 ├── backend/         # Express server for Gemini
-├── test/            # Unit, widget, regression tests
+├── test/            # Unit, widget, and integration test suites
 ├── third_party/     # Vendored liquid_glass_widgets
 ├── firestore.rules  # Security rules
 └── assets/          # Icons, images, static files
@@ -187,14 +191,15 @@ AttendEase/
 
 ### 🧪 Tests
 
-`flutter test` covers the parts most likely to break silently:
+`flutter test` covers the parts most likely to break silently (330+ automated tests):
 
-- **Attendance logic** — the week-skip planner is pinned against a real 127-row report: cumulative budgets aren't offered twice, an unsafe day doesn't abort the walk, a real absence shrinks the rest of the week, stale slots don't leak in, and `NU`/not-conducted rows stay out of the plan. Plus replacement lectures and future-day calendar projection.
-- **PDF parsing** — real SAP reports: subject names carrying digits and hyphens survive intact, two variants of one stem don't collapse into a merged subject, and the semester is read off the *Academic Session* line without a date fragment leaking in as "Semester 1".
-- **Report ownership** — a report for a different student or course raises the replace dialog, a continuation of your own reports does not (so a routine sync is never interrupted), and the profile header follows the imported report.
+- **Junior College compliance & rules** — strict 75% overall threshold verification, weekly overall skip planning, subject color synchrony, absence penalties, and complete isolation between Degree and Junior states.
+- **Attendance logic** — the week-skip planner is pinned against real reports: cumulative budgets aren't offered twice, an unsafe day doesn't abort the walk, a real absence shrinks the rest of the week, stale slots don't leak in, and `NU`/not-conducted rows stay out of the plan. Plus replacement lectures and future-day calendar projection.
+- **PDF parsing & routing** — real SAP and Junior College (FYJC/SYJC Arts, Science, Commerce) reports: subject names carrying digits and hyphens survive intact, two variants of one stem don't collapse into a merged subject, duration date ranges (`June to September`) parse properly, and term/semester routing avoids cross-curriculum collision.
+- **Report ownership & sync** — a report for a different student or course raises the replace dialog, a continuation of your own reports does not (so a routine sync is never interrupted), and the profile header follows the imported report.
 - **Account isolation** — signing out wipes the local database on every platform, so the next user starts clean.
 - **Editing & input** — delete-with-undo and the undo snackbar's placement, not-conducted-lecture visibility, and target-percentage input formatting.
-- **Report export** — the generated PDF's own arithmetic: percentages and the on-track test match the screen exactly, and "lectures to spare" / "lectures to attend" are solved rather than estimated.
+- **Report export** — the generated PDF's own arithmetic across both Degree and Junior College modes: percentages and the on-track test match the screen exactly, and "lectures to spare" / "lectures to attend" are solved rather than estimated.
 - **Navigation & layout** — pill drag, jelly direction *and area conservation*, icon replay, overlay layout, container transforms, bottom-nav safe-area insets, light-theme nav bar, and web desktop rendering.
 - **Contrast** — the glass nav bar's WCAG AA ratios are asserted, not eyeballed, because "pick a color and hope" is how a translucent bar becomes unreadable.
 
